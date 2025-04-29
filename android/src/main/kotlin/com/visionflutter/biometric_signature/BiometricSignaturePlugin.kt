@@ -1,15 +1,12 @@
 package com.visionflutter.biometric_signature
 
-import android.content.Context
 import android.content.pm.PackageManager
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.security.keystore.StrongBoxUnavailableException
 import android.util.Base64
-import androidx.annotation.NonNull
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
-import androidx.biometric.BiometricPrompt.PromptInfo
 import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -19,9 +16,13 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import java.security.*
+import java.security.KeyPair
+import java.security.KeyPairGenerator
+import java.security.KeyStore
+import java.security.PrivateKey
+import java.security.PublicKey
+import java.security.Signature
 import java.security.spec.RSAKeyGenParameterSpec
-import java.util.*
 
 const val AUTH_FAILED = "AUTH_FAILED"
 const val INVALID_PAYLOAD = "INVALID_PAYLOAD"
@@ -45,17 +46,17 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
     onDetachedFromActivity()
   }
 
-  override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
+  override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "biometric_signature")
     channel.setMethodCallHandler(this)
 
   }
-  override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+  override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
     channel.setMethodCallHandler(null)
   }
 
-  override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
-    if (activity !is FlutterFragmentActivity || activity == null) {
+  override fun onMethodCall(call: MethodCall, result: Result) {
+    if (activity !is FlutterFragmentActivity) {
       result.error("INCOMPATIBLE_ACTIVITY", "BiometricSignaturePlugin requires your app to use FlutterFragmentActivity", null)
       return
     }
@@ -81,7 +82,7 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
     }
   }
 
-  private fun createKeys(useDeviceCredentials: Boolean, @NonNull result: MethodChannel.Result) {
+  private fun createKeys(useDeviceCredentials: Boolean, result: MethodChannel.Result) {
     try {
       deleteBiometricKey()
       val keyPairGenerator: KeyPairGenerator =
@@ -139,7 +140,7 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
       )
     }
   }
-  private fun createSignature(options: MutableMap<String, String>?, @NonNull result: MethodChannel.Result) {
+  private fun createSignature(options: MutableMap<String, String>?, result: MethodChannel.Result) {
     try {
       val cancelButtonText = options?.get("cancelButtonText") ?: "Cancel"
       val promptMessage = options?.get("promptMessage") ?: "Welcome"
@@ -242,7 +243,7 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
     }
   }
 
-  private fun deleteKeys(@NonNull result: MethodChannel.Result) {
+  private fun deleteKeys(result: MethodChannel.Result) {
     if (doesBiometricKeyExist()) {
       val resultBoolean = deleteBiometricKey()
       if (resultBoolean) {
@@ -258,7 +259,7 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
     }
   }
 
-  private fun biometricKeyExists(checkValidity: Boolean, @NonNull result: MethodChannel.Result) {
+  private fun biometricKeyExists(checkValidity: Boolean, result: MethodChannel.Result) {
     try {
       val biometricKeyExists = doesBiometricKeyExist(checkValidity)
       result.success(biometricKeyExists)
@@ -270,7 +271,7 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
     }
   }
 
-  private fun biometricAuthAvailable(@NonNull result: MethodChannel.Result) {
+  private fun biometricAuthAvailable(result: MethodChannel.Result) {
     fun processBiometricString(rawString: String): String {
       val androidBiometrics = listOf("fingerprint", "face", "iris")
       val biometricsList = androidBiometrics.filter { rawString.contains(it, ignoreCase = true) }
