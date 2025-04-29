@@ -10,7 +10,7 @@ buildscript {
     }
 
     dependencies {
-        classpath("com.android.tools.build:gradle:8.1.0")
+        classpath("com.android.tools.build:gradle:8.1.4")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
     }
 }
@@ -58,6 +58,8 @@ android {
 
     dependencies {
         implementation("androidx.biometric:biometric-ktx:1.4.0-alpha02")
-        implementation("androidx.appcompat:appcompat:1.6.1")
+        implementation("androidx.appcompat:appcompat:1.7.0")
+        //implementation("io.flutter:flutter:3.29.3")
+        //implementation(files("/Users/blingmember/fvm/versions/3.29.3/bin/cache/artifacts/engine/android-arm64/flutter.jar"))
     }
 }
