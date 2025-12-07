@@ -70,6 +70,9 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     return Platform.isAndroid && useEc && enableDecryption;
   }
 
+  /// Whether we're running on an Apple platform (iOS or macOS)
+  bool get isApplePlatform => Platform.isIOS || Platform.isMacOS;
+
   Future<void> _createKeys() async {
     // Hide keyboard and clear errors first.
     FocusScope.of(context).unfocus();
@@ -91,6 +94,11 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
         iosConfig: IosConfig(
           useDeviceCredentials: false,
           signatureType: useEc ? IOSSignatureType.ECDSA : IOSSignatureType.RSA,
+          biometryCurrentSet: true,
+        ),
+        macosConfig: MacosConfig(
+          useDeviceCredentials: false,
+          signatureType: useEc ? MacosSignatureType.ECDSA : MacosSignatureType.RSA,
           biometryCurrentSet: true,
         ),
         enforceBiometric: true,
@@ -261,9 +269,11 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
       return _encryptRsa(plaintext);
     } else {
       // EC - use ECIES
-      if (!Platform.isAndroid) {
+      if (isApplePlatform) {
+        // iOS and macOS use native ECIES via method channel
         return _encryptEciesIos(plaintext);
       } else {
+        // Android uses Dart-based ECIES
         return _encryptEciesDart(plaintext);
       }
     }
@@ -425,7 +435,9 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
 
   @override
   Widget build(BuildContext context) {
-    final canDecrypt = enableDecryption || !Platform.isAndroid;
+    // On Apple platforms (iOS/macOS), decryption is always available
+    // On Android, it requires explicit enableDecryption flag
+    final canDecrypt = enableDecryption || isApplePlatform;
 
     return SafeArea(
       child: Stack(
