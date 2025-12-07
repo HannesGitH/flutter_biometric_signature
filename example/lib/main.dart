@@ -98,7 +98,9 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
         ),
         macosConfig: MacosConfig(
           useDeviceCredentials: false,
-          signatureType: useEc ? MacosSignatureType.ECDSA : MacosSignatureType.RSA,
+          signatureType: useEc
+              ? MacosSignatureType.ECDSA
+              : MacosSignatureType.RSA,
           biometryCurrentSet: true,
         ),
         enforceBiometric: true,

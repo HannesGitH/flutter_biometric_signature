@@ -157,4 +157,3 @@ class MacosDecryptionOptions {
     return {};
   }
 }
-
