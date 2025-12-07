@@ -261,7 +261,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
       return _encryptRsa(plaintext);
     } else {
       // EC - use ECIES
-      if (Platform.isIOS) {
+      if (!Platform.isAndroid) {
         return _encryptEciesIos(plaintext);
       } else {
         return _encryptEciesDart(plaintext);
@@ -425,7 +425,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
 
   @override
   Widget build(BuildContext context) {
-    final canDecrypt = enableDecryption || Platform.isIOS;
+    final canDecrypt = enableDecryption || !Platform.isAndroid;
 
     return SafeArea(
       child: Stack(
