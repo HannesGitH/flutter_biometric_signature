@@ -404,12 +404,6 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin {
 
                 // Store encrypted RSA private key data in Keychain
                 let encryptedKeyTag = self.getBiometricKeyTag()
-                let deleteQuery: [String: Any] = [
-                    kSecClass as String: kSecClassGenericPassword,
-                    kSecAttrService as String: encryptedKeyTag,
-                    kSecAttrAccount as String: encryptedKeyTag
-                ]
-                SecItemDelete(deleteQuery as CFDictionary) // Delete existing item
                 let encryptedKeyAttributes: [String: Any] = [
                     kSecClass as String: kSecClassGenericPassword,
                     kSecAttrService as String: encryptedKeyTag,
@@ -417,6 +411,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin {
                     kSecValueData as String: encryptedRSAKeyData,
                     kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
                 ]
+                SecItemDelete(encryptedKeyAttributes as CFDictionary) // Delete existing item
                 let status = SecItemAdd(encryptedKeyAttributes as CFDictionary, nil)
                 guard status == errSecSuccess else {
                     self.dispatchMainAsync {
