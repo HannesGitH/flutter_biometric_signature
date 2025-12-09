@@ -245,7 +245,7 @@ class _TransferScreenState extends State<TransferScreen> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<Account>(
-              value: _fromAccount,
+              initialValue: _fromAccount,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.account_balance_wallet),
@@ -281,7 +281,7 @@ class _TransferScreenState extends State<TransferScreen> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<Account>(
-              value: _toAccount,
+              initialValue: _toAccount,
               decoration: const InputDecoration(
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.account_balance),

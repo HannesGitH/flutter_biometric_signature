@@ -151,7 +151,7 @@ class _DocumentDetailScreenState extends State<DocumentDetailScreen> {
         _buildInfoRow('Method', sig.biometricType),
         _buildInfoRow(
           'Document Hash',
-          sig.documentHash.substring(0, 32) + '...',
+          '${sig.documentHash.substring(0, 32)}...',
         ),
       ],
     );
