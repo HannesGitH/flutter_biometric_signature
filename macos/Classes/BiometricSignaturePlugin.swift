@@ -7,10 +7,24 @@ private enum Constants {
     static let authFailed = "AUTH_FAILED"
     static let invalidPayload = "INVALID_PAYLOAD"
     static let invalidArguments = "INVALID_ARGUMENTS"
-    static let biometricKeyAlias = "biometric_key"
-    // Keep tag as Data similarly to iOS implementation
-    static let ecKeyAlias = "com.visionflutter.eckey".data(using: .utf8)!
-    static let invalidationSettingKey = "com.visionflutter.biometric_signature.invalidation_setting"
+    
+    // App-specific prefix to isolate keychain items per app on macOS
+    private static var appPrefix: String {
+        Bundle.main.bundleIdentifier ?? "com.visionflutter.biometric_signature"
+    }
+    
+    // Bundle-specific keychain identifiers to prevent cross-app conflicts
+    static var biometricKeyAlias: String {
+        "\(appPrefix).biometric_key"
+    }
+    
+    static var ecKeyAlias: Data {
+        "\(appPrefix).eckey".data(using: .utf8)!
+    }
+    
+    static var invalidationSettingKey: String {
+        "\(appPrefix).invalidation_setting"
+    }
 }
 
 private enum KeyFormat: String {
@@ -44,7 +58,11 @@ private let iso8601Formatter: ISO8601DateFormatter = {
 
 // MARK: - Domain State (biometry change detection)
 private enum DomainState {
-    static let service = "com.visionflutter.biometric_signature.domain_state"
+    // App-specific service identifier
+    private static var service: String {
+        let bundleId = Bundle.main.bundleIdentifier ?? "com.visionflutter.biometric_signature"
+        return "\(bundleId).domain_state"
+    }
 
     private static func account() -> String { "biometric_domain_state_v1" }
 
