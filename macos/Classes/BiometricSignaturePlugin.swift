@@ -192,12 +192,14 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin {
                 let keyFormat = KeyFormat.from(arguments["keyFormat"])
                 let biometryCurrentSet = arguments["biometryCurrentSet"] as! Bool
                 let enforceBiometric = arguments["enforceBiometric"] as? Bool ?? false
+                let promptMessage = arguments["promptMessage"] as? String ?? "Authenticate to create keys"
                 createKeys(
                     useDeviceCredentials: useDeviceCredentials,
                     useEc: useEc,
                     keyFormat: keyFormat,
                     biometryCurrentSet: biometryCurrentSet,
                     enforceBiometric: enforceBiometric,
+                    promptMessage: promptMessage,
                     result: result
                 )
             } else {
@@ -311,6 +313,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin {
     keyFormat: KeyFormat,
     biometryCurrentSet: Bool,
     enforceBiometric: Bool,
+    promptMessage: String,
     result: @escaping FlutterResult
     ) {
         // Delete existing keys (and baseline)
@@ -451,9 +454,9 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin {
         if enforceBiometric {
             let context = LAContext()
             context.localizedFallbackTitle = ""
-            context.localizedReason = "Authenticate to create keys"
+            context.localizedReason = promptMessage
 
-            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "Authenticate to create keys") { success, error in
+            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: promptMessage) { success, error in
                 if success {
                     // Continue to generation on background thread (already on bg thread from evaluatePolicy)
                     generateKeysBlock()

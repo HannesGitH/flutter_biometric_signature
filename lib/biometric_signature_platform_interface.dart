@@ -39,9 +39,10 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
     MacosConfig macosConfig, {
     required KeyFormat keyFormat,
     bool enforceBiometric = false,
+    String? promptMessage,
   }) {
     throw UnimplementedError(
-      'createKeys(AndroidConfig androidConfig, IosConfig iosConfig, MacosConfig macosConfig, {required KeyFormat keyFormat, bool enforceBiometric}) has not been implemented.',
+      'createKeys(AndroidConfig androidConfig, IosConfig iosConfig, MacosConfig macosConfig, {required KeyFormat keyFormat, bool enforceBiometric, String? promptMessage}) has not been implemented.',
     );
   }
 

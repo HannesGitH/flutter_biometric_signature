@@ -66,6 +66,7 @@ class BiometricSignature {
     MacosConfig? macosConfig,
     KeyFormat keyFormat = KeyFormat.base64,
     bool enforceBiometric = false,
+    String? promptMessage,
   }) async {
     final response = await BiometricSignaturePlatform.instance.createKeys(
       androidConfig ??
@@ -79,6 +80,7 @@ class BiometricSignature {
           MacosConfig(useDeviceCredentials: false, biometryCurrentSet: true),
       keyFormat: keyFormat,
       enforceBiometric: enforceBiometric,
+      promptMessage: promptMessage,
     );
 
     return response == null ? null : KeyCreationResult.fromChannel(response);

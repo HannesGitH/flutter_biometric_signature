@@ -13,6 +13,10 @@
   - `useDeviceCredentials`: Enable device credentials (passcode) fallback
   - `signatureType`: Support for both `MacosSignatureType.RSA` and `MacosSignatureType.ECDSA`
   - `biometryCurrentSet`: Bind keys to current Touch ID enrollment state
+* **New Parameter**: Added optional `promptMessage` parameter to `createKeys()` method across all platforms
+  - Allows customization of the authentication prompt when `enforceBiometric` is `true`
+  - Defaults to `"Authenticate to create keys"` for backward compatibility
+  - Provides context-specific instructions to users during key generation
 
 #### Security Features
 * **App-specific keychain isolation**: Keychain identifiers now incorporate bundle identifier to prevent cross-app conflicts on macOS

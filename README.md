@@ -254,7 +254,7 @@ When a user enrolls in biometrics, a key pair is generated. The private key is s
 
 This class provides methods to manage and utilize biometric authentication for secure server interactions. It supports both Android and iOS platforms.
 
-### `createKeys({ androidConfig, iosConfig, macosConfig, keyFormat, enforceBiometric })`
+### `createKeys({ androidConfig, iosConfig, macosConfig, keyFormat, enforceBiometric, promptMessage })`
 
 Generates a new key pair (RSA 2048 or EC) for biometric authentication. The private key is securely stored on the device, while the `KeyCreationResult` returned from this call contains a `FormattedValue` with the public key in the requested representation. StrongBox support is available for compatible Android devices and Secure Enclave support is available for iOS.
 Hybrid modes generate both hardware and software keys, encrypting software keys via secure hardware.
@@ -275,6 +275,7 @@ Hybrid modes generate both hardware and software keys, encrypting software keys 
         - `biometryCurrentSet` *(optional)*: A `bool` to constrain key usage to the current biometric enrollment. Defaults to `true`. When set to `true`, the key is bound to the current set of enrolled biometrics (Touch ID). If biometrics are changed, the key becomes invalid, requiring re-enrollment.
     - `keyFormat` *(optional)*: A `KeyFormat` value describing how the public key should be returned. Defaults to `KeyFormat.base64` for backward compatibility.
     - `enforceBiometric` *(optional)*: A `bool` to require biometric authentication before generating the key-pair. Defaults to `false`. When set to `true`, the user will be prompted for biometric authentication (fingerprint, face, or iris) before the key-pair is generated. This ensures that the person holding the device is verified before keys are created, adding an extra layer of security for sensitive use cases.
+    - `promptMessage` *(optional)*: A `String` to customize the authentication prompt message when `enforceBiometric` is `true`. Defaults to `"Authenticate to create keys"`. This allows you to provide context-specific instructions to the user during key generation.
 
 - **Returns**: `Future<KeyCreationResult?>`. Access the formatted public key through `result.publicKey`, e.g.:
 

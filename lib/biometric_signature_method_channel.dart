@@ -24,6 +24,7 @@ class MethodChannelBiometricSignature extends BiometricSignaturePlatform {
     MacosConfig macosConfig, {
     required KeyFormat keyFormat,
     bool enforceBiometric = false,
+    String? promptMessage,
   }) async {
     try {
       if (Platform.isAndroid) {
@@ -36,6 +37,7 @@ class MethodChannelBiometricSignature extends BiometricSignaturePlatform {
                   androidConfig.setInvalidatedByBiometricEnrollment,
               'enableDecryption': androidConfig.enableDecryption,
               'enforceBiometric': enforceBiometric,
+              if (promptMessage != null) 'promptMessage': promptMessage,
             });
         return _normalizeMapResponse(response);
       } else if (Platform.isMacOS) {
@@ -46,6 +48,7 @@ class MethodChannelBiometricSignature extends BiometricSignaturePlatform {
               'keyFormat': keyFormat.wireValue,
               'biometryCurrentSet': macosConfig.biometryCurrentSet,
               'enforceBiometric': enforceBiometric,
+              if (promptMessage != null) 'promptMessage': promptMessage,
             });
         return _normalizeMapResponse(response);
       } else {
@@ -56,6 +59,7 @@ class MethodChannelBiometricSignature extends BiometricSignaturePlatform {
               'keyFormat': keyFormat.wireValue,
               'biometryCurrentSet': iosConfig.biometryCurrentSet,
               'enforceBiometric': enforceBiometric,
+              if (promptMessage != null) 'promptMessage': promptMessage,
             });
         return _normalizeMapResponse(response);
       }
