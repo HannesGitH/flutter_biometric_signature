@@ -8,6 +8,7 @@ class SignatureOptions {
     this.promptMessage,
     this.androidOptions,
     this.iosOptions,
+    this.macosOptions,
     this.keyFormat = KeyFormat.base64,
   });
 
@@ -20,8 +21,11 @@ class SignatureOptions {
   /// Android-specific biometric prompt and configuration overrides.
   final AndroidSignatureOptions? androidOptions;
 
-  /// iOS-specific decryption options.
+  /// iOS-specific signature options.
   final IosSignatureOptions? iosOptions;
+
+  /// macOS-specific signature options.
+  final MacosSignatureOptions? macosOptions;
 
   /// Preferred output format for both public key and signature.
   final KeyFormat keyFormat;
@@ -40,6 +44,10 @@ class SignatureOptions {
 
     if (iosOptions != null) {
       map.addAll(iosOptions!.toMethodChannelMap());
+    }
+
+    if (macosOptions != null) {
+      map.addAll(macosOptions!.toMethodChannelMap());
     }
 
     return map;
@@ -95,5 +103,21 @@ class IosSignatureOptions {
   /// Converts iOS-specific options to a method-channel friendly map.
   Map<String, dynamic> toMethodChannelMap() {
     return {if (shouldMigrate != null) 'shouldMigrate': shouldMigrate};
+  }
+}
+
+/// macOS-specific overrides for a signature request.
+///
+/// Currently empty as macOS does not require migration or other special options.
+class MacosSignatureOptions {
+  /// Creates a new [MacosSignatureOptions] instance.
+  const MacosSignatureOptions();
+
+  /// Whether any macOS-specific values have been provided.
+  bool get hasValues => false;
+
+  /// Converts macOS-specific options to a method-channel friendly map.
+  Map<String, dynamic> toMethodChannelMap() {
+    return {};
   }
 }

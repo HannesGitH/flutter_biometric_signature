@@ -3,12 +3,14 @@ import 'biometric_signature_platform_interface.dart';
 import 'decryption_options.dart';
 import 'ios_config.dart';
 import 'key_material.dart';
+import 'macos_config.dart';
 import 'signature_options.dart';
 
 export 'android_config.dart';
 export 'decryption_options.dart';
 export 'ios_config.dart';
 export 'key_material.dart';
+export 'macos_config.dart';
 export 'signature_options.dart';
 
 /// High-level API for interacting with the Biometric Signature plugin.
@@ -19,10 +21,11 @@ export 'signature_options.dart';
 ///
 /// - **Android**: Android Keystore / StrongBox
 /// - **iOS**: Secure Enclave
+/// - **macOS**: Secure Enclave
 ///
 /// Hybrid modes are used automatically when hardware keys cannot perform the
 /// required decryption operation (for example, ECIES on Android or RSA PKCS#1
-/// decryption on iOS).
+/// decryption on iOS/macOS).
 class BiometricSignature {
   /// Creates a new biometric-protected key pair used for signing
   /// (and optionally decryption, depending on the platform and configuration).
@@ -50,7 +53,7 @@ class BiometricSignature {
   ///     AES-256 master key (stored in Keystore/StrongBox). The wrapped key
   ///     itself is stored in app-private files with MODE_PRIVATE permissions.
   ///
-  ///   - **iOS**
+  ///   - **iOS/macOS**
   ///     Hardware EC signing key + software RSA private key for PKCS#1
   ///     decryption. The software RSA key is encrypted using ECIES with
   ///     Secure Enclave EC public key material and stored in Keychain.
@@ -60,9 +63,10 @@ class BiometricSignature {
   Future<KeyCreationResult?> createKeys({
     AndroidConfig? androidConfig,
     IosConfig? iosConfig,
+    MacosConfig? macosConfig,
     KeyFormat keyFormat = KeyFormat.base64,
-    bool setInvalidatedByBiometricEnrollment = true,
     bool enforceBiometric = false,
+    String? promptMessage,
   }) async {
     final response = await BiometricSignaturePlatform.instance.createKeys(
       androidConfig ??
@@ -72,8 +76,11 @@ class BiometricSignature {
           ),
       iosConfig ??
           IosConfig(useDeviceCredentials: false, biometryCurrentSet: true),
+      macosConfig ??
+          MacosConfig(useDeviceCredentials: false, biometryCurrentSet: true),
       keyFormat: keyFormat,
       enforceBiometric: enforceBiometric,
+      promptMessage: promptMessage,
     );
 
     return response == null ? null : KeyCreationResult.fromChannel(response);

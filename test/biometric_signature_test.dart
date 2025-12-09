@@ -29,9 +29,11 @@ class MockBiometricSignaturePlatform
   @override
   Future<Map<String, dynamic>?> createKeys(
     AndroidConfig androidConfig,
-    IosConfig iosConfig, {
+    IosConfig iosConfig,
+    MacosConfig macosConfig, {
     required KeyFormat keyFormat,
     bool enforceBiometric = false,
+    String? promptMessage,
   }) {
     if (_shouldThrowError) throw Exception('Key creation failed');
 

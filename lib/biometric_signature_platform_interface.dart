@@ -1,5 +1,6 @@
 import 'package:biometric_signature/android_config.dart';
 import 'package:biometric_signature/ios_config.dart';
+import 'package:biometric_signature/macos_config.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'biometric_signature_method_channel.dart';
@@ -34,12 +35,14 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
   /// Creates a key pair using the supplied platform-specific configuration.
   Future<Map<String, dynamic>?> createKeys(
     AndroidConfig androidConfig,
-    IosConfig iosConfig, {
+    IosConfig iosConfig,
+    MacosConfig macosConfig, {
     required KeyFormat keyFormat,
     bool enforceBiometric = false,
+    String? promptMessage,
   }) {
     throw UnimplementedError(
-      'createKeys(AndroidConfig androidConfig, IosConfig iosConfig, {required KeyFormat keyFormat, bool enforceBiometric}) has not been implemented.',
+      'createKeys(AndroidConfig androidConfig, IosConfig iosConfig, MacosConfig macosConfig, {required KeyFormat keyFormat, bool enforceBiometric, String? promptMessage}) has not been implemented.',
     );
   }
 

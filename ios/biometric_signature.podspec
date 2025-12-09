@@ -4,14 +4,14 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'biometric_signature'
-  s.version          = '8.4.0'
+  s.version          = '8.5.0'
   s.summary          = 'A new Flutter plugin project.'
   s.description      = <<-DESC
 A new Flutter plugin project.
                        DESC
-  s.homepage         = 'http://example.com'
+  s.homepage         = 'https://visionflutter.com'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Your Company' => 'email@example.com' }
+  s.author           = { 'Vision Flutter' => 'chamodananayakkara@gmail.com' }
   s.source           = { :path => '.' }
   s.source_files = 'Classes/**/*'
   s.dependency 'Flutter'

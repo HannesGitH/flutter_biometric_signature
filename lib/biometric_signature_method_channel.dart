@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:biometric_signature/android_config.dart';
 import 'package:biometric_signature/ios_config.dart';
+import 'package:biometric_signature/macos_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -19,9 +20,11 @@ class MethodChannelBiometricSignature extends BiometricSignaturePlatform {
   @override
   Future<Map<String, dynamic>?> createKeys(
     AndroidConfig androidConfig,
-    IosConfig iosConfig, {
+    IosConfig iosConfig,
+    MacosConfig macosConfig, {
     required KeyFormat keyFormat,
     bool enforceBiometric = false,
+    String? promptMessage,
   }) async {
     try {
       if (Platform.isAndroid) {
@@ -34,6 +37,18 @@ class MethodChannelBiometricSignature extends BiometricSignaturePlatform {
                   androidConfig.setInvalidatedByBiometricEnrollment,
               'enableDecryption': androidConfig.enableDecryption,
               'enforceBiometric': enforceBiometric,
+              if (promptMessage != null) 'promptMessage': promptMessage,
+            });
+        return _normalizeMapResponse(response);
+      } else if (Platform.isMacOS) {
+        final response = await methodChannel
+            .invokeMethod<dynamic>('createKeys', {
+              'useDeviceCredentials': macosConfig.useDeviceCredentials,
+              'useEc': macosConfig.signatureType.isEc,
+              'keyFormat': keyFormat.wireValue,
+              'biometryCurrentSet': macosConfig.biometryCurrentSet,
+              'enforceBiometric': enforceBiometric,
+              if (promptMessage != null) 'promptMessage': promptMessage,
             });
         return _normalizeMapResponse(response);
       } else {
@@ -44,6 +59,7 @@ class MethodChannelBiometricSignature extends BiometricSignaturePlatform {
               'keyFormat': keyFormat.wireValue,
               'biometryCurrentSet': iosConfig.biometryCurrentSet,
               'enforceBiometric': enforceBiometric,
+              if (promptMessage != null) 'promptMessage': promptMessage,
             });
         return _normalizeMapResponse(response);
       }

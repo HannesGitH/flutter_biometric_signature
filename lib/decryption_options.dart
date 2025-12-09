@@ -7,7 +7,7 @@
 /// ## Supported Algorithms
 ///
 /// **RSA Decryption**
-/// - Uses RSA/ECB/PKCS1Padding on both Android and iOS.
+/// - Uses RSA/ECB/PKCS1Padding on Android, iOS, and macOS.
 ///
 /// **EC Decryption (ECIES)**
 /// - Uses ECIES with ANSI X9.63 KDF (SHA-256) and AES-128-GCM.
@@ -16,7 +16,7 @@
 ///   - The software EC private key is stored in app-private files (encrypted),
 ///     and unwrapped at runtime using a biometric-protected AES-256 master key
 ///     stored inside Keystore/StrongBox.
-/// - iOS:
+/// - iOS/macOS:
 ///   - ECIES is performed natively using
 ///     `SecKeyAlgorithm.eciesEncryptionStandardX963SHA256AESGCM`.
 ///
@@ -38,6 +38,7 @@ class DecryptionOptions {
     this.promptMessage,
     this.androidOptions,
     this.iosOptions,
+    this.macosOptions,
   });
 
   /// Base64-encoded encrypted payload.
@@ -58,6 +59,9 @@ class DecryptionOptions {
   /// iOS-specific configuration, including optional migration of legacy keys.
   final IosDecryptionOptions? iosOptions;
 
+  /// macOS-specific configuration.
+  final MacosDecryptionOptions? macosOptions;
+
   /// Converts this object to a map suitable for method-channel transport.
   Map<String, dynamic> toMethodChannelMap() {
     final map = <String, dynamic>{
@@ -71,6 +75,10 @@ class DecryptionOptions {
 
     if (iosOptions != null) {
       map.addAll(iosOptions!.toMethodChannelMap());
+    }
+
+    if (macosOptions != null) {
+      map.addAll(macosOptions!.toMethodChannelMap());
     }
 
     return map;
@@ -131,5 +139,21 @@ class IosDecryptionOptions {
   /// Converts iOS-specific options to a method-channel-compatible map.
   Map<String, dynamic> toMethodChannelMap() {
     return {if (shouldMigrate != null) 'shouldMigrate': shouldMigrate};
+  }
+}
+
+/// macOS-specific decryption parameters.
+///
+/// Currently empty as macOS does not require migration or other special options.
+class MacosDecryptionOptions {
+  /// Creates a new [MacosDecryptionOptions] instance.
+  const MacosDecryptionOptions();
+
+  /// Whether any macOS-specific parameters were provided.
+  bool get hasValues => false;
+
+  /// Converts macOS-specific options to a method-channel-compatible map.
+  Map<String, dynamic> toMethodChannelMap() {
+    return {};
   }
 }

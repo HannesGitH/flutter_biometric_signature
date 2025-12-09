@@ -193,6 +193,7 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
         val invalidateOnEnrollment = args.boolean("setInvalidatedByBiometricEnrollment")
         val enforceBiometric = args.boolean("enforceBiometric")
         val keyFormat = KeyFormat.from(args["keyFormat"] as? String)
+        val promptMessage = args["promptMessage"] as? String ?: "Authenticate to create keys"
 
         // Determine mode
         val mode = when {
@@ -209,7 +210,8 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                 invalidateOnEnrollment,
                 enableDecryption,
                 enforceBiometric,
-                keyFormat
+                keyFormat,
+                promptMessage
             )
 
             KeyMode.EC_SIGN_ONLY -> createEcSigningKeys(
@@ -218,7 +220,8 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                 useDeviceCredentials,
                 invalidateOnEnrollment,
                 enforceBiometric,
-                keyFormat
+                keyFormat,
+                promptMessage
             )
 
             KeyMode.HYBRID_EC -> createHybridEcKeys(
@@ -227,7 +230,8 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
                 useDeviceCredentials,
                 invalidateOnEnrollment,
                 keyFormat,
-                enforceBiometric
+                enforceBiometric,
+                promptMessage
             )
         }
     }
@@ -240,13 +244,14 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
         invalidateOnEnrollment: Boolean,
         enableDecryption: Boolean,
         enforceBiometric: Boolean,
-        keyFormat: KeyFormat
+        keyFormat: KeyFormat,
+        promptMessage: String
     ) {
         if (enforceBiometric) {
             checkBiometricAvailability(activity, useDeviceCredentials)
             authenticate(
                 activity,
-                "Authenticate to create keys",
+                promptMessage,
                 null,
                 "Cancel",
                 useDeviceCredentials,
@@ -300,13 +305,14 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
         useDeviceCredentials: Boolean,
         invalidateOnEnrollment: Boolean,
         enforceBiometric: Boolean,
-        keyFormat: KeyFormat
+        keyFormat: KeyFormat,
+        promptMessage: String
     ) {
         if (enforceBiometric) {
             checkBiometricAvailability(activity, useDeviceCredentials)
             authenticate(
                 activity,
-                "Authenticate to create keys",
+                promptMessage,
                 null,
                 "Cancel",
                 useDeviceCredentials,
@@ -352,7 +358,8 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
         useDeviceCredentials: Boolean,
         invalidateOnEnrollment: Boolean,
         keyFormat: KeyFormat,
-        enforceBiometric: Boolean
+        enforceBiometric: Boolean,
+        promptMessage: String
     ) {
         // Step 0: If requested, force biometric before key creation
         if (enforceBiometric) {
@@ -360,7 +367,7 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
             // Authenticate with a no-crypto prompt for enforcement only
             authenticate(
                 activity,
-                "Authenticate to create keys",
+                promptMessage,
                 null,
                 "Cancel",
                 useDeviceCredentials,
@@ -385,7 +392,7 @@ class BiometricSignaturePlugin : FlutterPlugin, MethodCallHandler, ActivityAware
         checkBiometricAvailability(activity, useDeviceCredentials)
         val authResult = authenticate(
             activity,
-            "Authenticate to create keys",
+            promptMessage,
             null,
             "Cancel",
             useDeviceCredentials,
