@@ -154,12 +154,12 @@ To get started with Biometric Signature, follow these steps:
 
 ```yaml
 dependencies:
-  biometric_signature: ^8.4.0
+  biometric_signature: ^8.5.0
 ```
 
-|             | Android | iOS   |
-|-------------|---------|-------|
-| **Support** | SDK 24+ | 13.0+ |
+|             | Android | iOS   | macOS    |
+|-------------|---------|-------|----------|
+| **Support** | SDK 24+ | 13.0+ | 10.15+   |
 
 ### iOS Integration
 
@@ -196,12 +196,41 @@ Update your project's `AndroidManifest.xml` file to include the
 </manifest>
 ```
 
+### macOS Integration
+
+This plugin works with Touch ID on supported Macs. To use Touch ID, you need to:
+
+1. Add the required entitlements to your macOS app.
+
+Open your macOS project's entitlements file (typically located at `macos/Runner/DebugProfile.entitlements` and `macos/Runner/Release.entitlements`) and ensure it includes:
+
+```xml
+<key>com.apple.security.device.usb</key>
+<false/>
+<key>com.apple.security.device.bluetooth</key>
+<false/>
+<key>keychain-access-groups</key>
+<array>
+    <string>$(AppIdentifierPrefix)com.yourdomain.yourapp</string>
+</array>
+```
+
+Replace `com.yourdomain.yourapp` with your actual bundle identifier.
+
+2. Ensure CocoaPods is properly configured in your `macos/Podfile`. The plugin requires macOS 10.15 or later:
+
+```ruby
+platform :osx, '10.15'
+```
+
+
 2. Import the package in your Dart code:
 
 ```dart
 import 'package:biometric_signature/biometric_signature.dart';
 import 'package:biometric_signature/android_config.dart';
 import 'package:biometric_signature/ios_config.dart';
+import 'package:biometric_signature/macos_config.dart';
 import 'package:biometric_signature/signature_options.dart';
 import 'package:biometric_signature/decryption_options.dart';
 ```
@@ -225,7 +254,7 @@ When a user enrolls in biometrics, a key pair is generated. The private key is s
 
 This class provides methods to manage and utilize biometric authentication for secure server interactions. It supports both Android and iOS platforms.
 
-### `createKeys({ androidConfig, iosConfig, keyFormat, enforceBiometric })`
+### `createKeys({ androidConfig, iosConfig, macosConfig, keyFormat, enforceBiometric })`
 
 Generates a new key pair (RSA 2048 or EC) for biometric authentication. The private key is securely stored on the device, while the `KeyCreationResult` returned from this call contains a `FormattedValue` with the public key in the requested representation. StrongBox support is available for compatible Android devices and Secure Enclave support is available for iOS.
 Hybrid modes generate both hardware and software keys, encrypting software keys via secure hardware.
@@ -240,6 +269,10 @@ Hybrid modes generate both hardware and software keys, encrypting software keys 
         - `useDeviceCredentials`: A `bool` to indicate whether Device Credentials' fallback support is needed.
         - `signatureType`: An enum value of `IOSSignatureType`.
         - `biometryCurrentSet` *(optional)*: A `bool` to constrain key usage to the current biometric enrollment. Defaults to `true`. When set to `true`, the key is bound to the current set of enrolled biometrics. If biometrics are changed (e.g., a new fingerprint is added or removed), the key becomes invalid, requiring re-enrollment.
+    - `macosConfig`: A `MacosConfig` object containing following properties:
+        - `useDeviceCredentials`: A `bool` to indicate whether Device Credentials' fallback support is needed.
+        - `signatureType`: An enum value of `MacosSignatureType`.
+        - `biometryCurrentSet` *(optional)*: A `bool` to constrain key usage to the current biometric enrollment. Defaults to `true`. When set to `true`, the key is bound to the current set of enrolled biometrics (Touch ID). If biometrics are changed, the key becomes invalid, requiring re-enrollment.
     - `keyFormat` *(optional)*: A `KeyFormat` value describing how the public key should be returned. Defaults to `KeyFormat.base64` for backward compatibility.
     - `enforceBiometric` *(optional)*: A `bool` to require biometric authentication before generating the key-pair. Defaults to `false`. When set to `true`, the user will be prompted for biometric authentication (fingerprint, face, or iris) before the key-pair is generated. This ensures that the person holding the device is verified before keys are created, adding an extra layer of security for sensitive use cases.
 

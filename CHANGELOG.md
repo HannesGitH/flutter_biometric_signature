@@ -1,3 +1,49 @@
+## [8.5.0] - 2025-12-09
+
+### Added - macOS Platform Support
+
+#### Platform Integration
+* **Full macOS support** for biometric authentication using Touch ID.
+* Native macOS implementation via `BiometricSignaturePlugin.swift`.
+* Support for macOS 10.15 (Catalina) and later.
+* CocoaPods integration for seamless dependency management.
+
+#### API and Configuration
+* New `MacosConfig` class for platform-specific configuration:
+  - `useDeviceCredentials`: Enable device credentials (passcode) fallback
+  - `signatureType`: Support for both `MacosSignatureType.RSA` and `MacosSignatureType.ECDSA`
+  - `biometryCurrentSet`: Bind keys to current Touch ID enrollment state
+
+#### Security Features
+* **App-specific keychain isolation**: Keychain identifiers now incorporate bundle identifier to prevent cross-app conflicts on macOS
+  - Each app's keys are completely isolated: `{bundleId}.eckey`, `{bundleId}.biometric_key`, etc.
+  - Solves the issue where multiple apps using the plugin would share the same keychain items
+  - iOS implementation remains unchanged as it already has proper sandboxing
+* Secure Enclave integration for EC key storage and operations
+* Hardware-backed cryptographic operations using macOS Security framework
+* Domain state tracking for biometric enrollment changes
+
+#### Cryptographic Features
+* **RSA Mode**: 
+  - RSA-2048 hardware-backed signing
+  - Hybrid mode with software RSA decryption key wrapped via ECIES
+* **EC Mode**: 
+  - P-256 (secp256r1) hardware-backed signing in Secure Enclave
+  - Native ECIES decryption using `SecKeyAlgorithm.eciesEncryptionStandardX963SHA256AESGCM`
+  - Support for EC-only mode and hybrid EC mode
+
+#### Implementation Details
+* Biometry change detection via `LAContext.evaluatedPolicyDomainState`
+* Automatic key invalidation when Touch ID enrollment changes (when `biometryCurrentSet` is `true`)
+* Support for all key formats: BASE64, PEM, RAW, HEX
+* Consistent error handling and Flutter method channel integration
+
+### Changed
+* Updated platform interface to distinguish macOS from iOS
+* Enhanced `BiometricSignaturePlatform` to properly handle macOS-specific parameters
+* Updated documentation with macOS integration steps and examples
+* Added macOS to platform support table (macOS 10.15+)
+
 ## [8.4.0] - 2025-11-28
 ### Added
 * **ECIES decryption** on Android and iOS.
