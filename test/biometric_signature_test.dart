@@ -33,6 +33,7 @@ class MockBiometricSignaturePlatform
     MacosConfig macosConfig, {
     required KeyFormat keyFormat,
     bool enforceBiometric = false,
+    String? promptMessage,
   }) {
     if (_shouldThrowError) throw Exception('Key creation failed');
 
