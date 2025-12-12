@@ -14,7 +14,7 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral
 
 SPEC CHECKSUMS:
-  biometric_signature: 299607c931c3b796e2eb3e0d5d5c3d16d95c364f
+  biometric_signature: 1effe0546fb383befaac2b96a418f97571b92555
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
 
 PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009

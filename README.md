@@ -256,195 +256,80 @@ This class provides methods to manage and utilize biometric authentication for s
 
 ### `createKeys({ androidConfig, iosConfig, macosConfig, keyFormat, enforceBiometric, promptMessage })`
 
-Generates a new key pair (RSA 2048 or EC) for biometric authentication. The private key is securely stored on the device, while the `KeyCreationResult` returned from this call contains a `FormattedValue` with the public key in the requested representation. StrongBox support is available for compatible Android devices and Secure Enclave support is available for iOS.
-Hybrid modes generate both hardware and software keys, encrypting software keys via secure hardware.
+Generates a new key pair (RSA 2048 or EC) for biometric authentication. The private key is securely stored on the device.
 
-- **Parameters**:
-    -`androidConfig`: An `AndroidConfig` object containing following properties:
-        - `useDeviceCredentials`: A `bool` to indicate whether Device Credentials' fallback support is needed for the compatible Android devices.
-        - `signatureType`: An enum value of `AndroidSignatureType`.
-        - `setInvalidatedByBiometricEnrollment` *(optional)*: A `bool` to indicate whether the key should be invalidated when a new biometric is enrolled. Defaults to `true`. When set to `true`, adding a new fingerprint, face, or iris will invalidate the existing key, requiring re-enrollment. This enhances security by ensuring keys are tied to the specific biometric set at creation time.
-        - `enableDecryption` *(optional)*: A `bool` to indicate whether the generated key should support decryption (RSA only). Defaults to `false`.
-    - `iosConfig`: An `IosConfig` object containing following properties:
-        - `useDeviceCredentials`: A `bool` to indicate whether Device Credentials' fallback support is needed.
-        - `signatureType`: An enum value of `IOSSignatureType`.
-        - `biometryCurrentSet` *(optional)*: A `bool` to constrain key usage to the current biometric enrollment. Defaults to `true`. When set to `true`, the key is bound to the current set of enrolled biometrics. If biometrics are changed (e.g., a new fingerprint is added or removed), the key becomes invalid, requiring re-enrollment.
-    - `macosConfig`: A `MacosConfig` object containing following properties:
-        - `useDeviceCredentials`: A `bool` to indicate whether Device Credentials' fallback support is needed.
-        - `signatureType`: An enum value of `MacosSignatureType`.
-        - `biometryCurrentSet` *(optional)*: A `bool` to constrain key usage to the current biometric enrollment. Defaults to `true`. When set to `true`, the key is bound to the current set of enrolled biometrics (Touch ID). If biometrics are changed, the key becomes invalid, requiring re-enrollment.
-    - `keyFormat` *(optional)*: A `KeyFormat` value describing how the public key should be returned. Defaults to `KeyFormat.base64` for backward compatibility.
-    - `enforceBiometric` *(optional)*: A `bool` to require biometric authentication before generating the key-pair. Defaults to `false`. When set to `true`, the user will be prompted for biometric authentication (fingerprint, face, or iris) before the key-pair is generated. This ensures that the person holding the device is verified before keys are created, adding an extra layer of security for sensitive use cases.
-    - `promptMessage` *(optional)*: A `String` to customize the authentication prompt message when `enforceBiometric` is `true`. Defaults to `"Authenticate to create keys"`. This allows you to provide context-specific instructions to the user during key generation.
-
-- **Returns**: `Future<KeyCreationResult?>`. Access the formatted public key through `result.publicKey`, e.g.:
+- **Returns**: `Future<KeyCreationResult>`.
+  - `publicKey`: The formatted public key string (Base64 or PEM).
+  - `code`: `BiometricError` code (e.g., `success`, `userCanceled`).
+  - `error`: Descriptive error message.
 
 ```dart
-final keyResult = await biometricSignature.createKeys(keyFormat: KeyFormat.pem);
-final pem = keyResult?.publicKey.asString();
-final derBytes = keyResult?.publicKey.toBytes();
+final result = await biometricSignature.createKeys(
+  keyFormat: KeyFormat.pem,
+  androidConfig: AndroidConfig(
+    useDeviceCredentials: false,
+    signatureType: SignatureType.rsa,
+  ),
+  iosConfig: IosConfig(
+    biometryCurrentSet: true,
+    signatureType: SignatureType.rsa,
+  ),
+);
+
+if (result.code == BiometricError.success) {
+   print('Public Key: ${result.publicKey}');
+}
 ```
 
-- **Error Codes**:
-  - `AUTH_FAILED`: Error generating keys.
+### `createSignature(options)`
 
-### `createSignature(SignatureOptions options)`
+Prompts the user for biometric authentication and generates a cryptographic signature.
 
-Prompts the user for biometric authentication and generates a cryptographic signature (RSA PKCS#1v1.5 SHA-256 or ECDSA P-256) using the securely stored private key. The new response is a `SignatureResult` that carries both the signature and public key in the requested output format.  
-Hybrid modes always sign using the hardware EC key.
-
-- **Parameters**:
-  - `options`: A `SignatureOptions` instance that specifies:
-    - `payload` (required): The UTF-8 payload to sign.
-    - `promptMessage` (optional): Message displayed in the biometric prompt. Default to `Authenticate`.
-    - `androidOptions` (optional): An `AndroidSignatureOptions` object offering:
-        - `cancelButtonText`: Overrides the cancel button label. Defaults to `Cancel`.
-        - `allowDeviceCredentials`: Enables device-credential fallback on compatible Android devices.
-        - `subtitle`: Optional secondary text displayed under the prompt title on Android.
-    - `iosOptions` (optional): An `IosSignatureOptions` object offering:
-        - `shouldMigrate`: Triggers migration from pre-5.x Keychain storage to Secure Enclave.
-    - `keyFormat` *(optional)*: Preferred output format (`KeyFormat.base64` by default). This is a new parameter.
-
-- **Returns**: `Future<SignatureResult?>`. Use the `FormattedValue` helpers to obtain the representation you need:
+- **Returns**: `Future<SignatureResult>`.
+  - `signature`: The signed payload.
+  - `publicKey`: The public key.
+  - `code`: `BiometricError` code.
 
 ```dart
-final signatureResult = await biometricSignature.createSignature(
-    SignatureOptions(
-        payload: 'Payload to sign',
-        keyFormat: KeyFormat.raw,
-        promptMessage: 'Authenticate to Sign',
-        androidOptions: const AndroidSignatureOptions(allowDeviceCredentials: false),
-        iosOptions: const IosSignatureOptions(shouldMigrate: false),
-    ),
+final result = await biometricSignature.createSignature(
+  payload: 'Data to sign',
+  promptMessage: 'Please authenticate',
 );
-
-final Uint8List rawSignature = signatureResult!.signature.toBytes();
-final String base64Signature = signatureResult.signature.toBase64();
 ```
 
-- **Error Codes**:
-  - `INVALID_PAYLOAD`: Payload is required and must be valid UTF-8.
-  - `AUTH_FAILED`: Error generating the signature.
+### `decrypt(options)`
 
-#### Supported output formats
+Decrypts the given payload using the private key and biometrics.
 
-`KeyFormat` lets you decide how both the public key and signature are returned:
-
-- `KeyFormat.base64` &mdash; URL/transport friendly string (default).
-- `KeyFormat.pem` &mdash; PEM block with headers, using SubjectPublicKeyInfo on both platforms.
-- `KeyFormat.raw` &mdash; `Uint8List` (DER bytes for public keys, raw signature bytes).
-- `KeyFormat.hex` &mdash; Lowercase hexadecimal string.
-
-Each `FormattedValue` exposes helpers such as `toBase64()`, `toBytes()`, `toHex()` and `asString()` so you can easily convert between representations.
-
-### `decrypt(DecryptionOptions options)`
-
-Decrypts the given payload using the private key and biometrics. Supports both **RSA** (PKCS#1) and **EC** (ECIES with P-256 → ECDH → X9.63 KDF (SHA-256) → AES-128-GCM) decryption.
-
-- **Parameters**:
-  - `options`: A `DecryptionOptions` instance that specifies:
-    - `payload` (required): The Base64 encoded encrypted payload to decrypt.
-    - `promptMessage` (optional): Message displayed in the biometric prompt. Defaults to `Authenticate`.
-    - `androidOptions` (optional): An `AndroidDecryptionOptions` object offering:
-        - `cancelButtonText`: Overrides the cancel button label. Defaults to `Cancel`.
-        - `allowDeviceCredentials`: Enables device-credential fallback on compatible Android devices.
-        - `subtitle`: Optional secondary text displayed under the prompt title on Android.
-    - `iosOptions` (optional): An `IosDecryptionOptions` object offering:
-        - `shouldMigrate`: Triggers migration from pre-5.x Keychain storage to Secure Enclave.
-
-- **Returns**: `Future<DecryptResult?>`. The `DecryptResult` contains the `decryptedData` string.
-
-- **Supported Algorithms**:
-  - **RSA**: Uses RSA/ECB/PKCS1Padding (Android & iOS Hybrid mode)
-  - **EC**: Uses ECIES (Elliptic Curve Integrated Encryption Scheme) with:
-    - Curve: P-256 (secp256r1)
-    - Key Agreement: ECDH
-    - KDF: ANSI X9.63 with SHA-256
-    - Encryption: AES-128-GCM (12-byte IV, 128-bit auth tag)
-
-- **Native Architecture Summary**:
-  - **Android**: 
-    - Hardware EC/RSA keys for signing (Keystore/StrongBox)
-    - Software EC key for ECIES decryption
-    - Wrapped EC private key stored in app-private files
-    - Unwrapped at runtime using biometric-protected AES-256 master key
-    - Manual ECIES implementation: ECDH → X9.63 KDF → AES-GCM
-    - All sensitive material zeroized immediately after use
-  - **iOS**: 
-    - Secure Enclave EC key for signing
-    - Native ECIES using `SecKeyAlgorithm.eciesEncryptionStandardX963SHA256AESGCM`
-    - Hybrid RSA mode: software RSA key wrapped via ECIES, stored in Keychain
-
-```dart
-// RSA Decryption Example
-final decryptResult = await biometricSignature.decrypt(
-    DecryptionOptions(
-        payload: 'Base64 Encrypted RSA Payload',
-        promptMessage: 'Authenticate to Decrypt',
-        androidOptions: const AndroidDecryptionOptions(allowDeviceCredentials: false),
-        iosOptions: const IosDecryptionOptions(shouldMigrate: false),
-    ),
-);
-
-// EC Decryption Example (ECIES)
-final ecDecryptResult = await biometricSignature.decrypt(
-    DecryptionOptions(
-        payload: 'Base64 Encrypted ECIES Payload',
-        promptMessage: 'Authenticate to Decrypt',
-        androidOptions: const AndroidDecryptionOptions(allowDeviceCredentials: false),
-        iosOptions: const IosDecryptionOptions(shouldMigrate: false),
-    ),
-);
-
-final decryptedString = decryptResult?.decryptedData;
-```
-
-- **Error Codes**:
-  - `INVALID_PAYLOAD`: Payload is required or invalid format.
-  - `AUTH_FAILED`: Error decrypting the payload or authentication failed.
-
-### `deleteKeys()`
-
-Deletes all key material (hardware + hybrid).
-Hybrid wrapped keys stored in Keystore are also removed.
-
-- **Returns**: `bool` - `true` if the key(s) was successfully deleted.
-
-- **Error Codes**:
-
-- `AUTH_FAILED`: Error deleting the biometric key
+- **Returns**: `Future<DecryptResult>`.
+  - `decryptedData`: The plaintext string.
+  - `code`: `BiometricError` code.
 
 ### `biometricAuthAvailable()`
 
-Checks if biometric authentication is available on the device. On Android, it specifically checks for Biometric Strong Authenticators, which provide a higher level of security.
+Checks if biometric authentication is available on the device and returns a structured response.
 
-- **Returns**: `String` - The type of biometric authentication available (`fingerprint`, `face`, `iris`, `TouchID`, `FaceID`, or `biometric`) or a string indicating the error if no biometrics are available.
+- **Returns**: `Future<BiometricAvailability>`.
+  - `canAuthenticate`: `bool` indicating if auth is possible.
+  - `hasEnrolledBiometrics`: `bool` indicating if user has enrolled biometrics.
+  - `availableBiometrics`: `List<BiometricType>` (e.g., `fingerprint`, `face`).
+  - `reason`: String explanation if unavailable.
 
-- **Possible negative returns in Android**:
-
-- `none, BIOMETRIC_ERROR_NO_HARDWARE`: No biometric hardware available.
-
-- `none, BIOMETRIC_ERROR_HW_UNAVAILABLE`: Biometric hardware currently unavailable.
-
-- `none, BIOMETRIC_ERROR_NONE_ENROLLED`: No biometric credentials enrolled.
-
-- `none, BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED`: Security update required.
-
-- `none, BIOMETRIC_ERROR_UNSUPPORTED`: Biometric authentication is unsupported.
-
-- `none, BIOMETRIC_STATUS_UNKNOWN`: Unknown status.
-
-- `none, NO_BIOMETRICS`: No biometrics.
+```dart
+final availability = await biometricSignature.biometricAuthAvailable();
+if (availability.canAuthenticate) {
+  print('Biometrics available: ${availability.availableBiometrics}');
+} else {
+  print('Not available: ${availability.reason}');
+}
+```
 
 ### `biometricKeyExists(checkValidity: bool)`
 
-Checks if the biometric key pair exists on the device. Optionally, it can also verify the validity of the key by attempting to initialize a signature with it. Since the key requires that user authentication takes place for every use of the key, it is also irreversibly invalidated once a new biometric is enrolled or once no more biometrics are enrolled (when `setInvalidatedByBiometricEnrollment` is `true` on Android or `biometryCurrentSet` is `true` on iOS).
+Checks if the biometric key pair exists on the device.
 
--   **Parameters**:
-    -   `checkValidity`: A bool indicating whether to check the validity of the key by initializing a signature. Default is `false`.
--   **Returns**: `bool` - `true` if the key pair exists (and is valid if `checkValidity` is `true`), `false` otherwise.
--   **Error Codes**:
-    -   `AUTH_FAILED`: Error checking if the biometric key exists.
+- **Returns**: `Future<bool>`.
+
 
 ## Example
 
