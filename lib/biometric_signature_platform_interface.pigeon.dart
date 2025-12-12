@@ -62,6 +62,8 @@ enum BiometricError {
   keyInvalidated,
   /// An unknown error occurred.
   unknown,
+  /// The input payload was invalid (e.g. not valid Base64).
+  invalidInput,
 }
 
 enum SignatureType {

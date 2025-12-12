@@ -161,6 +161,8 @@ enum BiometricError: Int {
   case keyInvalidated = 9
   /// An unknown error occurred.
   case unknown = 10
+  /// The input payload was invalid (e.g. not valid Base64).
+  case invalidInput = 11
 }
 
 enum SignatureType: Int {

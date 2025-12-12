@@ -160,7 +160,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
                 if success {
                     generateBlock()
                 } else {
-                    completion(.success(KeyCreationResult(code: .userCanceled, error: "Authentication failed")))
+                    completion(.success(KeyCreationResult(publicKey: nil, error: "Authentication failed", code: .userCanceled)))
                 }
             }
         } else {
@@ -180,7 +180,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         completion: @escaping (Result<SignatureResult, Error>) -> Void
     ) {
         guard let payload = payload, let dataToSign = payload.data(using: .utf8) else {
-             completion(.success(SignatureResult(code: .unknown, error: "Invalid payload")))
+             completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "Invalid payload", code: .invalidInput)))
              return
         }
         
@@ -202,16 +202,16 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         promptMessage: String?,
         completion: @escaping (Result<DecryptResult, Error>) -> Void
     ) {
-        guard let payload = payload, let encryptedData = Data(base64Encoded: payload) else {
-             completion(.success(DecryptResult(code: .unknown, error: "Invalid payload")))
+        guard let payload = payload else {
+             completion(.success(DecryptResult(decryptedData: nil, error: "Payload is required", code: .invalidInput)))
              return
         }
         let prompt = promptMessage ?? macosConfig?.localizedReason ?? "Authenticate"
         
         if hasRsaKey() {
-             performRsaDecryption(encryptedData: encryptedData, prompt: prompt, completion: completion)
+             performRsaDecryption(payload: payload, prompt: prompt, completion: completion)
         } else {
-             performEcDecryption(encryptedData: encryptedData, prompt: prompt, completion: completion)
+             performEcDecryption(payload: payload, prompt: prompt, completion: completion)
         }
     }
 
@@ -252,7 +252,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         }
         
         guard let accessControl = SecAccessControlCreateWithFlags(kCFAllocatorDefault, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly, flags, nil) else {
-            completion(.success(KeyCreationResult(code: .unknown, error: "Failed to create access control")))
+            completion(.success(KeyCreationResult(publicKey: nil, error: "Failed to create access control", code: .unknown)))
             return
         }
         
@@ -272,7 +272,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         var error: Unmanaged<CFError>?
         guard let ecPrivateKey = SecKeyCreateRandomKey(ecAttributes as CFDictionary, &error) else {
              let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
-             completion(.success(KeyCreationResult(code: .unknown, error: "EC Key Gen Error: \(msg)")))
+             completion(.success(KeyCreationResult(publicKey: nil, error: "EC Key Gen Error: \(msg)", code: .unknown)))
              return
         }
         
@@ -280,20 +280,20 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         InvalidationSetting.save(biometryCurrentSet)
         
         guard let ecPublicKey = SecKeyCopyPublicKey(ecPrivateKey) else {
-             completion(.success(KeyCreationResult(code: .unknown, error: "EC Pub Key Error")))
+             completion(.success(KeyCreationResult(publicKey: nil, error: "EC Pub Key Error", code: .unknown)))
              return
         }
 
         if signatureType == .ecdsa {
              let keyStr = formatKey(ecPublicKey, format: keyFormat)
-             completion(.success(KeyCreationResult(publicKey: keyStr, code: .success)))
+             completion(.success(KeyCreationResult(publicKey: keyStr, error: nil, code: .success)))
              return
         }
         
         // Hybrid RSA
         // Check encryption support
         guard SecKeyIsAlgorithmSupported(ecPublicKey, .encrypt, .eciesEncryptionStandardX963SHA256AESGCM) else {
-             completion(.success(KeyCreationResult(code: .unknown, error: "ECIES not supported")))
+             completion(.success(KeyCreationResult(publicKey: nil, error: "ECIES not supported", code: .unknown)))
              return
         }
 
@@ -304,14 +304,14 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
             kSecPrivateKeyAttrs as String: [kSecAttrIsPermanent as String: false]
         ]
         guard let rsaPrivateKey = SecKeyCreateRandomKey(rsaAttributes as CFDictionary, &error) else {
-             completion(.success(KeyCreationResult(code: .unknown, error: "RSA Gen Error")))
+             completion(.success(KeyCreationResult(publicKey: nil, error: "RSA Gen Error", code: .unknown)))
              return
         }
         
         // Wrap RSA Private Key
         guard let rsaPrivateData = SecKeyCopyExternalRepresentation(rsaPrivateKey, &error) as Data?,
               let encryptedRsa = SecKeyCreateEncryptedData(ecPublicKey, .eciesEncryptionStandardX963SHA256AESGCM, rsaPrivateData as CFData, &error) as Data? else {
-             completion(.success(KeyCreationResult(code: .unknown, error: "RSA Wrapping Error")))
+             completion(.success(KeyCreationResult(publicKey: nil, error: "RSA Wrapping Error", code: .unknown)))
              return
         }
         
@@ -327,94 +327,106 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         SecItemAdd(saveQuery as CFDictionary, nil)
         
         guard let rsaPublicKey = SecKeyCopyPublicKey(rsaPrivateKey) else {
-             completion(.success(KeyCreationResult(code: .unknown, error: "RSA Pub Key Error")))
+             completion(.success(KeyCreationResult(publicKey: nil, error: "RSA Pub Key Error", code: .unknown)))
              return
         }
         
         let keyStr = formatKey(rsaPublicKey, format: keyFormat)
-        completion(.success(KeyCreationResult(publicKey: keyStr, code: .success)))
+        completion(.success(KeyCreationResult(publicKey: keyStr, error: nil, code: .success)))
     }
     
      private func performRsaSigning(dataToSign: Data, prompt: String, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
         guard let rsaPrivateKey = unwrapRsaKey(prompt: prompt) else {
-             completion(.success(SignatureResult(code: .authFailed, error: "Failed to access/unwrap RSA key")))
+             completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "Failed to access/unwrap RSA key", code: .unknown)))
              return
         }
         
         var error: Unmanaged<CFError>?
         guard let signature = SecKeyCreateSignature(rsaPrivateKey, .rsaSignatureMessagePKCS1v15SHA256, dataToSign as CFData, &error) as Data? else {
              let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
-             completion(.success(SignatureResult(code: .unknown, error: "Signing Error: \(msg)")))
+             completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "Signing Error: \(msg)", code: .unknown)))
              return
         }
         
         guard let pub = SecKeyCopyPublicKey(rsaPrivateKey) else {
-             completion(.success(SignatureResult(code: .unknown, error: "Pub Key Error")))
+             completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "Pub Key Error", code: .unknown)))
              return
         }
         
         completion(.success(SignatureResult(
             signature: signature.base64EncodedString(),
             publicKey: formatKey(pub, format: .base64),
+            error: nil,
             code: .success
         )))
     }
     
     private func performEcSigning(dataToSign: Data, prompt: String, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
         guard let ecKey = getEcPrivateKey(prompt: prompt) else {
-             completion(.success(SignatureResult(code: .authFailed, error: "EC Key not found or auth failed")))
+             completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "EC Key not found or auth failed", code: .unknown)))
              return
         }
         
         var error: Unmanaged<CFError>?
         guard let signature = SecKeyCreateSignature(ecKey, .ecdsaSignatureMessageX962SHA256, dataToSign as CFData, &error) as Data? else {
               let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
-              completion(.success(SignatureResult(code: .unknown, error: "Signing Error: \(msg)")))
+               completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "Signing Error: \(msg)", code: .unknown)))
               return
         }
          guard let pub = SecKeyCopyPublicKey(ecKey) else {
-             completion(.success(SignatureResult(code: .unknown, error: "Pub Key Error")))
+              completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "Pub Key Error", code: .unknown)))
              return
         }
         
         completion(.success(SignatureResult(
             signature: signature.base64EncodedString(),
             publicKey: formatKey(pub, format: .base64),
+            error: nil,
             code: .success
         )))
     }
     
-    private func performRsaDecryption(encryptedData: Data, prompt: String, completion: @escaping (Result<DecryptResult, Error>) -> Void) {
+    private func performRsaDecryption(payload: String, prompt: String, completion: @escaping (Result<DecryptResult, Error>) -> Void) {
         guard let rsaPrivateKey = unwrapRsaKey(prompt: prompt) else {
-              completion(.success(DecryptResult(code: .authFailed, error: "Failed to access/unwrap RSA key")))
+              completion(.success(DecryptResult(decryptedData: nil, error: "Failed to access/unwrap RSA key", code: .unknown)))
               return
         }
         
         var error: Unmanaged<CFError>?
+        guard let encryptedData = Data(base64Encoded: payload, options: .ignoreUnknownCharacters) else {
+             completion(.success(DecryptResult(decryptedData: nil, error: "Invalid payload", code: .invalidInput)))
+             return
+        }
+
         guard let decrypted = SecKeyCreateDecryptedData(rsaPrivateKey, .rsaEncryptionPKCS1, encryptedData as CFData, &error) as Data?,
               let str = String(data: decrypted, encoding: .utf8) else {
              let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
-             completion(.success(DecryptResult(code: .unknown, error: "Decryption Error: \(msg)")))
+             completion(.success(DecryptResult(decryptedData: nil, error: "Decryption Error: \(msg)", code: .unknown)))
              return
         }
         
-        completion(.success(DecryptResult(decryptedData: str, code: .success)))
+        completion(.success(DecryptResult(decryptedData: str, error: nil, code: .success)))
     }
     
-    private func performEcDecryption(encryptedData: Data, prompt: String, completion: @escaping (Result<DecryptResult, Error>) -> Void) {
+    private func performEcDecryption(payload: String, prompt: String, completion: @escaping (Result<DecryptResult, Error>) -> Void) {
          guard let ecKey = getEcPrivateKey(prompt: prompt) else {
-              completion(.success(DecryptResult(code: .authFailed, error: "EC Key not found or auth failed")))
+               completion(.success(DecryptResult(decryptedData: nil, error: "EC Key not found or auth failed", code: .unknown)))
               return
         }
         
         var error: Unmanaged<CFError>?
+        guard let encryptedData = Data(base64Encoded: payload, options: .ignoreUnknownCharacters) else {
+             completion(.success(DecryptResult(decryptedData: nil, error: "Invalid payload", code: .invalidInput)))
+             return
+        }
+
         guard let decrypted = SecKeyCreateDecryptedData(ecKey, .eciesEncryptionStandardX963SHA256AESGCM, encryptedData as CFData, &error) as Data?,
               let str = String(data: decrypted, encoding: .utf8) else {
              let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
-             completion(.success(DecryptResult(code: .unknown, error: "Decryption Error: \(msg)")))
+             completion(.success(DecryptResult(decryptedData: nil, error: "Decryption Error: \(msg)", code: .unknown)))
              return
         }
-         completion(.success(DecryptResult(decryptedData: str, code: .success)))
+         completion(.success(DecryptResult(decryptedData: str, error: nil, code: .success)))
     }
 
     // MARK: - Helpers

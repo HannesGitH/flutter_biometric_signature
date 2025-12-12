@@ -1,8 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:biometric_signature/biometric_signature.dart';
+import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter/material.dart';
+import 'package:pointycastle/asn1/asn1_parser.dart';
+import 'package:pointycastle/asn1/primitives/asn1_bit_string.dart';
+import 'package:pointycastle/asn1/primitives/asn1_integer.dart';
+import 'package:pointycastle/asn1/primitives/asn1_sequence.dart';
+import 'package:pointycastle/export.dart' hide Padding, State;
 
 void main() {
   runApp(const MyApp());
@@ -16,7 +24,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
       home: Scaffold(
-        appBar: AppBar(title: const Text('Biometric Signature v9.0')),
+        appBar: AppBar(title: const Text('Biometric Signature v9.0.0')),
         body: const ExampleAppBody(),
       ),
     );
@@ -68,18 +76,18 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
         keyFormat: KeyFormat.pem,
         androidConfig: AndroidConfig(
           useDeviceCredentials: false,
-          signatureType: useEc ? AndroidSignatureType.ecdsa : AndroidSignatureType.rsa,
+          signatureType: useEc ? SignatureType.ecdsa : SignatureType.rsa,
           setInvalidatedByBiometricEnrollment: true,
           enableDecryption: enableDecryption,
         ),
         iosConfig: IosConfig(
           useDeviceCredentials: false,
-          signatureType: useEc ? IosSignatureType.ecdsa : IosSignatureType.rsa,
+          signatureType: useEc ? SignatureType.ecdsa : SignatureType.rsa,
           biometryCurrentSet: true,
         ),
         macosConfig: MacosConfig(
           useDeviceCredentials: false,
-          signatureType: useEc ? MacosSignatureType.ecdsa : MacosSignatureType.rsa,
+          signatureType: useEc ? SignatureType.ecdsa : SignatureType.rsa,
           biometryCurrentSet: true,
         ),
         enforceBiometric: true,
@@ -111,9 +119,9 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
       final result = await _biometricSignature.createSignature(
         payload: payload!,
         promptMessage: 'Sign Data',
-        androidConfig: const AndroidConfig(
+        androidConfig: AndroidConfig(
           useDeviceCredentials: false,
-          signatureType: AndroidSignatureType.rsa, // Type inferred from key existence usually, but config required in API? 
+          signatureType: SignatureType.rsa, // Type inferred from key existence usually, but config required in API?
           // Wait, createSignature API in Dart wrapper:
           // createSignature({required String payload, AndroidConfig? androidConfig, ... })
           // The native side usually just looks up the key alias.
@@ -150,19 +158,248 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     });
 
     try {
+      // 1) Encrypt payload first (Roundtrip verification)
+      final encryptedBase64 = await _encryptPayload(payload!);
+      debugPrint('📦 Encrypted: ${encryptedBase64.substring(0, min(40, encryptedBase64.length))}...');
+
+      // 2) Present biometric prompt via plugin (native UI).
       final result = await _biometricSignature.decrypt(
-        payload: payload!,
-        promptMessage: 'Decrypt Data',
+        payload: encryptedBase64,
+        promptMessage: 'Decrypt Payload',
+        androidConfig:  AndroidConfig(
+          useDeviceCredentials: false, 
+          // subtitle: 'Approve to decrypt data' // Removed in v9 API simplification, uses promptMessage
+        ),
+        iosConfig:  IosConfig(biometryCurrentSet: true),
+        macosConfig:  MacosConfig(biometryCurrentSet: true),
       );
 
-      if (result.code == BiometricError.success) {
-        setState(() => decryptResult = result);
+      // Only show overlay if we need to do extra processing after auth.
+      setState(() {
+        isLoading = true;
+      });
+
+      setState(() => decryptResult = result);
+      if (result.decryptedData != null) {
+        debugPrint('✅ Decrypted: ${result.decryptedData}');
       } else {
-        setState(() => errorMessage = 'Error: ${result.code} - ${result.error}');
+        debugPrint('❌ Decryption Failed: Code=${result.code}, Error=${result.error}');
+        setState(() => errorMessage = 'Decryption Failed: ${result.code}');
       }
-    } catch (e) {
+    } catch (e, stack) {
       setState(() => errorMessage = e.toString());
+      debugPrint('❌ Error: $e\n$stack');
+    } finally {
+      setState(() => isLoading = false);
     }
+  }
+
+  /// Encrypts payload based on current key type
+  Future<String> _encryptPayload(String plaintext) async {
+    // Determine algorithm from state since KeyCreationResult doesn't carry it
+    // useEc is the source of truth for what we requested.
+    if (!useEc) {
+      return _encryptRsa(plaintext);
+    } else {
+      // EC - use ECIES
+      // Note: We use Dart-based ECIES for all platforms to simplify testing without native method channels.
+      return _encryptEciesDart(plaintext);
+    }
+  }
+
+  /// RSA encryption
+  String _encryptRsa(String plaintext) {
+    if (Platform.isIOS || Platform.isMacOS) {
+      // iOS/macOS return raw PKCS#1 (RSAPublicKey) inside the PEM string.
+      // We must strip the PEM headers and newlines to get the raw Base64.
+      final cleanBase64 = keyResult!.publicKey!
+          .replaceAll(RegExp(r'-----[A-Z ]+-----'), '')
+          .replaceAll(RegExp(r'\s+'), '');
+          
+      final bytes = base64Decode(cleanBase64);
+      final parser = ASN1Parser(bytes);
+      final topLevel = parser.nextObject() as ASN1Sequence;
+      
+      final modulus = topLevel.elements![0] as ASN1Integer;
+      final exponent = topLevel.elements![1] as ASN1Integer;
+      
+      final rsaPublicKey = RSAPublicKey(modulus.integer!, exponent.integer!);
+      final encrypter = enc.Encrypter(enc.RSA(publicKey: rsaPublicKey));
+      return encrypter.encrypt(plaintext).base64;
+    }
+
+    // Android returns SPKI (Standard X.509)
+    final publicKeyStr = keyResult!.publicKey!;
+    final publicKeyPem = publicKeyStr.contains('BEGIN PUBLIC KEY')
+        ? publicKeyStr
+        : '-----BEGIN PUBLIC KEY-----\n$publicKeyStr\n-----END PUBLIC KEY-----';
+
+    final parser = enc.RSAKeyParser();
+    final rsaPublicKey = parser.parse(publicKeyPem) as RSAPublicKey;
+    final encrypter = enc.Encrypter(enc.RSA(publicKey: rsaPublicKey));
+    return encrypter.encrypt(plaintext).base64;
+  }
+
+  /// ECIES encryption using Dart (PointyCastle)
+  String _encryptEciesDart(String plaintext) {
+    // Parse recipient's public key (handling both PEM and raw Base64 if needed)
+    final publicKeyStr = keyResult!.publicKey!;
+    // Note: _parseEcPublicKeyFromPem handles stripping headers
+    final ecPublicKey = _parseEcPublicKeyFromPem(publicKeyStr);
+
+    // Generate ephemeral keypair
+    final ephemeralKeyPair = _generateEphemeralKeyPair(ecPublicKey.parameters!);
+    final ephemeralPublic = ephemeralKeyPair.publicKey as ECPublicKey;
+    final ephemeralPrivate = ephemeralKeyPair.privateKey as ECPrivateKey;
+
+    // ECDH key agreement
+    final agreement = ECDHBasicAgreement()..init(ephemeralPrivate);
+    final sharedSecret = agreement.calculateAgreement(ecPublicKey);
+
+    // Output: [EphemeralPubKey (Uncompressed 65)] || [Ciphertext + Tag]
+    final isApple = Platform.isIOS || Platform.isMacOS;
+    final ephemeralPubBytes = ephemeralPublic.Q!.getEncoded(false); // Uncompressed required
+
+    // ECIES Parameters
+    // Hypothesis: Apple Standard Mode uses Static Zero IV and binds EphemKey in SharedInfo.
+    final sharedInfo = isApple ? ephemeralPubBytes : Uint8List(0);
+
+    Uint8List gcmIv;
+    Uint8List aesKey;
+    final Uint8List aad;
+    
+    if (isApple) {
+        // iOS Standard Mode Hypothesis
+        // 1. IV is Static Zeros (16 bytes).
+        // 2. KDF derives ONLY Key (16 bytes).
+        final keySize = 16;
+        aesKey = _kdfX963(sharedSecret, keySize, sharedInfo);
+        gcmIv = Uint8List(16); // Zero IV
+    } else {
+        // Android Standard Mode (Derived IV)
+        final keySize = 16;
+        final ivSize = 12;
+        final derived = _kdfX963(sharedSecret, keySize + ivSize, sharedInfo);
+        aesKey = derived.sublist(0, keySize);
+        gcmIv = derived.sublist(keySize, keySize + ivSize);
+    }
+        
+    aad = Uint8List(0);
+
+    // AES-GCM encryption
+    final cipher = GCMBlockCipher(AESEngine());
+    cipher.init(
+      true,
+      AEADParameters(KeyParameter(aesKey), 128, gcmIv, aad),
+    );
+    final ciphertext = cipher.process(
+      Uint8List.fromList(utf8.encode(plaintext)),
+    );
+    
+    // Construct Payload: [EphemKey] [Ciphertext]
+    // Note: Android uses same payload structure
+    final payloadParts = [ephemeralPubBytes, ciphertext];
+    
+    return base64Encode(
+      Uint8List.fromList(payloadParts.expand((x) => x).toList()),
+    );
+  }
+
+  // ==================== ECIES Helpers ====================
+
+  ECPublicKey _parseEcPublicKeyFromPem(String pem) {
+    // Strip headers if present
+    final rows = pem
+        .split('\n')
+        .where((l) => !l.startsWith('-----') && l.trim().isNotEmpty)
+        .join('');
+    final bytes = base64Decode(rows);
+    final params = ECDomainParameters('secp256r1');
+    Uint8List pubBytes;
+
+    try {
+      final parser = ASN1Parser(bytes);
+      final topLevel = parser.nextObject();
+
+      if (topLevel is ASN1Sequence) {
+        // SPKI format (Android)
+        final bitString = topLevel.elements![1] as ASN1BitString;
+        pubBytes = Uint8List.fromList(bitString.stringValues!);
+      } else {
+        // iOS returns raw bytes (often parses as OctetString due to 0x04 tag)
+        pubBytes = bytes;
+      }
+    } catch (_) {
+      // Fallback to raw bytes just in case
+      pubBytes = bytes;
+    }
+
+    final q = params.curve.decodePoint(pubBytes)!;
+    return ECPublicKey(q, params);
+  }
+
+  AsymmetricKeyPair<PublicKey, PrivateKey> _generateEphemeralKeyPair(
+    ECDomainParameters params,
+  ) {
+    final generator = ECKeyGenerator();
+    generator.init(
+      ParametersWithRandom(ECKeyGeneratorParameters(params), _secureRandom()),
+    );
+    return generator.generateKeyPair();
+  }
+
+  SecureRandom _secureRandom() {
+    final rng = FortunaRandom();
+    final seed = Uint8List(32);
+    final random = Random.secure();
+    for (var i = 0; i < 32; i++) {
+      seed[i] = random.nextInt(256);
+    }
+    rng.seed(KeyParameter(seed));
+    return rng;
+  }
+
+  Uint8List _kdfX963(BigInt sharedSecret, int length, Uint8List sharedInfo) {
+    final digest = SHA256Digest();
+    final secretBytes = _bigIntToBytes(sharedSecret, 32);
+    final result = Uint8List(length);
+    var offset = 0;
+    var counter = 1;
+
+    while (offset < length) {
+      digest.reset();
+      digest.update(secretBytes, 0, secretBytes.length);
+      digest.updateByte((counter >> 24) & 0xff);
+      digest.updateByte((counter >> 16) & 0xff);
+      digest.updateByte((counter >> 8) & 0xff);
+      digest.updateByte(counter & 0xff);
+      digest.update(sharedInfo, 0, sharedInfo.length);
+
+      final hash = Uint8List(digest.digestSize);
+      digest.doFinal(hash, 0);
+
+      final toCopy = (length - offset).clamp(0, hash.length);
+      result.setRange(offset, offset + toCopy, hash);
+      offset += toCopy;
+      counter++;
+    }
+    return result;
+  }
+
+  Uint8List _bigIntToBytes(BigInt number, int length) {
+    var hex = number.toRadixString(16);
+    if (hex.length % 2 != 0) hex = '0$hex';
+
+    final bytes = Uint8List(hex.length ~/ 2);
+    for (var i = 0; i < bytes.length; i++) {
+      bytes[i] = int.parse(hex.substring(i * 2, i * 2 + 2), radix: 16);
+    }
+
+    if (bytes.length >= length) return bytes.sublist(bytes.length - length);
+
+    final padded = Uint8List(length);
+    padded.setRange(length - bytes.length, length, bytes);
+    return padded;
   }
 
   Future<void> _deleteKeys() async {

@@ -7,6 +7,8 @@ import 'package:pigeon/pigeon.dart';
   kotlinOptions: KotlinOptions(package: 'com.visionflutter.biometric_signature'),
   swiftOut: 'ios/Classes/BiometricSignatureApi.swift',
   swiftOptions: SwiftOptions(),
+  macosOut: 'macos/Classes/BiometricSignatureApi.swift',
+  macosOptions: MacosOptions(),
 ))
 
 enum BiometricType {
@@ -42,6 +44,8 @@ enum BiometricError {
   keyInvalidated,
   /// An unknown error occurred.
   unknown,
+  /// The input payload was invalid (e.g. not valid Base64).
+  invalidInput,
 }
 
 class BiometricAvailability {

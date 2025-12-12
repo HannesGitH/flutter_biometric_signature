@@ -322,8 +322,12 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
 
                 val signatureBytes = withContext(Dispatchers.IO) {
                     val sig = authResult.cryptoObject?.signature ?: signature
-                    sig.update(payload.toByteArray(Charsets.UTF_8))
-                    sig.sign()
+                    try {
+                        sig.update(payload.toByteArray(Charsets.UTF_8))
+                        sig.sign()
+                    } catch (e: IllegalArgumentException) {
+                        throw IllegalArgumentException("Invalid payload", e)
+                    }
                 }
 
                 val publicKey = getSigningPublicKey()
@@ -412,8 +416,12 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         val decrypted = withContext(Dispatchers.IO) {
             val authenticatedCipher = authResult.cryptoObject?.cipher
                 ?: throw SecurityException("Authentication failed - no cipher returned")
-            val encryptedBytes = Base64.decode(payload, Base64.NO_WRAP)
-            authenticatedCipher.doFinal(encryptedBytes)
+            try {
+                val encryptedBytes = Base64.decode(payload, Base64.NO_WRAP)
+                authenticatedCipher.doFinal(encryptedBytes)
+            } catch (e: IllegalArgumentException) {
+                throw IllegalArgumentException("Invalid Base64 payload", e)
+            }
         }
 
         return String(decrypted, Charsets.UTF_8)
@@ -608,7 +616,11 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
             val privateKey: PrivateKey = KeyFactory.getInstance("EC")
                 .generatePrivate(PKCS8EncodedKeySpec(privateKeyBytes))
 
-            val data = Base64.decode(payloadBase64, Base64.NO_WRAP)
+            val data = try {
+                Base64.decode(payloadBase64, Base64.NO_WRAP)
+            } catch (e: IllegalArgumentException) {
+                throw IllegalArgumentException("Invalid Base64 payload", e)
+            }
             require(data.size >= EC_PUBKEY_SIZE + GCM_TAG_BYTES) {
                 "Invalid ECIES payload: too short (${data.size} bytes)"
             }
@@ -885,6 +897,8 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
              
             // Map simple Cancellation
             e is CancellationException -> BiometricError.USER_CANCELED
+
+            e is IllegalArgumentException && (e.message?.contains("Base64") == true || e.message?.contains("payload") == true) -> BiometricError.INVALID_INPUT
 
             else -> BiometricError.UNKNOWN
         }

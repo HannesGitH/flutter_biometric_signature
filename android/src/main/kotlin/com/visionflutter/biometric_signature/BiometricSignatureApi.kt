@@ -116,7 +116,9 @@ enum class BiometricError(val raw: Int) {
   /** The key has been invalidated (e.g. by new biometric enrollment). */
   KEY_INVALIDATED(9),
   /** An unknown error occurred. */
-  UNKNOWN(10);
+  UNKNOWN(10),
+  /** The input payload was invalid (e.g. not valid Base64). */
+  INVALID_INPUT(11);
 
   companion object {
     fun ofRaw(raw: Int): BiometricError? {
