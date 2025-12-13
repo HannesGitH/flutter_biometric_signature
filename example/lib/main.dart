@@ -231,7 +231,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
   /// ECIES encryption using Dart (PointyCastle)
   String _encryptEciesDart(String plaintext) {
     // Parse recipient's public key (handling both PEM and raw Base64 if needed)
-    final publicKeyStr = keyResult!.publicKey!;
+    final publicKeyStr = keyResult!.decryptingPublicKey ?? keyResult!.publicKey!;
     // Note: _parseEcPublicKeyFromPem handles stripping headers
     final ecPublicKey = _parseEcPublicKeyFromPem(publicKeyStr);
 

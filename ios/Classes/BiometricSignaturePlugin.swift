@@ -352,23 +352,18 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
              return
         }
         
-        let ecKeyStr = formatKey(ecPublicKey, format: keyFormat)
-        let ecData = SecKeyCopyExternalRepresentation(ecPublicKey, &error) as Data?
-        let ecTypedData = ecData != nil ? FlutterStandardTypedData(bytes: ecData!) : nil
+        let rsaData = SecKeyCopyExternalRepresentation(rsaPublicKey, &error) as Data?
+        let rsaTypedData = rsaData != nil ? FlutterStandardTypedData(bytes: rsaData!) : nil
         
         let rsaKeyStr = formatKey(rsaPublicKey, format: keyFormat)
         
         completion(.success(KeyCreationResult(
-            publicKey: ecKeyStr,
-            publicKeyBytes: ecTypedData,
+            publicKey: rsaKeyStr,
+            publicKeyBytes: rsaTypedData,
             error: nil,
             code: .success,
-            algorithm: "EC",
-            keySize: 256,
-            decryptingPublicKey: rsaKeyStr,
-            decryptingAlgorithm: "RSA",
-            decryptingKeySize: 2048,
-            isHybridMode: true
+            algorithm: "RSA",
+            keySize: 2048
         )))
     }
     
