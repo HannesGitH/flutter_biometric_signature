@@ -92,7 +92,9 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
       if (result.code == BiometricError.success) {
         setState(() => keyResult = result);
       } else {
-        setState(() => errorMessage = 'Error: ${result.code} - ${result.error}');
+        setState(
+          () => errorMessage = 'Error: ${result.code} - ${result.error}',
+        );
       }
     } catch (e) {
       setState(() => errorMessage = e.toString());
@@ -119,14 +121,17 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
         androidConfig: AndroidCreateSignatureConfig(
           allowDeviceCredentials: false,
         ),
-        iosConfig: IosCreateSignatureConfig(), // shouldMigrate defaults to false/null
+        iosConfig:
+            IosCreateSignatureConfig(), // shouldMigrate defaults to false/null
         macosConfig: MacosCreateSignatureConfig(),
       );
 
       if (result.code == BiometricError.success) {
         setState(() => signatureResult = result);
       } else {
-        setState(() => errorMessage = 'Error: ${result.code} - ${result.error}');
+        setState(
+          () => errorMessage = 'Error: ${result.code} - ${result.error}',
+        );
       }
     } catch (e) {
       setState(() => errorMessage = e.toString());
@@ -147,16 +152,16 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     try {
       // 1) Encrypt payload first (Roundtrip verification)
       final encryptedBase64 = await _encryptPayload(payload!);
-      debugPrint('📦 Encrypted: ${encryptedBase64.substring(0, min(40, encryptedBase64.length))}...');
+      debugPrint(
+        '📦 Encrypted: ${encryptedBase64.substring(0, min(40, encryptedBase64.length))}...',
+      );
 
       // 2) Present biometric prompt via plugin (native UI).
       final result = await _biometricSignature.decrypt(
         payload: encryptedBase64,
         payloadFormat: PayloadFormat.base64,
         promptMessage: 'Decrypt Payload',
-        androidConfig: AndroidDecryptConfig(
-          allowDeviceCredentials: false, 
-        ),
+        androidConfig: AndroidDecryptConfig(allowDeviceCredentials: false),
         iosConfig: IosDecryptConfig(),
         macosConfig: MacosDecryptConfig(),
       );
@@ -170,7 +175,9 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
       if (result.decryptedData != null) {
         debugPrint('✅ Decrypted: ${result.decryptedData}');
       } else {
-        debugPrint('❌ Decryption Failed: Code=${result.code}, Error=${result.error}');
+        debugPrint(
+          '❌ Decryption Failed: Code=${result.code}, Error=${result.error}',
+        );
         setState(() => errorMessage = 'Decryption Failed: ${result.code}');
       }
     } catch (e, stack) {
@@ -200,18 +207,18 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
       // iOS/macOS return raw PKCS#1 (RSAPublicKey) inside the PEM string.
       // In Hybrid/RSA mode, the RSA public key is in decryptingPublicKey
       final keyStr = keyResult!.decryptingPublicKey ?? keyResult!.publicKey!;
-      
+
       final cleanBase64 = keyStr
           .replaceAll(RegExp(r'-----[A-Z ]+-----'), '')
           .replaceAll(RegExp(r'\s+'), '');
-          
+
       final bytes = base64Decode(cleanBase64);
       final parser = ASN1Parser(bytes);
       final topLevel = parser.nextObject() as ASN1Sequence;
-      
+
       final modulus = topLevel.elements![0] as ASN1Integer;
       final exponent = topLevel.elements![1] as ASN1Integer;
-      
+
       final rsaPublicKey = RSAPublicKey(modulus.integer!, exponent.integer!);
       final encrypter = enc.Encrypter(enc.RSA(publicKey: rsaPublicKey));
       return encrypter.encrypt(plaintext).base64;
@@ -219,7 +226,8 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
 
     // Android returns SPKI (Standard X.509)
     // In Hybrid mode, RSA key is in decryptingPublicKey
-    final publicKeyStr = keyResult!.decryptingPublicKey ?? keyResult!.publicKey!;
+    final publicKeyStr =
+        keyResult!.decryptingPublicKey ?? keyResult!.publicKey!;
     final publicKeyPem = publicKeyStr.contains('BEGIN PUBLIC KEY')
         ? publicKeyStr
         : '-----BEGIN PUBLIC KEY-----\n$publicKeyStr\n-----END PUBLIC KEY-----';
@@ -233,7 +241,8 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
   /// ECIES encryption using Dart (PointyCastle)
   String _encryptEciesDart(String plaintext) {
     // Parse recipient's public key (handling both PEM and raw Base64 if needed)
-    final publicKeyStr = keyResult!.decryptingPublicKey ?? keyResult!.publicKey!;
+    final publicKeyStr =
+        keyResult!.decryptingPublicKey ?? keyResult!.publicKey!;
     // Note: _parseEcPublicKeyFromPem handles stripping headers
     final ecPublicKey = _parseEcPublicKeyFromPem(publicKeyStr);
 
@@ -248,7 +257,9 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
 
     // Output: [EphemeralPubKey (Uncompressed 65)] || [Ciphertext + Tag]
     final isApple = Platform.isIOS || Platform.isMacOS;
-    final ephemeralPubBytes = ephemeralPublic.Q!.getEncoded(false); // Uncompressed required
+    final ephemeralPubBytes = ephemeralPublic.Q!.getEncoded(
+      false,
+    ); // Uncompressed required
 
     // ECIES Parameters
     // Hypothesis: Apple Standard Mode uses Static Zero IV and binds EphemKey in SharedInfo.
@@ -257,39 +268,36 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     Uint8List gcmIv;
     Uint8List aesKey;
     final Uint8List aad;
-    
+
     if (isApple) {
-        // iOS Standard Mode Hypothesis
-        // 1. IV is Static Zeros (16 bytes).
-        // 2. KDF derives ONLY Key (16 bytes).
-        final keySize = 16;
-        aesKey = _kdfX963(sharedSecret, keySize, sharedInfo);
-        gcmIv = Uint8List(16); // Zero IV
+      // iOS Standard Mode Hypothesis
+      // 1. IV is Static Zeros (16 bytes).
+      // 2. KDF derives ONLY Key (16 bytes).
+      final keySize = 16;
+      aesKey = _kdfX963(sharedSecret, keySize, sharedInfo);
+      gcmIv = Uint8List(16); // Zero IV
     } else {
-        // Android Standard Mode (Derived IV)
-        final keySize = 16;
-        final ivSize = 12;
-        final derived = _kdfX963(sharedSecret, keySize + ivSize, sharedInfo);
-        aesKey = derived.sublist(0, keySize);
-        gcmIv = derived.sublist(keySize, keySize + ivSize);
+      // Android Standard Mode (Derived IV)
+      final keySize = 16;
+      final ivSize = 12;
+      final derived = _kdfX963(sharedSecret, keySize + ivSize, sharedInfo);
+      aesKey = derived.sublist(0, keySize);
+      gcmIv = derived.sublist(keySize, keySize + ivSize);
     }
-        
+
     aad = Uint8List(0);
 
     // AES-GCM encryption
     final cipher = GCMBlockCipher(AESEngine());
-    cipher.init(
-      true,
-      AEADParameters(KeyParameter(aesKey), 128, gcmIv, aad),
-    );
+    cipher.init(true, AEADParameters(KeyParameter(aesKey), 128, gcmIv, aad));
     final ciphertext = cipher.process(
       Uint8List.fromList(utf8.encode(plaintext)),
     );
-    
+
     // Construct Payload: [EphemKey] [Ciphertext]
     // Note: Android uses same payload structure
     final payloadParts = [ephemeralPubBytes, ciphertext];
-    
+
     return base64Encode(
       Uint8List.fromList(payloadParts.expand((x) => x).toList()),
     );
@@ -427,14 +435,26 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
             Card(
               child: ListTile(
                 leading: Icon(
-                  availability!.canAuthenticate ? Icons.check_circle : Icons.warning,
-                  color: availability!.canAuthenticate ? Colors.green : Colors.orange,
+                  availability!.canAuthenticate
+                      ? Icons.check_circle
+                      : Icons.warning,
+                  color: availability!.canAuthenticate
+                      ? Colors.green
+                      : Colors.orange,
                 ),
-                title: Text(availability!.canAuthenticate ? 'Biometrics Available' : 'Biometrics Unavailable'),
-                subtitle: Text(availability!.availableBiometrics?.toString() ?? availability!.reason ?? ''),
+                title: Text(
+                  availability!.canAuthenticate
+                      ? 'Biometrics Available'
+                      : 'Biometrics Unavailable',
+                ),
+                subtitle: Text(
+                  availability!.availableBiometrics?.toString() ??
+                      availability!.reason ??
+                      '',
+                ),
               ),
             ),
-          
+
           const SizedBox(height: 10),
 
           // Config
@@ -443,21 +463,45 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
               padding: const EdgeInsets.all(12),
               child: Column(
                 children: [
-                   Row(children: [
-                     const Text('Use EC'),
-                     Switch(value: useEc, onChanged: (v) => setState(() => useEc = v)),
-                     const SizedBox(width: 20),
-                     const Text('Decrypt Support'),
-                     Switch(value: enableDecryption, onChanged: (v) => setState(() => enableDecryption = v)),
-                   ]),
-                   Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      const Text('Pub Key: '), 
-                      DropdownButton<KeyFormat>(value: _publicKeyFormat, onChanged: (v) { if(v!=null) setState(()=>_publicKeyFormat=v); }, items: KeyFormat.values.map((f)=>DropdownMenuItem(value: f, child: Text(f.name))).toList())
-                   ]),
-                   ElevatedButton(
-                     onPressed: _createKeys,
-                     child: const Text('Create Keys'),
-                   ),
+                  Row(
+                    children: [
+                      const Text('Use EC'),
+                      Switch(
+                        value: useEc,
+                        onChanged: (v) => setState(() => useEc = v),
+                      ),
+                      const SizedBox(width: 20),
+                      const Text('Decrypt Support'),
+                      Switch(
+                        value: enableDecryption,
+                        onChanged: (v) => setState(() => enableDecryption = v),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Pub Key: '),
+                      DropdownButton<KeyFormat>(
+                        value: _publicKeyFormat,
+                        onChanged: (v) {
+                          if (v != null) setState(() => _publicKeyFormat = v);
+                        },
+                        items: KeyFormat.values
+                            .map(
+                              (f) => DropdownMenuItem(
+                                value: f,
+                                child: Text(f.name),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ],
+                  ),
+                  ElevatedButton(
+                    onPressed: _createKeys,
+                    child: const Text('Create Keys'),
+                  ),
                 ],
               ),
             ),
@@ -470,26 +514,50 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                 padding: const EdgeInsets.all(12),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                   children: [
-                     const Text('Public Key Created:', style: TextStyle(fontWeight: FontWeight.bold)),
-                     const SizedBox(height: 4),
-                     Text(keyResult!.publicKey ?? '', style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
-                     if (keyResult!.publicKeyBytes != null)
-                        Text('Bytes: ${keyResult!.publicKeyBytes!.length} (Hex: ${keyResult!.publicKeyBytes!.map((e)=>e.toRadixString(16).padLeft(2,'0')).join()})', style: const TextStyle(fontSize: 8, color: Colors.grey)),
-                     if (keyResult!.decryptingPublicKey != null) ...[
-                        const SizedBox(height: 8),
-                        const Text('Decrypting Key (Hybrid):', style: TextStyle(fontWeight: FontWeight.bold)),
-                        Text(keyResult!.decryptingPublicKey!, style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
-                        if (keyResult!.decryptingAlgorithm != null)
-                           Text('Alg: ${keyResult!.decryptingAlgorithm}, Size: ${keyResult!.decryptingKeySize}', style: const TextStyle(fontSize: 10)),
-                     ],
-                     const SizedBox(height: 8),
-                     TextButton.icon(
-                       icon: const Icon(Icons.delete, size: 16),
-                       label: const Text('Delete Keys'),
-                       onPressed: _deleteKeys,
-                     )
-                   ],
+                  children: [
+                    const Text(
+                      'Public Key Created:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      keyResult!.publicKey ?? '',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    if (keyResult!.publicKeyBytes != null)
+                      Text(
+                        'Bytes: ${keyResult!.publicKeyBytes!.length} (Hex: ${keyResult!.publicKeyBytes!.map((e) => e.toRadixString(16).padLeft(2, '0')).join()})',
+                        style: const TextStyle(fontSize: 8, color: Colors.grey),
+                      ),
+                    if (keyResult!.decryptingPublicKey != null) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Decrypting Key (Hybrid):',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        keyResult!.decryptingPublicKey!,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                      if (keyResult!.decryptingAlgorithm != null)
+                        Text(
+                          'Alg: ${keyResult!.decryptingAlgorithm}, Size: ${keyResult!.decryptingKeySize}',
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                    ],
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      icon: const Icon(Icons.delete, size: 16),
+                      label: const Text('Delete Keys'),
+                      onPressed: _deleteKeys,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -497,37 +565,74 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
           const SizedBox(height: 20),
 
           TextField(
-            decoration: const InputDecoration(labelText: 'Payload (Text or Base64)'),
+            decoration: const InputDecoration(
+              labelText: 'Payload (Text or Base64)',
+            ),
             onChanged: (v) => payload = v,
           ),
-          
-          const SizedBox(height: 10),
-          Row(children: [
-             const Text('Sig Format: '), 
-             DropdownButton<SignatureFormat>(value: _signatureFormat, onChanged: (v) { if(v!=null) setState(()=>_signatureFormat=v); }, items: SignatureFormat.values.map((f)=>DropdownMenuItem(value: f, child: Text(f.name))).toList()),
-             const SizedBox(width: 10),
-             const Text('Key Format: '), 
-             DropdownButton<KeyFormat>(value: _signatureKeyFormat, onChanged: (v) { if(v!=null) setState(()=>_signatureKeyFormat=v); }, items: KeyFormat.values.map((f)=>DropdownMenuItem(value: f, child: Text(f.name))).toList())
-          ]),
+
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: FilledButton(onPressed: _createSignature, child: const Text('Sign'))),
+              const Text('Sig Format: '),
+              DropdownButton<SignatureFormat>(
+                value: _signatureFormat,
+                onChanged: (v) {
+                  if (v != null) setState(() => _signatureFormat = v);
+                },
+                items: SignatureFormat.values
+                    .map((f) => DropdownMenuItem(value: f, child: Text(f.name)))
+                    .toList(),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: FilledButton.tonal(onPressed: _decrypt, child: const Text('Decrypt'))),
+              const Text('Key Format: '),
+              DropdownButton<KeyFormat>(
+                value: _signatureKeyFormat,
+                onChanged: (v) {
+                  if (v != null) setState(() => _signatureKeyFormat = v);
+                },
+                items: KeyFormat.values
+                    .map((f) => DropdownMenuItem(value: f, child: Text(f.name)))
+                    .toList(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: _createSignature,
+                  child: const Text('Sign'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.tonal(
+                  onPressed: _decrypt,
+                  child: const Text('Decrypt'),
+                ),
+              ),
             ],
           ),
 
           if (errorMessage != null)
             Padding(
               padding: const EdgeInsets.all(8.0),
-              child: Text(errorMessage!, style: const TextStyle(color: Colors.red)),
+              child: Text(
+                errorMessage!,
+                style: const TextStyle(color: Colors.red),
+              ),
             ),
 
           if (signatureResult != null) ...[
-            _buildResult('Signature', signatureResult!.signature, bytes: signatureResult!.signatureBytes),
+            _buildResult(
+              'Signature',
+              signatureResult!.signature,
+              bytes: signatureResult!.signatureBytes,
+            ),
             if (signatureResult!.publicKey != null)
-               _buildResult('Signer Public Key', signatureResult!.publicKey),
+              _buildResult('Signer Public Key', signatureResult!.publicKey),
           ],
 
           if (decryptResult != null)
@@ -547,9 +652,15 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
           children: [
             Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            SelectableText(data ?? 'null', style: const TextStyle(fontFamily: 'monospace')),
+            SelectableText(
+              data ?? 'null',
+              style: const TextStyle(fontFamily: 'monospace'),
+            ),
             if (bytes != null)
-               Text('Bytes: ${bytes.length} (Hex: ${bytes.map((e)=>e.toRadixString(16).padLeft(2,'0')).join()})', style: const TextStyle(fontSize: 8, color: Colors.grey)),
+              Text(
+                'Bytes: ${bytes.length} (Hex: ${bytes.map((e) => e.toRadixString(16).padLeft(2, '0')).join()})',
+                style: const TextStyle(fontSize: 8, color: Colors.grey),
+              ),
           ],
         ),
       ),

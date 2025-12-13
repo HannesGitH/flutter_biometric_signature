@@ -28,43 +28,47 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
   /// Checks if biometric authentication is available.
   Future<BiometricAvailability> getBiometricAvailability() {
     throw UnimplementedError(
-        'getBiometricAvailability() has not been implemented.');
+      'getBiometricAvailability() has not been implemented.',
+    );
   }
 
   /// Creates a new key pair.
   Future<KeyCreationResult> createKeys(
-      AndroidCreateKeysConfig? androidConfig,
-      IosCreateKeysConfig? iosConfig,
-      MacosCreateKeysConfig? macosConfig,
-      bool? useDeviceCredentials,
-      SignatureType? signatureType,
-      bool? setInvalidatedByBiometricEnrollment,
-      KeyFormat keyFormat,
-      bool enforceBiometric,
-      String? promptMessage) {
+    AndroidCreateKeysConfig? androidConfig,
+    IosCreateKeysConfig? iosConfig,
+    MacosCreateKeysConfig? macosConfig,
+    bool? useDeviceCredentials,
+    SignatureType? signatureType,
+    bool? setInvalidatedByBiometricEnrollment,
+    KeyFormat keyFormat,
+    bool enforceBiometric,
+    String? promptMessage,
+  ) {
     throw UnimplementedError('createKeys() has not been implemented.');
   }
 
   /// Creates a signature.
   Future<SignatureResult> createSignature(
-      String? payload,
-      AndroidCreateSignatureConfig? androidConfig,
-      IosCreateSignatureConfig? iosConfig,
-      MacosCreateSignatureConfig? macosConfig,
-      SignatureFormat signatureFormat,
-      KeyFormat keyFormat,
-      String? promptMessage) {
+    String? payload,
+    AndroidCreateSignatureConfig? androidConfig,
+    IosCreateSignatureConfig? iosConfig,
+    MacosCreateSignatureConfig? macosConfig,
+    SignatureFormat signatureFormat,
+    KeyFormat keyFormat,
+    String? promptMessage,
+  ) {
     throw UnimplementedError('createSignature() has not been implemented.');
   }
 
   /// Decrypts data.
   Future<DecryptResult> decrypt(
-      String? payload,
-      PayloadFormat payloadFormat,
-      AndroidDecryptConfig? androidConfig,
-      IosDecryptConfig? iosConfig,
-      MacosDecryptConfig? macosConfig,
-      String? promptMessage) {
+    String? payload,
+    PayloadFormat payloadFormat,
+    AndroidDecryptConfig? androidConfig,
+    IosDecryptConfig? iosConfig,
+    MacosDecryptConfig? macosConfig,
+    String? promptMessage,
+  ) {
     throw UnimplementedError('decrypt() has not been implemented.');
   }
 
@@ -89,42 +93,67 @@ class _PigeonBiometricSignature extends BiometricSignaturePlatform {
 
   @override
   Future<KeyCreationResult> createKeys(
-      AndroidCreateKeysConfig? androidConfig,
-      IosCreateKeysConfig? iosConfig,
-      MacosCreateKeysConfig? macosConfig,
-      bool? useDeviceCredentials,
-      SignatureType? signatureType,
-      bool? setInvalidatedByBiometricEnrollment,
-      KeyFormat keyFormat,
-      bool enforceBiometric,
-      String? promptMessage) {
-    return _api.createKeys(androidConfig, iosConfig, macosConfig, useDeviceCredentials, signatureType, setInvalidatedByBiometricEnrollment, keyFormat,
-        enforceBiometric, promptMessage);
+    AndroidCreateKeysConfig? androidConfig,
+    IosCreateKeysConfig? iosConfig,
+    MacosCreateKeysConfig? macosConfig,
+    bool? useDeviceCredentials,
+    SignatureType? signatureType,
+    bool? setInvalidatedByBiometricEnrollment,
+    KeyFormat keyFormat,
+    bool enforceBiometric,
+    String? promptMessage,
+  ) {
+    return _api.createKeys(
+      androidConfig,
+      iosConfig,
+      macosConfig,
+      useDeviceCredentials,
+      signatureType,
+      setInvalidatedByBiometricEnrollment,
+      keyFormat,
+      enforceBiometric,
+      promptMessage,
+    );
   }
 
   @override
   Future<SignatureResult> createSignature(
-      String? payload,
-      AndroidCreateSignatureConfig? androidConfig,
-      IosCreateSignatureConfig? iosConfig,
-      MacosCreateSignatureConfig? macosConfig,
-      SignatureFormat signatureFormat,
-      KeyFormat keyFormat,
-      String? promptMessage) {
+    String? payload,
+    AndroidCreateSignatureConfig? androidConfig,
+    IosCreateSignatureConfig? iosConfig,
+    MacosCreateSignatureConfig? macosConfig,
+    SignatureFormat signatureFormat,
+    KeyFormat keyFormat,
+    String? promptMessage,
+  ) {
     return _api.createSignature(
-        payload, androidConfig, iosConfig, macosConfig, signatureFormat, keyFormat, promptMessage);
+      payload,
+      androidConfig,
+      iosConfig,
+      macosConfig,
+      signatureFormat,
+      keyFormat,
+      promptMessage,
+    );
   }
 
   @override
   Future<DecryptResult> decrypt(
-      String? payload,
-      PayloadFormat payloadFormat,
-      AndroidDecryptConfig? androidConfig,
-      IosDecryptConfig? iosConfig,
-      MacosDecryptConfig? macosConfig,
-      String? promptMessage) {
+    String? payload,
+    PayloadFormat payloadFormat,
+    AndroidDecryptConfig? androidConfig,
+    IosDecryptConfig? iosConfig,
+    MacosDecryptConfig? macosConfig,
+    String? promptMessage,
+  ) {
     return _api.decrypt(
-        payload, payloadFormat, androidConfig, iosConfig, macosConfig, promptMessage);
+      payload,
+      payloadFormat,
+      androidConfig,
+      iosConfig,
+      macosConfig,
+      promptMessage,
+    );
   }
 
   @override

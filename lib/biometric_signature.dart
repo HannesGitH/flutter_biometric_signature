@@ -101,7 +101,8 @@ class BiometricSignature {
 
   /// Checks whether a hardware-backed signing key currently exists.
   Future<bool> biometricKeyExists({bool checkValidity = false}) async {
-    return BiometricSignaturePlatform.instance
-        .biometricKeyExists(checkValidity);
+    return BiometricSignaturePlatform.instance.biometricKeyExists(
+      checkValidity,
+    );
   }
 }
