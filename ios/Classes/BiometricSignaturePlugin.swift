@@ -197,12 +197,117 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         if hasRsaKey() {
              performRsaSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
         } else if shouldMigrate {
-             // Migration logic placeholder
-             performEcSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
+             migrateToSecureEnclave(prompt: prompt) { result in
+                switch result {
+                case .success:
+                    self.performRsaSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
+                case .failure(let error):
+                    // If migration fails, returning error. Alternatively could fallback to EC signing if that was the intent,
+                    // but migration implies preservation of RSA key.
+                     let msg = (error as? PigeonError)?.message ?? (error as NSError).localizedDescription
+                     completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Migration Error: \(msg)", code: .unknown)))
+                }
+             }
         } else {
              // Fallback to EC signing
              performEcSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
         }
+    }
+
+    private func migrateToSecureEnclave(prompt: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        // Generate EC key pair in Secure Enclave
+        let ecAccessControl = SecAccessControlCreateWithFlags(
+            kCFAllocatorDefault,
+            kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
+            [.privateKeyUsage, .biometryAny], // Defaulting to biometryAny for migration
+            nil
+        )
+
+        guard let ecAccessControl = ecAccessControl else {
+            completion(.failure(PigeonError(code: "authFailed", message: "Failed to create access control for EC key", details: nil)))
+            return
+        }
+
+        let ecTag = Constants.ecKeyAlias
+        let ecKeyAttributes: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrKeySizeInBits as String: 256,
+            kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
+            kSecAttrAccessControl as String: ecAccessControl,
+            kSecPrivateKeyAttrs as String: [
+                kSecAttrIsPermanent as String: true,
+                kSecAttrApplicationTag as String: ecTag
+            ]
+        ]
+
+        var error: Unmanaged<CFError>?
+        guard let ecPrivateKey = SecKeyCreateRandomKey(ecKeyAttributes as CFDictionary, &error) else {
+            let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
+            completion(.failure(PigeonError(code: "authFailed", message: "Error generating EC key: \(msg)", details: nil)))
+            return
+        }
+
+        guard let ecPublicKey = SecKeyCopyPublicKey(ecPrivateKey) else {
+            completion(.failure(PigeonError(code: "authFailed", message: "Error getting EC public key", details: nil)))
+            return
+        }
+
+        // Save baseline after EC key creation (migration assumes biometry-any, so no baseline needed)
+        // But save the invalidation setting
+        InvalidationSetting.save(false)
+
+        let unencryptedKeyTag = Constants.biometricKeyAlias
+        let unencryptedKeyTagData = unencryptedKeyTag.data(using: .utf8)!
+        // Note: The legacy key was stored as kSecClassKey. The new wrapped key is kSecClassGenericPassword.
+        let unencryptedKeyQuery: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: unencryptedKeyTagData,
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+            kSecReturnData as String: true
+        ]
+
+        var rsaItem: CFTypeRef?
+        let status = SecItemCopyMatching(unencryptedKeyQuery as CFDictionary, &rsaItem)
+        guard status == errSecSuccess else {
+            completion(.failure(PigeonError(code: "authFailed", message: "RSA private key not found in Keychain", details: nil)))
+            return
+        }
+        guard let rsaPrivateKeyData = rsaItem as? Data else {
+             completion(.failure(PigeonError(code: "authFailed", message: "Failed to retrieve RSA private key data", details: nil)))
+            return
+        }
+
+        let algorithm: SecKeyAlgorithm = .eciesEncryptionStandardX963SHA256AESGCM
+        guard SecKeyIsAlgorithmSupported(ecPublicKey, .encrypt, algorithm) else {
+            completion(.failure(PigeonError(code: "authFailed", message: "EC encryption algorithm not supported", details: nil)))
+            return
+        }
+
+        guard let encryptedRSAKeyData = SecKeyCreateEncryptedData(ecPublicKey, algorithm, rsaPrivateKeyData as CFData, &error) as Data? else {
+            let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
+            completion(.failure(PigeonError(code: "authFailed", message: "Error encrypting RSA private key: \(msg)", details: nil)))
+            return
+        }
+
+        let encryptedKeyAttributes: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: unencryptedKeyTag,
+            kSecAttrAccount as String: unencryptedKeyTag,
+            kSecValueData as String: encryptedRSAKeyData,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+
+        SecItemDelete(encryptedKeyAttributes as CFDictionary) // Delete any existing item
+        let storeStatus = SecItemAdd(encryptedKeyAttributes as CFDictionary, nil)
+        if storeStatus != errSecSuccess {
+            completion(.failure(PigeonError(code: "authFailed", message: "Error storing encrypted RSA private key in Keychain", details: nil)))
+            return
+        }
+
+        // Delete the legacy unencrypted key
+        SecItemDelete(unencryptedKeyQuery as CFDictionary)
+        
+        completion(.success(()))
     }
 
     func decrypt(
@@ -219,9 +324,20 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
              return
         }
         let prompt = promptMessage ?? "Authenticate"
+        let shouldMigrate = iosConfig?.shouldMigrate ?? false
         
         if hasRsaKey() {
              performRsaDecryption(payload: payload, payloadFormat: payloadFormat, prompt: prompt, completion: completion)
+        } else if shouldMigrate {
+             migrateToSecureEnclave(prompt: prompt) { result in
+                switch result {
+                case .success:
+                     self.performRsaDecryption(payload: payload, payloadFormat: payloadFormat, prompt: prompt, completion: completion)
+                case .failure(let error):
+                     let msg = (error as? PigeonError)?.message ?? (error as NSError).localizedDescription
+                     completion(.success(DecryptResult(decryptedData: nil, error: "Migration Error: \(msg)", code: .unknown)))
+                }
+             }
         } else {
              performEcDecryption(payload: payload, payloadFormat: payloadFormat, prompt: prompt, completion: completion)
         }
