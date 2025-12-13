@@ -44,7 +44,8 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
   // Settings
   bool useEc = false;
   bool enableDecryption = false;
-  KeyFormat _keyFormat = KeyFormat.pem;
+  KeyFormat _publicKeyFormat = KeyFormat.pem;
+  KeyFormat _signatureFormat = KeyFormat.base64;
 
   // Results
   KeyCreationResult? keyResult;
@@ -74,7 +75,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
 
     try {
       final result = await _biometricSignature.createKeys(
-        keyFormat: _keyFormat,
+        keyFormat: _publicKeyFormat,
         androidConfig: AndroidConfig(
           useDeviceCredentials: false,
           signatureType: useEc ? SignatureType.ecdsa : SignatureType.rsa,
@@ -119,7 +120,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     try {
       final result = await _biometricSignature.createSignature(
         payload: payload!,
-        keyFormat: _keyFormat,
+        keyFormat: _signatureFormat,
         promptMessage: 'Sign Data',
         androidConfig: AndroidConfig(
           useDeviceCredentials: false,
@@ -462,7 +463,10 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                      const Text('Decrypt Support'),
                      Switch(value: enableDecryption, onChanged: (v) => setState(() => enableDecryption = v)),
                    ]),
-                   DropdownButton<KeyFormat>(value: _keyFormat, onChanged: (v) { if(v!=null) setState(()=>_keyFormat=v); }, items: KeyFormat.values.map((f)=>DropdownMenuItem(value: f, child: Text(f.name))).toList()),
+                   Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      const Text('Pub Key: '), 
+                      DropdownButton<KeyFormat>(value: _publicKeyFormat, onChanged: (v) { if(v!=null) setState(()=>_publicKeyFormat=v); }, items: KeyFormat.values.map((f)=>DropdownMenuItem(value: f, child: Text(f.name))).toList())
+                   ]),
                    ElevatedButton(
                      onPressed: _createKeys,
                      child: const Text('Create Keys'),
@@ -504,7 +508,11 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
           ),
           
           const SizedBox(height: 10),
-          
+          Row(children: [
+             const Text('Sig Format: '), 
+             DropdownButton<KeyFormat>(value: _signatureFormat, onChanged: (v) { if(v!=null) setState(()=>_signatureFormat=v); }, items: KeyFormat.values.map((f)=>DropdownMenuItem(value: f, child: Text(f.name))).toList())
+          ]),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(child: FilledButton(onPressed: _createSignature, child: const Text('Sign'))),
