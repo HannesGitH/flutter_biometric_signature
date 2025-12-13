@@ -52,6 +52,7 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
       IosCreateSignatureConfig? iosConfig,
       MacosCreateSignatureConfig? macosConfig,
       SignatureFormat signatureFormat,
+      KeyFormat keyFormat,
       String? promptMessage) {
     throw UnimplementedError('createSignature() has not been implemented.');
   }
@@ -108,9 +109,10 @@ class _PigeonBiometricSignature extends BiometricSignaturePlatform {
       IosCreateSignatureConfig? iosConfig,
       MacosCreateSignatureConfig? macosConfig,
       SignatureFormat signatureFormat,
+      KeyFormat keyFormat,
       String? promptMessage) {
     return _api.createSignature(
-        payload, androidConfig, iosConfig, macosConfig, signatureFormat, promptMessage);
+        payload, androidConfig, iosConfig, macosConfig, signatureFormat, keyFormat, promptMessage);
   }
 
   @override

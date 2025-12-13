@@ -970,14 +970,14 @@ class BiometricSignatureApi {
   }
 
   /// Creates a signature.
-  Future<SignatureResult> createSignature(String? payload, AndroidCreateSignatureConfig? androidConfig, IosCreateSignatureConfig? iosConfig, MacosCreateSignatureConfig? macosConfig, SignatureFormat signatureFormat, String? promptMessage) async {
+  Future<SignatureResult> createSignature(String? payload, AndroidCreateSignatureConfig? androidConfig, IosCreateSignatureConfig? iosConfig, MacosCreateSignatureConfig? macosConfig, SignatureFormat signatureFormat, KeyFormat keyFormat, String? promptMessage) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.createSignature$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[payload, androidConfig, iosConfig, macosConfig, signatureFormat, promptMessage]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[payload, androidConfig, iosConfig, macosConfig, signatureFormat, keyFormat, promptMessage]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);

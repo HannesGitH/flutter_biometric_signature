@@ -56,6 +56,7 @@ class BiometricSignature {
     IosCreateSignatureConfig? iosConfig,
     MacosCreateSignatureConfig? macosConfig,
     SignatureFormat signatureFormat = SignatureFormat.base64,
+    KeyFormat keyFormat = KeyFormat.base64,
     String? promptMessage,
   }) async {
     return BiometricSignaturePlatform.instance.createSignature(
@@ -64,6 +65,7 @@ class BiometricSignature {
       iosConfig,
       macosConfig,
       signatureFormat,
+      keyFormat,
       promptMessage,
     );
   }

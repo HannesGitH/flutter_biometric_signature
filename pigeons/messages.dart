@@ -191,6 +191,7 @@ abstract class BiometricSignatureApi {
       IosCreateSignatureConfig? iosConfig,
       MacosCreateSignatureConfig? macosConfig,
       SignatureFormat signatureFormat,
+      KeyFormat keyFormat,
       String? promptMessage);
 
   /// Decrypts data.

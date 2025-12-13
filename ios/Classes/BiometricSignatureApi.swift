@@ -806,7 +806,7 @@ protocol BiometricSignatureApi {
   /// Creates a new key pair.
   func createKeys(androidConfig: AndroidCreateKeysConfig?, iosConfig: IosCreateKeysConfig?, macosConfig: MacosCreateKeysConfig?, useDeviceCredentials: Bool?, signatureType: SignatureType?, setInvalidatedByBiometricEnrollment: Bool?, keyFormat: KeyFormat, enforceBiometric: Bool, promptMessage: String?, completion: @escaping (Result<KeyCreationResult, Error>) -> Void)
   /// Creates a signature.
-  func createSignature(payload: String?, androidConfig: AndroidCreateSignatureConfig?, iosConfig: IosCreateSignatureConfig?, macosConfig: MacosCreateSignatureConfig?, signatureFormat: SignatureFormat, promptMessage: String?, completion: @escaping (Result<SignatureResult, Error>) -> Void)
+  func createSignature(payload: String?, androidConfig: AndroidCreateSignatureConfig?, iosConfig: IosCreateSignatureConfig?, macosConfig: MacosCreateSignatureConfig?, signatureFormat: SignatureFormat, keyFormat: KeyFormat, promptMessage: String?, completion: @escaping (Result<SignatureResult, Error>) -> Void)
   /// Decrypts data.
   func decrypt(payload: String?, payloadFormat: PayloadFormat, androidConfig: AndroidDecryptConfig?, iosConfig: IosDecryptConfig?, macosConfig: MacosDecryptConfig?, promptMessage: String?, completion: @escaping (Result<DecryptResult, Error>) -> Void)
   /// Deletes keys.
@@ -871,8 +871,9 @@ class BiometricSignatureApiSetup {
         let iosConfigArg: IosCreateSignatureConfig? = nilOrValue(args[2])
         let macosConfigArg: MacosCreateSignatureConfig? = nilOrValue(args[3])
         let signatureFormatArg = args[4] as! SignatureFormat
-        let promptMessageArg: String? = nilOrValue(args[5])
-        api.createSignature(payload: payloadArg, androidConfig: androidConfigArg, iosConfig: iosConfigArg, macosConfig: macosConfigArg, signatureFormat: signatureFormatArg, promptMessage: promptMessageArg) { result in
+        let keyFormatArg = args[5] as! KeyFormat
+        let promptMessageArg: String? = nilOrValue(args[6])
+        api.createSignature(payload: payloadArg, androidConfig: androidConfigArg, iosConfig: iosConfigArg, macosConfig: macosConfigArg, signatureFormat: signatureFormatArg, keyFormat: keyFormatArg, promptMessage: promptMessageArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))

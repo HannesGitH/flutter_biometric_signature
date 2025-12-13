@@ -853,7 +853,7 @@ interface BiometricSignatureApi {
   /** Creates a new key pair. */
   fun createKeys(androidConfig: AndroidCreateKeysConfig?, iosConfig: IosCreateKeysConfig?, macosConfig: MacosCreateKeysConfig?, useDeviceCredentials: Boolean?, signatureType: SignatureType?, setInvalidatedByBiometricEnrollment: Boolean?, keyFormat: KeyFormat, enforceBiometric: Boolean, promptMessage: String?, callback: (Result<KeyCreationResult>) -> Unit)
   /** Creates a signature. */
-  fun createSignature(payload: String?, androidConfig: AndroidCreateSignatureConfig?, iosConfig: IosCreateSignatureConfig?, macosConfig: MacosCreateSignatureConfig?, signatureFormat: SignatureFormat, promptMessage: String?, callback: (Result<SignatureResult>) -> Unit)
+  fun createSignature(payload: String?, androidConfig: AndroidCreateSignatureConfig?, iosConfig: IosCreateSignatureConfig?, macosConfig: MacosCreateSignatureConfig?, signatureFormat: SignatureFormat, keyFormat: KeyFormat, promptMessage: String?, callback: (Result<SignatureResult>) -> Unit)
   /** Decrypts data. */
   fun decrypt(payload: String?, payloadFormat: PayloadFormat, androidConfig: AndroidDecryptConfig?, iosConfig: IosDecryptConfig?, macosConfig: MacosDecryptConfig?, promptMessage: String?, callback: (Result<DecryptResult>) -> Unit)
   /** Deletes keys. */
@@ -923,8 +923,9 @@ interface BiometricSignatureApi {
             val iosConfigArg = args[2] as IosCreateSignatureConfig?
             val macosConfigArg = args[3] as MacosCreateSignatureConfig?
             val signatureFormatArg = args[4] as SignatureFormat
-            val promptMessageArg = args[5] as String?
-            api.createSignature(payloadArg, androidConfigArg, iosConfigArg, macosConfigArg, signatureFormatArg, promptMessageArg) { result: Result<SignatureResult> ->
+            val keyFormatArg = args[5] as KeyFormat
+            val promptMessageArg = args[6] as String?
+            api.createSignature(payloadArg, androidConfigArg, iosConfigArg, macosConfigArg, signatureFormatArg, keyFormatArg, promptMessageArg) { result: Result<SignatureResult> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))

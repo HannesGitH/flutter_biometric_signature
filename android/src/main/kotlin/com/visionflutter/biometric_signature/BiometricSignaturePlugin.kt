@@ -283,6 +283,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         iosConfig: IosCreateSignatureConfig?,
         macosConfig: MacosCreateSignatureConfig?,
         signatureFormat: SignatureFormat,
+        keyFormat: KeyFormat,
         promptMessage: String?,
         callback: (Result<SignatureResult>) -> Unit
     ) {
@@ -328,7 +329,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                 }
 
                 val publicKey = getSigningPublicKey()
-                val response = buildSignatureResponse(signatureBytes, publicKey, signatureFormat)
+                val response = buildSignatureResponse(signatureBytes, publicKey, signatureFormat, keyFormat)
                 callback(Result.success(response))
 
             } catch (e: Exception) {
@@ -873,13 +874,12 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         )
     }
 
-    private fun buildSignatureResponse(signatureBytes: ByteArray, publicKey: PublicKey, format: SignatureFormat): SignatureResult {
-        // Map SignatureFormat to KeyFormat for consistency in Public Key formatting (if possible)
-        val keyFormat = when(format) {
-            SignatureFormat.BASE64 -> KeyFormat.BASE64
-            SignatureFormat.HEX -> KeyFormat.HEX
-            SignatureFormat.RAW -> KeyFormat.RAW
-        }
+    private fun buildSignatureResponse(
+        signatureBytes: ByteArray, 
+        publicKey: PublicKey, 
+        format: SignatureFormat,
+        keyFormat: KeyFormat
+    ): SignatureResult {
         
         // Format signature explicitly based on SignatureFormat
         val sigString = when(format) {

@@ -45,6 +45,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
   bool useEc = false;
   bool enableDecryption = false;
   KeyFormat _publicKeyFormat = KeyFormat.pem;
+  KeyFormat _signatureKeyFormat = KeyFormat.base64;
   SignatureFormat _signatureFormat = SignatureFormat.base64;
 
   // Results
@@ -113,6 +114,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
       final result = await _biometricSignature.createSignature(
         payload: payload!,
         signatureFormat: _signatureFormat,
+        keyFormat: _signatureKeyFormat,
         promptMessage: 'Sign Data',
         androidConfig: AndroidCreateSignatureConfig(
           allowDeviceCredentials: false,
@@ -502,7 +504,10 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
           const SizedBox(height: 10),
           Row(children: [
              const Text('Sig Format: '), 
-             DropdownButton<SignatureFormat>(value: _signatureFormat, onChanged: (v) { if(v!=null) setState(()=>_signatureFormat=v); }, items: SignatureFormat.values.map((f)=>DropdownMenuItem(value: f, child: Text(f.name))).toList())
+             DropdownButton<SignatureFormat>(value: _signatureFormat, onChanged: (v) { if(v!=null) setState(()=>_signatureFormat=v); }, items: SignatureFormat.values.map((f)=>DropdownMenuItem(value: f, child: Text(f.name))).toList()),
+             const SizedBox(width: 10),
+             const Text('Key Format: '), 
+             DropdownButton<KeyFormat>(value: _signatureKeyFormat, onChanged: (v) { if(v!=null) setState(()=>_signatureKeyFormat=v); }, items: KeyFormat.values.map((f)=>DropdownMenuItem(value: f, child: Text(f.name))).toList())
           ]),
           const SizedBox(height: 10),
           Row(
@@ -519,8 +524,11 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
               child: Text(errorMessage!, style: const TextStyle(color: Colors.red)),
             ),
 
-          if (signatureResult != null)
+          if (signatureResult != null) ...[
             _buildResult('Signature', signatureResult!.signature, bytes: signatureResult!.signatureBytes),
+            if (signatureResult!.publicKey != null)
+               _buildResult('Signer Public Key', signatureResult!.publicKey),
+          ],
 
           if (decryptResult != null)
             _buildResult('Decrypted', decryptResult!.decryptedData),

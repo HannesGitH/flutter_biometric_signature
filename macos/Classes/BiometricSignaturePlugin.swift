@@ -182,6 +182,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         iosConfig: IosCreateSignatureConfig?,
         macosConfig: MacosCreateSignatureConfig?,
         signatureFormat: SignatureFormat,
+        keyFormat: KeyFormat,
         promptMessage: String?,
         completion: @escaping (Result<SignatureResult, Error>) -> Void
     ) {
@@ -194,13 +195,13 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         let shouldMigrate = iosConfig?.shouldMigrate ?? false
 
         if hasRsaKey() {
-             performRsaSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, completion: completion)
+             performRsaSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
         } else if shouldMigrate {
              // Migration logic placeholder
-             performEcSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, completion: completion)
+             performEcSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
         } else {
              // Fallback to EC signing
-             performEcSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, completion: completion)
+             performEcSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
         }
     }
 
@@ -367,7 +368,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         )))
     }
     
-    private func performRsaSigning(dataToSign: Data, prompt: String, signatureFormat: SignatureFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
+    private func performRsaSigning(dataToSign: Data, prompt: String, signatureFormat: SignatureFormat, keyFormat: KeyFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
         guard let rsaPrivateKey = unwrapRsaKey(prompt: prompt) else {
              completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Failed to access/unwrap RSA key", code: .unknown)))
              return
@@ -388,7 +389,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         completion(.success(SignatureResult(
             signature: formatSignature(signature, format: signatureFormat),
             signatureBytes: FlutterStandardTypedData(bytes: signature),
-            publicKey: nil,
+            publicKey: formatKey(pub, format: keyFormat),
             error: nil,
             code: .success,
             algorithm: "RSA",
@@ -396,7 +397,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         )))
     }
     
-    private func performEcSigning(dataToSign: Data, prompt: String, signatureFormat: SignatureFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
+    private func performEcSigning(dataToSign: Data, prompt: String, signatureFormat: SignatureFormat, keyFormat: KeyFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
         guard let ecKey = getEcPrivateKey(prompt: prompt) else {
              completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "EC Key not found or auth failed", code: .unknown)))
              return
@@ -416,7 +417,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         completion(.success(SignatureResult(
             signature: formatSignature(signature, format: signatureFormat),
             signatureBytes: FlutterStandardTypedData(bytes: signature),
-            publicKey: nil,
+            publicKey: formatKey(pub, format: keyFormat),
             error: nil,
             code: .success,
             algorithm: "EC",
