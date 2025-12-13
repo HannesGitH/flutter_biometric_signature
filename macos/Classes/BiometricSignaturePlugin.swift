@@ -556,8 +556,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     }
 
     private func formatKey(_ key: SecKey, format: KeyFormat) -> String {
-        var error: Unmanaged<CFError>?
-        guard let data = SecKeyCopyExternalRepresentation(key, &error) as Data? else { return "" }
+        guard let data = subjectPublicKeyInfo(for: key) else { return "" }
         
         switch format {
         case .base64, .raw:
@@ -568,6 +567,74 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         case .hex:
              return data.map { String(format: "%02x", $0) }.joined()
         }
+    }
+    
+    private func subjectPublicKeyInfo(for key: SecKey) -> Data? {
+        var error: Unmanaged<CFError>?
+        guard let rawData = SecKeyCopyExternalRepresentation(key, &error) as Data? else { return nil }
+        
+        guard let attributes = SecKeyCopyAttributes(key) as? [String: Any],
+              let keyType = attributes[kSecAttrKeyType as String] as? String else { return rawData }
+
+        if keyType == (kSecAttrKeyTypeRSA as String) {
+            // AlgorithmIdentifier: rsaEncryption, NULL
+            let algorithmHeader: [UInt8] = [
+                0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00
+            ]
+            
+            var bitString = Data()
+            bitString.append(0x00) // unused bits
+            bitString.append(rawData)
+            let bitStringEncoded = encodeASN1Content(tag: 0x03, content: bitString)
+            
+            var sequenceContent = Data(algorithmHeader)
+            sequenceContent.append(bitStringEncoded)
+            
+            return encodeASN1Content(tag: 0x30, content: sequenceContent)
+            
+        } else if keyType == (kSecAttrKeyTypeECSECPrimeRandom as String) {
+            // AlgorithmIdentifier: id-ecPublicKey, prime256v1
+            let algorithmHeader: [UInt8] = [
+                0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07
+            ]
+            
+            var bitString = Data()
+            bitString.append(0x00) // unused bits
+            bitString.append(rawData)
+            let bitStringEncoded = encodeASN1Content(tag: 0x03, content: bitString)
+            
+            var sequenceContent = Data(algorithmHeader)
+            sequenceContent.append(bitStringEncoded)
+            return encodeASN1Content(tag: 0x30, content: sequenceContent)
+        }
+        
+        return rawData
+    }
+    
+    // Encodes length and content into ASN.1
+    private func encodeASN1Content(tag: UInt8, content: Data) -> Data {
+        var data = Data()
+        data.append(tag)
+        let length = content.count
+        
+        if length < 128 {
+            data.append(UInt8(length))
+        } else if length < 256 {
+            data.append(0x81)
+            data.append(UInt8(length))
+        } else if length < 65536 {
+            data.append(0x82)
+            data.append(UInt8(length >> 8))
+            data.append(UInt8(length & 0xFF))
+        } else {
+             data.append(0x83)
+             data.append(UInt8(length >> 16))
+             data.append(UInt8((length >> 8) & 0xFF))
+             data.append(UInt8(length & 0xFF))
+        }
+        
+        data.append(content)
+        return data
     }
 
     private func formatSignature(_ data: Data, format: SignatureFormat) -> String {

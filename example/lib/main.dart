@@ -203,28 +203,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
 
   /// RSA encryption
   String _encryptRsa(String plaintext) {
-    if (Platform.isIOS || Platform.isMacOS) {
-      // iOS/macOS return raw PKCS#1 (RSAPublicKey) inside the PEM string.
-      // In Hybrid/RSA mode, the RSA public key is in decryptingPublicKey
-      final keyStr = keyResult!.decryptingPublicKey ?? keyResult!.publicKey!;
-
-      final cleanBase64 = keyStr
-          .replaceAll(RegExp(r'-----[A-Z ]+-----'), '')
-          .replaceAll(RegExp(r'\s+'), '');
-
-      final bytes = base64Decode(cleanBase64);
-      final parser = ASN1Parser(bytes);
-      final topLevel = parser.nextObject() as ASN1Sequence;
-
-      final modulus = topLevel.elements![0] as ASN1Integer;
-      final exponent = topLevel.elements![1] as ASN1Integer;
-
-      final rsaPublicKey = RSAPublicKey(modulus.integer!, exponent.integer!);
-      final encrypter = enc.Encrypter(enc.RSA(publicKey: rsaPublicKey));
-      return encrypter.encrypt(plaintext).base64;
-    }
-
-    // Android returns SPKI (Standard X.509)
+    // All platforms now return SPKI (Standard X.509)
     // In Hybrid mode, RSA key is in decryptingPublicKey
     final publicKeyStr =
         keyResult!.decryptingPublicKey ?? keyResult!.publicKey!;
