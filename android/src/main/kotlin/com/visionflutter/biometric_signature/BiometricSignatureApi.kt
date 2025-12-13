@@ -82,9 +82,8 @@ enum class BiometricType(val raw: Int) {
   FACE(0),
   FINGERPRINT(1),
   IRIS(2),
-  WEAK(3),
-  STRONG(4),
-  UNAVAILABLE(5);
+  MULTIPLE(3),
+  UNAVAILABLE(4);
 
   companion object {
     fun ofRaw(raw: Int): BiometricType? {

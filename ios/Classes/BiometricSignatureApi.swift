@@ -132,9 +132,8 @@ enum BiometricType: Int {
   case face = 0
   case fingerprint = 1
   case iris = 2
-  case weak = 3
-  case strong = 4
-  case unavailable = 5
+  case multiple = 3
+  case unavailable = 4
 }
 
 /// Standardized error codes for the plugin.

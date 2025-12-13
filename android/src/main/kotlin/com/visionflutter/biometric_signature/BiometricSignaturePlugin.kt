@@ -932,15 +932,60 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
     }
 
     private fun detectBiometricTypes(): Pair<List<BiometricType>, String?> {
-         // Logic to detect types
-         val types = mutableListOf<BiometricType>()
-         var identifiedFingerprint = false
-         val pm = appContext.packageManager
-         if (pm.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT)) {
+        var identifiedFingerprint = false
+        val pm = appContext.packageManager
+
+        if (pm.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT)) {
+            val fm = appContext.getSystemService(FingerprintManager::class.java)
+            val enrolled = try {
+                fm?.hasEnrolledFingerprints() == true
+            } catch (_: SecurityException) {
+                true
+            }
+            identifiedFingerprint = fm?.isHardwareDetected == true && enrolled
+        }
+
+        val otherString = listOf("face", "iris", ",")
+        val biometricManager = BiometricManager.from(activity!!)
+        
+        // Use reflection to access getStrings(int authenticators)
+        var buttonLabel: String? = null
+        try {
+            val getStringsMethod = BiometricManager::class.java.getMethod("getStrings", Int::class.javaPrimitiveType)
+            val strings = getStringsMethod.invoke(biometricManager, BiometricManager.Authenticators.BIOMETRIC_STRONG)
+            if (strings != null) {
+                val getButtonLabelMethod = strings.javaClass.getMethod("getButtonLabel")
+                buttonLabel = getButtonLabelMethod.invoke(strings) as? String
+            }
+        } catch (e: Exception) {
+            // Reflection failed or method not found, ignore
+        }
+
+        val otherBiometrics = otherString.filter {
+            buttonLabel?.contains(it, ignoreCase = true) == true
+        }
+
+        val resultString = if (identifiedFingerprint) {
+            if (otherBiometrics.isEmpty()) "fingerprint" else "biometric"
+        } else {
+            if (otherBiometrics.size == 1 && otherBiometrics[0] != ",") otherBiometrics[0] else "biometric"
+        }
+        
+        // Map string to List<BiometricType>
+        val types = mutableListOf<BiometricType>()
+        
+        if (resultString == "fingerprint") {
              types.add(BiometricType.FINGERPRINT)
-         }
-         // This is a simplification. Real detection needs authenticators string parsing potentially.
-         return Pair(types, null)
+        } else if (resultString == "face") {
+             types.add(BiometricType.FACE)
+        } else if (resultString == "iris") {
+             types.add(BiometricType.IRIS)
+        } else if (resultString == "biometric") {
+             // Fallback or multiple
+             types.add(BiometricType.MULTIPLE)
+        }
+        
+        return Pair(types, null)
     }
 
     private fun mapToBiometricError(e: Throwable): BiometricError {

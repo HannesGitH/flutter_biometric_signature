@@ -33,8 +33,7 @@ enum BiometricType {
   face,
   fingerprint,
   iris,
-  weak,
-  strong,
+  multiple,
   unavailable,
 }
 
