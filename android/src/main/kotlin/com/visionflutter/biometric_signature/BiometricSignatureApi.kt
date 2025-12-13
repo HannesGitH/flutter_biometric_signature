@@ -140,7 +140,9 @@ enum class SignatureType(val raw: Int) {
 
 enum class KeyFormat(val raw: Int) {
   BASE64(0),
-  PEM(1);
+  PEM(1),
+  HEX(2),
+  RAW(3);
 
   companion object {
     fun ofRaw(raw: Int): KeyFormat? {
@@ -189,6 +191,7 @@ data class BiometricAvailability (
 /** Generated class from Pigeon that represents data sent in messages. */
 data class KeyCreationResult (
   val publicKey: String? = null,
+  val publicKeyBytes: ByteArray? = null,
   val error: String? = null,
   val code: BiometricError? = null
 )
@@ -196,14 +199,16 @@ data class KeyCreationResult (
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): KeyCreationResult {
       val publicKey = pigeonVar_list[0] as String?
-      val error = pigeonVar_list[1] as String?
-      val code = pigeonVar_list[2] as BiometricError?
-      return KeyCreationResult(publicKey, error, code)
+      val publicKeyBytes = pigeonVar_list[1] as ByteArray?
+      val error = pigeonVar_list[2] as String?
+      val code = pigeonVar_list[3] as BiometricError?
+      return KeyCreationResult(publicKey, publicKeyBytes, error, code)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
       publicKey,
+      publicKeyBytes,
       error,
       code,
     )
@@ -223,6 +228,7 @@ data class KeyCreationResult (
 /** Generated class from Pigeon that represents data sent in messages. */
 data class SignatureResult (
   val signature: String? = null,
+  val signatureBytes: ByteArray? = null,
   val publicKey: String? = null,
   val error: String? = null,
   val code: BiometricError? = null
@@ -231,15 +237,17 @@ data class SignatureResult (
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): SignatureResult {
       val signature = pigeonVar_list[0] as String?
-      val publicKey = pigeonVar_list[1] as String?
-      val error = pigeonVar_list[2] as String?
-      val code = pigeonVar_list[3] as BiometricError?
-      return SignatureResult(signature, publicKey, error, code)
+      val signatureBytes = pigeonVar_list[1] as ByteArray?
+      val publicKey = pigeonVar_list[2] as String?
+      val error = pigeonVar_list[3] as String?
+      val code = pigeonVar_list[4] as BiometricError?
+      return SignatureResult(signature, signatureBytes, publicKey, error, code)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
       signature,
+      signatureBytes,
       publicKey,
       error,
       code,
@@ -548,7 +556,7 @@ interface BiometricSignatureApi {
   /** Creates a new key pair. */
   fun createKeys(androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, keyFormat: KeyFormat, enforceBiometric: Boolean, promptMessage: String?, callback: (Result<KeyCreationResult>) -> Unit)
   /** Creates a signature. */
-  fun createSignature(payload: String?, androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, promptMessage: String?, callback: (Result<SignatureResult>) -> Unit)
+  fun createSignature(payload: String?, androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, keyFormat: KeyFormat, promptMessage: String?, callback: (Result<SignatureResult>) -> Unit)
   /** Decrypts data. */
   fun decrypt(payload: String?, androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, promptMessage: String?, callback: (Result<DecryptResult>) -> Unit)
   /** Deletes keys. */
@@ -614,8 +622,9 @@ interface BiometricSignatureApi {
             val androidConfigArg = args[1] as AndroidConfig?
             val iosConfigArg = args[2] as IosConfig?
             val macosConfigArg = args[3] as MacosConfig?
-            val promptMessageArg = args[4] as String?
-            api.createSignature(payloadArg, androidConfigArg, iosConfigArg, macosConfigArg, promptMessageArg) { result: Result<SignatureResult> ->
+            val keyFormatArg = args[4] as KeyFormat
+            val promptMessageArg = args[5] as String?
+            api.createSignature(payloadArg, androidConfigArg, iosConfigArg, macosConfigArg, keyFormatArg, promptMessageArg) { result: Result<SignatureResult> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))

@@ -284,6 +284,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         androidConfig: AndroidConfig?,
         iosConfig: IosConfig?,
         macosConfig: MacosConfig?,
+        keyFormat: KeyFormat,
         promptMessage: String?,
         callback: (Result<SignatureResult>) -> Unit
     ) {
@@ -334,7 +335,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                 // KeyFormat is not passed in createSignature in new API?
                 // Wait, createSignature in Pigeon API DOES NOT have KeyFormat arg.
                 // I should default to BASE64.
-                val response = buildSignatureResponse(signatureBytes, publicKey, KeyFormat.BASE64)
+                val response = buildSignatureResponse(signatureBytes, publicKey, keyFormat)
                 callback(Result.success(response))
 
             } catch (e: Exception) {
@@ -847,15 +848,17 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         val formatted = formatOutput(publicKey.encoded, format)
         return KeyCreationResult(
             publicKey = formatted.value,
+            publicKeyBytes = publicKey.encoded,
             code = BiometricError.SUCCESS
         )
     }
 
     private fun buildSignatureResponse(signatureBytes: ByteArray, publicKey: PublicKey, format: KeyFormat): SignatureResult {
         val sigFormatted = formatOutput(signatureBytes, format, "SIGNATURE")
-        val pubFormatted = formatOutput(publicKey.encoded, format) // Also return pub key in same format
+        val pubFormatted = formatOutput(publicKey.encoded, format) 
         return SignatureResult(
             signature = sigFormatted.value,
+            signatureBytes = signatureBytes,
             publicKey = pubFormatted.value,
             code = BiometricError.SUCCESS
         )
@@ -869,7 +872,13 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                 format,
                 label
             )
+            KeyFormat.HEX -> FormattedOutput(bytesToHex(bytes), format)
+            KeyFormat.RAW -> FormattedOutput(Base64.encodeToString(bytes, Base64.NO_WRAP), format) // Raw bytes returned in separate field, String is Base64
         }
+
+    private fun bytesToHex(bytes: ByteArray): String {
+        return bytes.joinToString("") { "%02x".format(it) }
+    }
 
     private fun detectBiometricTypes(): Pair<List<BiometricType>, String?> {
          // Logic to detect types

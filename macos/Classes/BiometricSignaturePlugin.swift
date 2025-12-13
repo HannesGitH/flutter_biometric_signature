@@ -176,11 +176,12 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         androidConfig: AndroidConfig?,
         iosConfig: IosConfig?,
         macosConfig: MacosConfig?,
+        keyFormat: KeyFormat,
         promptMessage: String?,
         completion: @escaping (Result<SignatureResult, Error>) -> Void
     ) {
         guard let payload = payload, let dataToSign = payload.data(using: .utf8) else {
-             completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "Invalid payload", code: .invalidInput)))
+             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Invalid payload", code: .invalidInput)))
              return
         }
         
@@ -188,9 +189,9 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         
         // Check for RSA keys (Hybrid) - similar to iOS
         if hasRsaKey() {
-             performRsaSigning(dataToSign: dataToSign, prompt: prompt, completion: completion)
+             performRsaSigning(dataToSign: dataToSign, prompt: prompt, keyFormat: keyFormat, completion: completion)
         } else {
-             performEcSigning(dataToSign: dataToSign, prompt: prompt, completion: completion)
+             performEcSigning(dataToSign: dataToSign, prompt: prompt, keyFormat: keyFormat, completion: completion)
         }
     }
 
@@ -252,7 +253,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         }
         
         guard let accessControl = SecAccessControlCreateWithFlags(kCFAllocatorDefault, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly, flags, nil) else {
-            completion(.success(KeyCreationResult(publicKey: nil, error: "Failed to create access control", code: .unknown)))
+            completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "Failed to create access control", code: .unknown)))
             return
         }
         
@@ -272,7 +273,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         var error: Unmanaged<CFError>?
         guard let ecPrivateKey = SecKeyCreateRandomKey(ecAttributes as CFDictionary, &error) else {
              let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
-             completion(.success(KeyCreationResult(publicKey: nil, error: "EC Key Gen Error: \(msg)", code: .unknown)))
+             completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "EC Key Gen Error: \(msg)", code: .unknown)))
              return
         }
         
@@ -280,20 +281,22 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         InvalidationSetting.save(biometryCurrentSet)
         
         guard let ecPublicKey = SecKeyCopyPublicKey(ecPrivateKey) else {
-             completion(.success(KeyCreationResult(publicKey: nil, error: "EC Pub Key Error", code: .unknown)))
+             completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "EC Pub Key Error", code: .unknown)))
              return
         }
 
         if signatureType == .ecdsa {
              let keyStr = formatKey(ecPublicKey, format: keyFormat)
-             completion(.success(KeyCreationResult(publicKey: keyStr, error: nil, code: .success)))
+             let data = SecKeyCopyExternalRepresentation(ecPublicKey, &error) as Data?
+             let typedData = data != nil ? FlutterStandardTypedData(bytes: data!) : nil
+             completion(.success(KeyCreationResult(publicKey: keyStr, publicKeyBytes: typedData, error: nil, code: .success)))
              return
         }
         
         // Hybrid RSA
         // Check encryption support
         guard SecKeyIsAlgorithmSupported(ecPublicKey, .encrypt, .eciesEncryptionStandardX963SHA256AESGCM) else {
-             completion(.success(KeyCreationResult(publicKey: nil, error: "ECIES not supported", code: .unknown)))
+             completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "ECIES not supported", code: .unknown)))
              return
         }
 
@@ -304,14 +307,14 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
             kSecPrivateKeyAttrs as String: [kSecAttrIsPermanent as String: false]
         ]
         guard let rsaPrivateKey = SecKeyCreateRandomKey(rsaAttributes as CFDictionary, &error) else {
-             completion(.success(KeyCreationResult(publicKey: nil, error: "RSA Gen Error", code: .unknown)))
+             completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "RSA Gen Error", code: .unknown)))
              return
         }
         
         // Wrap RSA Private Key
         guard let rsaPrivateData = SecKeyCopyExternalRepresentation(rsaPrivateKey, &error) as Data?,
               let encryptedRsa = SecKeyCreateEncryptedData(ecPublicKey, .eciesEncryptionStandardX963SHA256AESGCM, rsaPrivateData as CFData, &error) as Data? else {
-             completion(.success(KeyCreationResult(publicKey: nil, error: "RSA Wrapping Error", code: .unknown)))
+             completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "RSA Wrapping Error", code: .unknown)))
              return
         }
         
@@ -327,61 +330,64 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         SecItemAdd(saveQuery as CFDictionary, nil)
         
         guard let rsaPublicKey = SecKeyCopyPublicKey(rsaPrivateKey) else {
-             completion(.success(KeyCreationResult(publicKey: nil, error: "RSA Pub Key Error", code: .unknown)))
+             completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "RSA Pub Key Error", code: .unknown)))
              return
         }
         
         let keyStr = formatKey(rsaPublicKey, format: keyFormat)
-        completion(.success(KeyCreationResult(publicKey: keyStr, error: nil, code: .success)))
+        let data = SecKeyCopyExternalRepresentation(rsaPublicKey, &error) as Data?
+        let typedData = data != nil ? FlutterStandardTypedData(bytes: data!) : nil
+        completion(.success(KeyCreationResult(publicKey: keyStr, publicKeyBytes: typedData, error: nil, code: .success)))
     }
     
-     private func performRsaSigning(dataToSign: Data, prompt: String, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
+     private func performRsaSigning(dataToSign: Data, prompt: String, keyFormat: KeyFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
         guard let rsaPrivateKey = unwrapRsaKey(prompt: prompt) else {
-             completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "Failed to access/unwrap RSA key", code: .unknown)))
+             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Failed to access/unwrap RSA key", code: .unknown)))
              return
         }
         
         var error: Unmanaged<CFError>?
         guard let signature = SecKeyCreateSignature(rsaPrivateKey, .rsaSignatureMessagePKCS1v15SHA256, dataToSign as CFData, &error) as Data? else {
              let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
-             completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "Signing Error: \(msg)", code: .unknown)))
+             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Signing Error: \(msg)", code: .unknown)))
              return
         }
         
         guard let pub = SecKeyCopyPublicKey(rsaPrivateKey) else {
-             completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "Pub Key Error", code: .unknown)))
+             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Pub Key Error", code: .unknown)))
              return
         }
         
         completion(.success(SignatureResult(
-            signature: signature.base64EncodedString(),
-            publicKey: formatKey(pub, format: .base64),
+            signature: formatBytes(signature, format: keyFormat),
+            signatureBytes: FlutterStandardTypedData(bytes: signature),
+            publicKey: formatKey(pub, format: keyFormat),
             error: nil,
             code: .success
         )))
     }
     
-    private func performEcSigning(dataToSign: Data, prompt: String, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
+    private func performEcSigning(dataToSign: Data, prompt: String, keyFormat: KeyFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
         guard let ecKey = getEcPrivateKey(prompt: prompt) else {
-             completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "EC Key not found or auth failed", code: .unknown)))
+             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "EC Key not found or auth failed", code: .unknown)))
              return
         }
         
         var error: Unmanaged<CFError>?
         guard let signature = SecKeyCreateSignature(ecKey, .ecdsaSignatureMessageX962SHA256, dataToSign as CFData, &error) as Data? else {
               let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
-               completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "Signing Error: \(msg)", code: .unknown)))
+               completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Signing Error: \(msg)", code: .unknown)))
               return
         }
          guard let pub = SecKeyCopyPublicKey(ecKey) else {
-              completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "Pub Key Error", code: .unknown)))
+              completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Pub Key Error", code: .unknown)))
              return
         }
         
         completion(.success(SignatureResult(
-            signature: signature.base64EncodedString(),
-            publicKey: formatKey(pub, format: .base64),
-            error: nil,
+            signature: formatBytes(signature, format: keyFormat),
+            signatureBytes: FlutterStandardTypedData(bytes: signature),
+            publicKey: formatKey(pub, format: keyFormat),
             code: .success
         )))
     }
@@ -515,10 +521,18 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     private func formatKey(_ key: SecKey, format: KeyFormat) -> String {
         var error: Unmanaged<CFError>?
         guard let data = SecKeyCopyExternalRepresentation(key, &error) as Data? else { return "" }
-        if format == .pem {
-             let base64 = data.base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
-             return "-----BEGIN PUBLIC KEY-----\n\(base64)\n-----END PUBLIC KEY-----"
+        return formatBytes(data, format: format)
+    }
+
+    private func formatBytes(_ data: Data, format: KeyFormat) -> String {
+        switch format {
+        case .base64, .raw:
+            return data.base64EncodedString()
+        case .pem:
+            let base64 = data.base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
+            return "-----BEGIN PUBLIC KEY-----\n\(base64)\n-----END PUBLIC KEY-----"
+        case .hex:
+            return data.map { String(format: "%02x", $0) }.joined()
         }
-        return data.base64EncodedString()
     }
 }

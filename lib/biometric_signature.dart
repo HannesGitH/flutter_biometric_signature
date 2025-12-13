@@ -41,6 +41,7 @@ class BiometricSignature {
     AndroidConfig? androidConfig,
     IosConfig? iosConfig,
     MacosConfig? macosConfig,
+    KeyFormat keyFormat = KeyFormat.base64,
     String? promptMessage,
   }) async {
     return BiometricSignaturePlatform.instance.createSignature(
@@ -48,6 +49,7 @@ class BiometricSignature {
       androidConfig,
       iosConfig,
       macosConfig,
+      keyFormat,
       promptMessage,
     );
   }

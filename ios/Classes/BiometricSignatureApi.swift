@@ -173,6 +173,8 @@ enum SignatureType: Int {
 enum KeyFormat: Int {
   case base64 = 0
   case pem = 1
+  case hex = 2
+  case raw = 3
 }
 
 /// Generated class from Pigeon that represents data sent in messages.
@@ -215,6 +217,7 @@ struct BiometricAvailability: Hashable {
 /// Generated class from Pigeon that represents data sent in messages.
 struct KeyCreationResult: Hashable {
   var publicKey: String? = nil
+  var publicKeyBytes: FlutterStandardTypedData? = nil
   var error: String? = nil
   var code: BiometricError? = nil
 
@@ -222,11 +225,13 @@ struct KeyCreationResult: Hashable {
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> KeyCreationResult? {
     let publicKey: String? = nilOrValue(pigeonVar_list[0])
-    let error: String? = nilOrValue(pigeonVar_list[1])
-    let code: BiometricError? = nilOrValue(pigeonVar_list[2])
+    let publicKeyBytes: FlutterStandardTypedData? = nilOrValue(pigeonVar_list[1])
+    let error: String? = nilOrValue(pigeonVar_list[2])
+    let code: BiometricError? = nilOrValue(pigeonVar_list[3])
 
     return KeyCreationResult(
       publicKey: publicKey,
+      publicKeyBytes: publicKeyBytes,
       error: error,
       code: code
     )
@@ -234,6 +239,7 @@ struct KeyCreationResult: Hashable {
   func toList() -> [Any?] {
     return [
       publicKey,
+      publicKeyBytes,
       error,
       code,
     ]
@@ -248,6 +254,7 @@ struct KeyCreationResult: Hashable {
 /// Generated class from Pigeon that represents data sent in messages.
 struct SignatureResult: Hashable {
   var signature: String? = nil
+  var signatureBytes: FlutterStandardTypedData? = nil
   var publicKey: String? = nil
   var error: String? = nil
   var code: BiometricError? = nil
@@ -256,12 +263,14 @@ struct SignatureResult: Hashable {
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> SignatureResult? {
     let signature: String? = nilOrValue(pigeonVar_list[0])
-    let publicKey: String? = nilOrValue(pigeonVar_list[1])
-    let error: String? = nilOrValue(pigeonVar_list[2])
-    let code: BiometricError? = nilOrValue(pigeonVar_list[3])
+    let signatureBytes: FlutterStandardTypedData? = nilOrValue(pigeonVar_list[1])
+    let publicKey: String? = nilOrValue(pigeonVar_list[2])
+    let error: String? = nilOrValue(pigeonVar_list[3])
+    let code: BiometricError? = nilOrValue(pigeonVar_list[4])
 
     return SignatureResult(
       signature: signature,
+      signatureBytes: signatureBytes,
       publicKey: publicKey,
       error: error,
       code: code
@@ -270,6 +279,7 @@ struct SignatureResult: Hashable {
   func toList() -> [Any?] {
     return [
       signature,
+      signatureBytes,
       publicKey,
       error,
       code,
@@ -562,7 +572,7 @@ protocol BiometricSignatureApi {
   /// Creates a new key pair.
   func createKeys(androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, keyFormat: KeyFormat, enforceBiometric: Bool, promptMessage: String?, completion: @escaping (Result<KeyCreationResult, Error>) -> Void)
   /// Creates a signature.
-  func createSignature(payload: String?, androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, promptMessage: String?, completion: @escaping (Result<SignatureResult, Error>) -> Void)
+  func createSignature(payload: String?, androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, keyFormat: KeyFormat, promptMessage: String?, completion: @escaping (Result<SignatureResult, Error>) -> Void)
   /// Decrypts data.
   func decrypt(payload: String?, androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, promptMessage: String?, completion: @escaping (Result<DecryptResult, Error>) -> Void)
   /// Deletes keys.
@@ -623,8 +633,9 @@ class BiometricSignatureApiSetup {
         let androidConfigArg: AndroidConfig? = nilOrValue(args[1])
         let iosConfigArg: IosConfig? = nilOrValue(args[2])
         let macosConfigArg: MacosConfig? = nilOrValue(args[3])
-        let promptMessageArg: String? = nilOrValue(args[4])
-        api.createSignature(payload: payloadArg, androidConfig: androidConfigArg, iosConfig: iosConfigArg, macosConfig: macosConfigArg, promptMessage: promptMessageArg) { result in
+        let keyFormatArg = args[4] as! KeyFormat
+        let promptMessageArg: String? = nilOrValue(args[5])
+        api.createSignature(payload: payloadArg, androidConfig: androidConfigArg, iosConfig: iosConfigArg, macosConfig: macosConfigArg, keyFormat: keyFormatArg, promptMessage: promptMessageArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))

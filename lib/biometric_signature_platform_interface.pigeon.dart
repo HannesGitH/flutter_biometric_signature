@@ -74,6 +74,8 @@ enum SignatureType {
 enum KeyFormat {
   base64,
   pem,
+  hex,
+  raw,
 }
 
 class BiometricAvailability {
@@ -135,11 +137,14 @@ class BiometricAvailability {
 class KeyCreationResult {
   KeyCreationResult({
     this.publicKey,
+    this.publicKeyBytes,
     this.error,
     this.code,
   });
 
   String? publicKey;
+
+  Uint8List? publicKeyBytes;
 
   String? error;
 
@@ -148,6 +153,7 @@ class KeyCreationResult {
   List<Object?> _toList() {
     return <Object?>[
       publicKey,
+      publicKeyBytes,
       error,
       code,
     ];
@@ -160,8 +166,9 @@ class KeyCreationResult {
     result as List<Object?>;
     return KeyCreationResult(
       publicKey: result[0] as String?,
-      error: result[1] as String?,
-      code: result[2] as BiometricError?,
+      publicKeyBytes: result[1] as Uint8List?,
+      error: result[2] as String?,
+      code: result[3] as BiometricError?,
     );
   }
 
@@ -186,12 +193,15 @@ class KeyCreationResult {
 class SignatureResult {
   SignatureResult({
     this.signature,
+    this.signatureBytes,
     this.publicKey,
     this.error,
     this.code,
   });
 
   String? signature;
+
+  Uint8List? signatureBytes;
 
   String? publicKey;
 
@@ -202,6 +212,7 @@ class SignatureResult {
   List<Object?> _toList() {
     return <Object?>[
       signature,
+      signatureBytes,
       publicKey,
       error,
       code,
@@ -215,9 +226,10 @@ class SignatureResult {
     result as List<Object?>;
     return SignatureResult(
       signature: result[0] as String?,
-      publicKey: result[1] as String?,
-      error: result[2] as String?,
-      code: result[3] as BiometricError?,
+      signatureBytes: result[1] as Uint8List?,
+      publicKey: result[2] as String?,
+      error: result[3] as String?,
+      code: result[4] as BiometricError?,
     );
   }
 
@@ -637,14 +649,14 @@ class BiometricSignatureApi {
   }
 
   /// Creates a signature.
-  Future<SignatureResult> createSignature(String? payload, AndroidConfig? androidConfig, IosConfig? iosConfig, MacosConfig? macosConfig, String? promptMessage) async {
+  Future<SignatureResult> createSignature(String? payload, AndroidConfig? androidConfig, IosConfig? iosConfig, MacosConfig? macosConfig, KeyFormat keyFormat, String? promptMessage) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.createSignature$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[payload, androidConfig, iosConfig, macosConfig, promptMessage]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[payload, androidConfig, iosConfig, macosConfig, keyFormat, promptMessage]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);

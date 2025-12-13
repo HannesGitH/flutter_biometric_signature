@@ -44,6 +44,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
   // Settings
   bool useEc = false;
   bool enableDecryption = false;
+  KeyFormat _keyFormat = KeyFormat.pem;
 
   // Results
   KeyCreationResult? keyResult;
@@ -73,7 +74,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
 
     try {
       final result = await _biometricSignature.createKeys(
-        keyFormat: KeyFormat.pem,
+        keyFormat: _keyFormat,
         androidConfig: AndroidConfig(
           useDeviceCredentials: false,
           signatureType: useEc ? SignatureType.ecdsa : SignatureType.rsa,
@@ -118,6 +119,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     try {
       final result = await _biometricSignature.createSignature(
         payload: payload!,
+        keyFormat: _keyFormat,
         promptMessage: 'Sign Data',
         androidConfig: AndroidConfig(
           useDeviceCredentials: false,
@@ -460,6 +462,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                      const Text('Decrypt Support'),
                      Switch(value: enableDecryption, onChanged: (v) => setState(() => enableDecryption = v)),
                    ]),
+                   DropdownButton<KeyFormat>(value: _keyFormat, onChanged: (v) { if(v!=null) setState(()=>_keyFormat=v); }, items: KeyFormat.values.map((f)=>DropdownMenuItem(value: f, child: Text(f.name))).toList()),
                    ElevatedButton(
                      onPressed: _createKeys,
                      child: const Text('Create Keys'),
@@ -480,6 +483,8 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                      const Text('Public Key Created:', style: TextStyle(fontWeight: FontWeight.bold)),
                      const SizedBox(height: 4),
                      Text(keyResult!.publicKey ?? '', style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
+                     if (keyResult!.publicKeyBytes != null)
+                        Text('Bytes: ${keyResult!.publicKeyBytes!.length} (Hex: ${keyResult!.publicKeyBytes!.map((e)=>e.toRadixString(16).padLeft(2,'0')).join()})', style: const TextStyle(fontSize: 8, color: Colors.grey)),
                      const SizedBox(height: 8),
                      TextButton.icon(
                        icon: const Icon(Icons.delete, size: 16),
@@ -515,7 +520,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
             ),
 
           if (signatureResult != null)
-            _buildResult('Signature', signatureResult!.signature),
+            _buildResult('Signature', signatureResult!.signature, bytes: signatureResult!.signatureBytes),
 
           if (decryptResult != null)
             _buildResult('Decrypted', decryptResult!.decryptedData),
@@ -524,7 +529,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     );
   }
 
-  Widget _buildResult(String title, String? data) {
+  Widget _buildResult(String title, String? data, {Uint8List? bytes}) {
     return Card(
       margin: const EdgeInsets.only(top: 10),
       child: Padding(
@@ -535,6 +540,8 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
             Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             SelectableText(data ?? 'null', style: const TextStyle(fontFamily: 'monospace')),
+            if (bytes != null)
+               Text('Bytes: ${bytes.length} (Hex: ${bytes.map((e)=>e.toRadixString(16).padLeft(2,'0')).join()})', style: const TextStyle(fontSize: 8, color: Colors.grey)),
           ],
         ),
       ),

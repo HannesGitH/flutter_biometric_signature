@@ -57,12 +57,14 @@ class BiometricAvailability {
 
 class KeyCreationResult {
   String? publicKey;
+  Uint8List? publicKeyBytes;
   String? error;
   BiometricError? code;
 }
 
 class SignatureResult {
   String? signature;
+  Uint8List? signatureBytes;
   String? publicKey;
   String? error;
   BiometricError? code;
@@ -112,6 +114,8 @@ class MacosConfig {
 enum KeyFormat {
   base64,
   pem,
+  hex,
+  raw,
 }
 
 @HostApi()
@@ -136,6 +140,7 @@ abstract class BiometricSignatureApi {
       AndroidConfig? androidConfig,
       IosConfig? iosConfig,
       MacosConfig? macosConfig,
+      KeyFormat keyFormat,
       String? promptMessage);
 
   /// Decrypts data.
