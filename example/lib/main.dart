@@ -45,7 +45,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
   bool useEc = false;
   bool enableDecryption = false;
   KeyFormat _publicKeyFormat = KeyFormat.pem;
-  KeyFormat _signatureFormat = KeyFormat.base64;
+  SignatureFormat _signatureFormat = SignatureFormat.base64;
 
   // Results
   KeyCreationResult? keyResult;
@@ -76,24 +76,16 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     try {
       final result = await _biometricSignature.createKeys(
         keyFormat: _publicKeyFormat,
-        androidConfig: AndroidConfig(
-          useDeviceCredentials: false,
-          signatureType: useEc ? SignatureType.ecdsa : SignatureType.rsa,
-          setInvalidatedByBiometricEnrollment: true,
-          enableDecryption: enableDecryption,
-        ),
-        iosConfig: IosConfig(
-          useDeviceCredentials: false,
-          signatureType: useEc ? SignatureType.ecdsa : SignatureType.rsa,
-          biometryCurrentSet: true,
-        ),
-        macosConfig: MacosConfig(
-          useDeviceCredentials: false,
-          signatureType: useEc ? SignatureType.ecdsa : SignatureType.rsa,
-          biometryCurrentSet: true,
-        ),
+        useDeviceCredentials: false,
+        signatureType: useEc ? SignatureType.ecdsa : SignatureType.rsa,
+        setInvalidatedByBiometricEnrollment: true,
         enforceBiometric: true,
         promptMessage: 'Authenticate to create keys',
+        androidConfig: AndroidCreateKeysConfig(
+          enableDecryption: enableDecryption,
+        ),
+        iosConfig: IosCreateKeysConfig(),
+        macosConfig: MacosCreateKeysConfig(),
       );
 
       if (result.code == BiometricError.success) {
@@ -120,23 +112,13 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     try {
       final result = await _biometricSignature.createSignature(
         payload: payload!,
-        keyFormat: _signatureFormat,
+        signatureFormat: _signatureFormat,
         promptMessage: 'Sign Data',
-        androidConfig: AndroidConfig(
-          useDeviceCredentials: false,
-          signatureType: SignatureType.rsa, // Type inferred from key existence usually, but config required in API?
-          // Wait, createSignature API in Dart wrapper:
-          // createSignature({required String payload, AndroidConfig? androidConfig, ... })
-          // The native side usually just looks up the key alias.
-          // Passing configs might be for options like 'allowDeviceCredentials' which are in signature options usually.
-          // But my new API merged Config and Options? 
-          // Let's check biometric_signature.dart again. 
-          // It accepts AndroidConfig?. 
-          // But usually createSignature doesn't need full config, just UI options.
-          // In my Pigeon schema, I removed SignatureOptions and just passed Configs?
-          // Let's assume passing null or minimal config is fine if not needed, 
-          // or if I reused AndroidConfig for options.
+        androidConfig: AndroidCreateSignatureConfig(
+          allowDeviceCredentials: false,
         ),
+        iosConfig: IosCreateSignatureConfig(), // shouldMigrate defaults to false/null
+        macosConfig: MacosCreateSignatureConfig(),
       );
 
       if (result.code == BiometricError.success) {
@@ -151,7 +133,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
 
   Future<void> _decrypt() async {
     if (payload == null || payload!.isEmpty) {
-      _showSnack('Enter encrypted b64 payload');
+      _showSnack('Enter payload first');
       return;
     }
     FocusScope.of(context).unfocus();
@@ -168,13 +150,13 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
       // 2) Present biometric prompt via plugin (native UI).
       final result = await _biometricSignature.decrypt(
         payload: encryptedBase64,
+        payloadFormat: PayloadFormat.base64,
         promptMessage: 'Decrypt Payload',
-        androidConfig:  AndroidConfig(
-          useDeviceCredentials: false, 
-          // subtitle: 'Approve to decrypt data' // Removed in v9 API simplification, uses promptMessage
+        androidConfig: AndroidDecryptConfig(
+          allowDeviceCredentials: false, 
         ),
-        iosConfig:  IosConfig(biometryCurrentSet: true),
-        macosConfig:  MacosConfig(biometryCurrentSet: true),
+        iosConfig: IosDecryptConfig(),
+        macosConfig: MacosDecryptConfig(),
       );
 
       // Only show overlay if we need to do extra processing after auth.
@@ -214,8 +196,10 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
   String _encryptRsa(String plaintext) {
     if (Platform.isIOS || Platform.isMacOS) {
       // iOS/macOS return raw PKCS#1 (RSAPublicKey) inside the PEM string.
-      // We must strip the PEM headers and newlines to get the raw Base64.
-      final cleanBase64 = keyResult!.publicKey!
+      // In Hybrid/RSA mode, the RSA public key is in decryptingPublicKey
+      final keyStr = keyResult!.decryptingPublicKey ?? keyResult!.publicKey!;
+      
+      final cleanBase64 = keyStr
           .replaceAll(RegExp(r'-----[A-Z ]+-----'), '')
           .replaceAll(RegExp(r'\s+'), '');
           
@@ -232,7 +216,8 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     }
 
     // Android returns SPKI (Standard X.509)
-    final publicKeyStr = keyResult!.publicKey!;
+    // In Hybrid mode, RSA key is in decryptingPublicKey
+    final publicKeyStr = keyResult!.decryptingPublicKey ?? keyResult!.publicKey!;
     final publicKeyPem = publicKeyStr.contains('BEGIN PUBLIC KEY')
         ? publicKeyStr
         : '-----BEGIN PUBLIC KEY-----\n$publicKeyStr\n-----END PUBLIC KEY-----';
@@ -489,6 +474,13 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                      Text(keyResult!.publicKey ?? '', style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
                      if (keyResult!.publicKeyBytes != null)
                         Text('Bytes: ${keyResult!.publicKeyBytes!.length} (Hex: ${keyResult!.publicKeyBytes!.map((e)=>e.toRadixString(16).padLeft(2,'0')).join()})', style: const TextStyle(fontSize: 8, color: Colors.grey)),
+                     if (keyResult!.decryptingPublicKey != null) ...[
+                        const SizedBox(height: 8),
+                        const Text('Decrypting Key (Hybrid):', style: TextStyle(fontWeight: FontWeight.bold)),
+                        Text(keyResult!.decryptingPublicKey!, style: const TextStyle(fontSize: 10, fontFamily: 'monospace')),
+                        if (keyResult!.decryptingAlgorithm != null)
+                           Text('Alg: ${keyResult!.decryptingAlgorithm}, Size: ${keyResult!.decryptingKeySize}', style: const TextStyle(fontSize: 10)),
+                     ],
                      const SizedBox(height: 8),
                      TextButton.icon(
                        icon: const Icon(Icons.delete, size: 16),
@@ -510,7 +502,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
           const SizedBox(height: 10),
           Row(children: [
              const Text('Sig Format: '), 
-             DropdownButton<KeyFormat>(value: _signatureFormat, onChanged: (v) { if(v!=null) setState(()=>_signatureFormat=v); }, items: KeyFormat.values.map((f)=>DropdownMenuItem(value: f, child: Text(f.name))).toList())
+             DropdownButton<SignatureFormat>(value: _signatureFormat, onChanged: (v) { if(v!=null) setState(()=>_signatureFormat=v); }, items: SignatureFormat.values.map((f)=>DropdownMenuItem(value: f, child: Text(f.name))).toList())
           ]),
           const SizedBox(height: 10),
           Row(

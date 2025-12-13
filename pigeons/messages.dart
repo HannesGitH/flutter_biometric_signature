@@ -60,6 +60,13 @@ class KeyCreationResult {
   Uint8List? publicKeyBytes;
   String? error;
   BiometricError? code;
+  // Added for v8.5.0 parity (Refactored to Decrypting fields)
+  String? algorithm;
+  int? keySize;
+  String? decryptingPublicKey;
+  String? decryptingAlgorithm;
+  int? decryptingKeySize;
+  bool? isHybridMode;
 }
 
 class SignatureResult {
@@ -68,6 +75,9 @@ class SignatureResult {
   String? publicKey;
   String? error;
   BiometricError? code;
+  // Added for v8.5.0 parity
+  String? algorithm;
+  int? keySize;
 }
 
 class DecryptResult {
@@ -82,38 +92,75 @@ enum SignatureType {
   ecdsa,
 }
 
-/// Configuration for Android.
-class AndroidConfig {
-  bool? useDeviceCredentials;
-  bool? setInvalidatedByBiometricEnrollment;
+/// Configuration for Android key creation.
+class AndroidCreateKeysConfig {
   bool? enableDecryption;
-  SignatureType? signatureType;
-  String? promptTitle;
   String? promptSubtitle;
   String? promptDescription;
   String? cancelButtonText;
 }
 
-/// Configuration for iOS.
-class IosConfig {
-  bool? useDeviceCredentials;
-  bool? biometryCurrentSet;
-  SignatureType? signatureType;
-  String? localizedReason;
+/// Configuration for iOS key creation.
+class IosCreateKeysConfig {
+  String? reserved;
+}
+
+/// Configuration for macOS key creation.
+class MacosCreateKeysConfig {
+  String? reserved;
+}
+
+/// Configuration for Android signature creation.
+class AndroidCreateSignatureConfig {
+  String? promptSubtitle;
+  String? promptDescription;
+  String? cancelButtonText;
+  bool? allowDeviceCredentials;
+}
+
+/// Configuration for iOS signature creation.
+class IosCreateSignatureConfig {
   bool? shouldMigrate;
 }
 
-/// Configuration for macOS.
-class MacosConfig {
-  bool? useDeviceCredentials;
-  bool? biometryCurrentSet;
-  SignatureType? signatureType;
-  String? localizedReason;
+/// Configuration for macOS signature creation.
+class MacosCreateSignatureConfig {
+  String? reserved;
+}
+
+/// Configuration for Android decryption.
+class AndroidDecryptConfig {
+  String? promptSubtitle;
+  String? promptDescription;
+  String? cancelButtonText;
+  bool? allowDeviceCredentials;
+}
+
+/// Configuration for iOS decryption.
+class IosDecryptConfig {
+  bool? shouldMigrate;
+}
+
+/// Configuration for macOS decryption.
+class MacosDecryptConfig {
+  String? reserved;
 }
 
 enum KeyFormat {
   base64,
   pem,
+  hex,
+  raw,
+}
+
+enum SignatureFormat {
+  base64,
+  hex,
+  raw,
+}
+
+enum PayloadFormat {
+  base64,
   hex,
   raw,
 }
@@ -126,9 +173,12 @@ abstract class BiometricSignatureApi {
   /// Creates a new key pair.
   @async
   KeyCreationResult createKeys(
-      AndroidConfig? androidConfig,
-      IosConfig? iosConfig,
-      MacosConfig? macosConfig,
+      AndroidCreateKeysConfig? androidConfig,
+      IosCreateKeysConfig? iosConfig,
+      MacosCreateKeysConfig? macosConfig,
+      bool? useDeviceCredentials,
+      SignatureType? signatureType,
+      bool? setInvalidatedByBiometricEnrollment,
       KeyFormat keyFormat,
       bool enforceBiometric,
       String? promptMessage);
@@ -137,19 +187,20 @@ abstract class BiometricSignatureApi {
   @async
   SignatureResult createSignature(
       String? payload,
-      AndroidConfig? androidConfig,
-      IosConfig? iosConfig,
-      MacosConfig? macosConfig,
-      KeyFormat keyFormat,
+      AndroidCreateSignatureConfig? androidConfig,
+      IosCreateSignatureConfig? iosConfig,
+      MacosCreateSignatureConfig? macosConfig,
+      SignatureFormat signatureFormat,
       String? promptMessage);
 
   /// Decrypts data.
   @async
   DecryptResult decrypt(
       String? payload,
-      AndroidConfig? androidConfig,
-      IosConfig? iosConfig,
-      MacosConfig? macosConfig,
+      PayloadFormat payloadFormat,
+      AndroidDecryptConfig? androidConfig,
+      IosDecryptConfig? iosConfig,
+      MacosDecryptConfig? macosConfig,
       String? promptMessage);
 
   /// Deletes keys.

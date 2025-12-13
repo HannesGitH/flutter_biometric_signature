@@ -129,9 +129,12 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
     }
 
     override fun createKeys(
-        androidConfig: AndroidConfig?,
-        iosConfig: IosConfig?,
-        macosConfig: MacosConfig?,
+        androidConfig: AndroidCreateKeysConfig?,
+        iosConfig: IosCreateKeysConfig?,
+        macosConfig: MacosCreateKeysConfig?,
+        useDeviceCredentials: Boolean?,
+        signatureType: SignatureType?,
+        setInvalidatedByBiometricEnrollment: Boolean?,
         keyFormat: KeyFormat,
         enforceBiometric: Boolean,
         promptMessage: String?,
@@ -145,10 +148,10 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
 
         pluginScope.launch {
             try {
-                val useDeviceCredentials = androidConfig?.useDeviceCredentials ?: false
+                val useDeviceCredentials = useDeviceCredentials ?: false
                 val enableDecryption = androidConfig?.enableDecryption ?: false
-                val invalidateOnEnrollment = androidConfig?.setInvalidatedByBiometricEnrollment ?: true
-                val signatureType = androidConfig?.signatureType ?: SignatureType.RSA
+                val invalidateOnEnrollment = setInvalidatedByBiometricEnrollment ?: true
+                val signatureType = signatureType ?: SignatureType.RSA
                 
                 val mode = when(signatureType) {
                     SignatureType.RSA -> KeyMode.RSA
@@ -262,29 +265,24 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         writeFileAtomic(EC_PUB_FILENAME, publicKeyBytes)
 
         // For hybrid, we return the decryption public key as the main key
+        // For hybrid, we return the Signing Key as default, and Decryption Key as optional
+        val decryptingPublicKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(publicKeyBytes))
+        
         val response = buildKeyResponse(
-            KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(publicKeyBytes)),
-            keyFormat
+            publicKey = signingKeyPair.public, 
+            format = keyFormat,
+            decryptingKey = decryptingPublicKey
         )
-        // Note: The previous implementation returned signing key and decryption key separately in a map.
-        // The Pigeon API returns a single KeyCreationResult with publicKey.
-        // We will return the decryption key here as it is "createKeys".
-        // If the user needs signing key, maybe we should return it too?
-        // But KeyCreationResult only has one publicKey field.
-        // Usually 'createKeys' implies the key for the primary operation which might be authentication/signing
-        // BUT 'Hybrid EC' was specifically for Decryption support on Android.
-        // So I return the Decryption Key. The Signing key is in Keystore (alias BIOMETRIC_KEY_ALIAS) 
-        // and its public key can be retrieved if needed, but here we return the one we just generated.
         
         callback(Result.success(response))
     }
 
     override fun createSignature(
         payload: String?,
-        androidConfig: AndroidConfig?,
-        iosConfig: IosConfig?,
-        macosConfig: MacosConfig?,
-        keyFormat: KeyFormat,
+        androidConfig: AndroidCreateSignatureConfig?,
+        iosConfig: IosCreateSignatureConfig?,
+        macosConfig: MacosCreateSignatureConfig?,
+        signatureFormat: SignatureFormat,
         promptMessage: String?,
         callback: (Result<SignatureResult>) -> Unit
     ) {
@@ -302,9 +300,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
             try {
                 val mode = inferKeyModeFromKeystore() ?: throw SecurityException("Signing key not found")
                 
-                val allowDeviceCredentials = androidConfig?.useDeviceCredentials ?: false // Using useDeviceCredentials instead of allowDeviceCredentials for consistency?
-                // Wait, SignatureOptions had allowDeviceCredentials override.
-                // AndroidConfig (pigeon) has useDeviceCredentials. I'll use that.
+                val allowDeviceCredentials = androidConfig?.allowDeviceCredentials ?: false
                 
                 val (signature, cryptoObject) = withContext(Dispatchers.IO) {
                     prepareSignature(mode)
@@ -314,7 +310,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
 
                 val authResult = authenticate(
                     act,
-                    promptMessage ?: androidConfig?.promptTitle ?: "Authenticate",
+                    promptMessage ?: "Authenticate",
                     androidConfig?.promptSubtitle,
                     androidConfig?.cancelButtonText ?: "Cancel",
                     allowDeviceCredentials,
@@ -332,10 +328,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                 }
 
                 val publicKey = getSigningPublicKey()
-                // KeyFormat is not passed in createSignature in new API?
-                // Wait, createSignature in Pigeon API DOES NOT have KeyFormat arg.
-                // I should default to BASE64.
-                val response = buildSignatureResponse(signatureBytes, publicKey, keyFormat)
+                val response = buildSignatureResponse(signatureBytes, publicKey, signatureFormat)
                 callback(Result.success(response))
 
             } catch (e: Exception) {
@@ -346,9 +339,10 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
 
     override fun decrypt(
         payload: String?,
-        androidConfig: AndroidConfig?,
-        iosConfig: IosConfig?,
-        macosConfig: MacosConfig?,
+        payloadFormat: PayloadFormat,
+        androidConfig: AndroidDecryptConfig?,
+        iosConfig: IosDecryptConfig?,
+        macosConfig: MacosDecryptConfig?,
         promptMessage: String?,
         callback: (Result<DecryptResult>) -> Unit
     ) {
@@ -371,14 +365,14 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                      throw SecurityException("Decryption not enabled for EC signing-only mode")
                 }
 
-                val allowDeviceCredentials = androidConfig?.useDeviceCredentials ?: false
-                val prompt = promptMessage ?: androidConfig?.promptTitle ?: "Authenticate"
+                val allowDeviceCredentials = androidConfig?.allowDeviceCredentials ?: false
+                val prompt = promptMessage ?: "Authenticate"
                 val subtitle = androidConfig?.promptSubtitle
                 val cancel = androidConfig?.cancelButtonText ?: "Cancel"
 
                 val decryptedData = when (mode) {
-                    KeyMode.RSA -> decryptRsa(act, payload, prompt, subtitle, cancel, allowDeviceCredentials)
-                    KeyMode.HYBRID_EC -> decryptHybridEc(act, payload, prompt, subtitle, cancel, allowDeviceCredentials)
+                    KeyMode.RSA -> decryptRsa(act, payload, payloadFormat, prompt, subtitle, cancel, allowDeviceCredentials)
+                    KeyMode.HYBRID_EC -> decryptHybridEc(act, payload, payloadFormat, prompt, subtitle, cancel, allowDeviceCredentials)
                     else -> throw SecurityException("Unsupported decryption mode")
                 }
                 
@@ -393,6 +387,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
     private suspend fun decryptRsa(
         activity: FlutterFragmentActivity,
         payload: String,
+        payloadFormat: PayloadFormat,
         prompt: String,
         subtitle: String?,
         cancel: String,
@@ -418,7 +413,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
             val authenticatedCipher = authResult.cryptoObject?.cipher
                 ?: throw SecurityException("Authentication failed - no cipher returned")
             try {
-                val encryptedBytes = Base64.decode(payload, Base64.NO_WRAP)
+                val encryptedBytes = parsePayload(payload, payloadFormat)
                 authenticatedCipher.doFinal(encryptedBytes)
             } catch (e: IllegalArgumentException) {
                 throw IllegalArgumentException("Invalid Base64 payload", e)
@@ -431,6 +426,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
     private suspend fun decryptHybridEc(
         activity: FlutterFragmentActivity,
         payload: String,
+        payloadFormat: PayloadFormat,
         prompt: String,
         subtitle: String?,
         cancel: String,
@@ -450,7 +446,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         return withContext(Dispatchers.IO) {
             val authenticatedCipher = authResult.cryptoObject?.cipher
                 ?: throw SecurityException("Authentication failed - no cipher returned")
-            performEciesDecryption(authenticatedCipher, payload)
+            performEciesDecryption(authenticatedCipher, payload, payloadFormat)
         }
     }
 
@@ -603,7 +599,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         return entry.certificate.publicKey
     }
     
-    private fun performEciesDecryption(unwrapCipher: Cipher, payloadBase64: String): String {
+    private fun performEciesDecryption(unwrapCipher: Cipher, payload: String, format: PayloadFormat): String {
         val wrapped = readFileIfExists(EC_WRAPPED_FILENAME)
             ?: throw IllegalStateException("Encrypted EC key not found")
         if (wrapped.size < GCM_IV_SIZE + 1) throw IllegalStateException("Malformed wrapped blob")
@@ -618,9 +614,9 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                 .generatePrivate(PKCS8EncodedKeySpec(privateKeyBytes))
 
             val data = try {
-                Base64.decode(payloadBase64, Base64.NO_WRAP)
+                parsePayload(payload, format)
             } catch (e: IllegalArgumentException) {
-                throw IllegalArgumentException("Invalid Base64 payload", e)
+                throw IllegalArgumentException("Invalid payload", e)
             }
             require(data.size >= EC_PUBKEY_SIZE + GCM_TAG_BYTES) {
                 "Invalid ECIES payload: too short (${data.size} bytes)"
@@ -844,23 +840,64 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         }
     }
     
-    private fun buildKeyResponse(publicKey: PublicKey, format: KeyFormat): KeyCreationResult {
+    private fun buildKeyResponse(
+        publicKey: PublicKey, 
+        format: KeyFormat, 
+        decryptingKey: PublicKey? = null
+    ): KeyCreationResult {
         val formatted = formatOutput(publicKey.encoded, format)
+        val keySize = (publicKey as? java.security.interfaces.RSAKey)?.modulus?.bitLength()
+            ?: (publicKey as? java.security.interfaces.ECKey)?.params?.order?.bitLength()
+        
+        var decryptingFormatted: FormattedOutput? = null
+        var decryptingAlgorithm: String? = null
+        var decryptingKeySize: Long? = null
+        
+        if (decryptingKey != null) {
+            decryptingFormatted = formatOutput(decryptingKey.encoded, format)
+            decryptingAlgorithm = decryptingKey.algorithm
+            decryptingKeySize = ((decryptingKey as? java.security.interfaces.RSAKey)?.modulus?.bitLength()
+                ?: (decryptingKey as? java.security.interfaces.ECKey)?.params?.order?.bitLength())?.toLong()
+        }
+        
         return KeyCreationResult(
             publicKey = formatted.value,
             publicKeyBytes = publicKey.encoded,
-            code = BiometricError.SUCCESS
+            code = BiometricError.SUCCESS,
+            algorithm = publicKey.algorithm,
+            keySize = keySize?.toLong(),
+            decryptingPublicKey = decryptingFormatted?.value,
+            decryptingAlgorithm = decryptingAlgorithm,
+            decryptingKeySize = decryptingKeySize,
+            isHybridMode = decryptingKey != null
         )
     }
 
-    private fun buildSignatureResponse(signatureBytes: ByteArray, publicKey: PublicKey, format: KeyFormat): SignatureResult {
-        val sigFormatted = formatOutput(signatureBytes, format, "SIGNATURE")
-        val pubFormatted = formatOutput(publicKey.encoded, format) 
+    private fun buildSignatureResponse(signatureBytes: ByteArray, publicKey: PublicKey, format: SignatureFormat): SignatureResult {
+        // Map SignatureFormat to KeyFormat for consistency in Public Key formatting (if possible)
+        val keyFormat = when(format) {
+            SignatureFormat.BASE64 -> KeyFormat.BASE64
+            SignatureFormat.HEX -> KeyFormat.HEX
+            SignatureFormat.RAW -> KeyFormat.RAW
+        }
+        
+        // Format signature explicitly based on SignatureFormat
+        val sigString = when(format) {
+             SignatureFormat.BASE64, SignatureFormat.RAW -> Base64.encodeToString(signatureBytes, Base64.NO_WRAP)
+             SignatureFormat.HEX -> bytesToHex(signatureBytes)
+        }
+
+        val pubFormatted = formatOutput(publicKey.encoded, keyFormat)
+        val keySize = (publicKey as? java.security.interfaces.RSAKey)?.modulus?.bitLength()
+            ?: (publicKey as? java.security.interfaces.ECKey)?.params?.order?.bitLength()
+            
         return SignatureResult(
-            signature = sigFormatted.value,
+            signature = sigString,
             signatureBytes = signatureBytes,
             publicKey = pubFormatted.value,
-            code = BiometricError.SUCCESS
+            code = BiometricError.SUCCESS,
+            algorithm = publicKey.algorithm,
+            keySize = keySize?.toLong()
         )
     }
     
@@ -873,11 +910,25 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                 label
             )
             KeyFormat.HEX -> FormattedOutput(bytesToHex(bytes), format)
-            KeyFormat.RAW -> FormattedOutput(Base64.encodeToString(bytes, Base64.NO_WRAP), format) // Raw bytes returned in separate field, String is Base64
+            KeyFormat.RAW -> FormattedOutput(Base64.encodeToString(bytes, Base64.NO_WRAP), format)
         }
+
+    private fun parsePayload(payload: String, format: PayloadFormat): ByteArray {
+        return when (format) {
+            PayloadFormat.BASE64, PayloadFormat.RAW -> Base64.decode(payload, Base64.NO_WRAP)
+            PayloadFormat.HEX -> hexToBytes(payload)
+        }
+    }
 
     private fun bytesToHex(bytes: ByteArray): String {
         return bytes.joinToString("") { "%02x".format(it) }
+    }
+    
+    private fun hexToBytes(hex: String): ByteArray {
+        val cleanHex = if (hex.length % 2 != 0) "0$hex" else hex
+        return cleanHex.chunked(2)
+            .map { it.toInt(16).toByte() }
+            .toByteArray()
     }
 
     private fun detectBiometricTypes(): Pair<List<BiometricType>, String?> {

@@ -127,18 +127,21 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     }
 
     func createKeys(
-        androidConfig: AndroidConfig?,
-        iosConfig: IosConfig?,
-        macosConfig: MacosConfig?,
+        androidConfig: AndroidCreateKeysConfig?,
+        iosConfig: IosCreateKeysConfig?,
+        macosConfig: MacosCreateKeysConfig?,
+        useDeviceCredentials: Bool?,
+        signatureType: SignatureType?,
+        setInvalidatedByBiometricEnrollment: Bool?,
         keyFormat: KeyFormat,
         enforceBiometric: Bool,
         promptMessage: String?,
         completion: @escaping (Result<KeyCreationResult, Error>) -> Void
     ) {
-        let useDeviceCredentials = iosConfig?.useDeviceCredentials ?? false
-        let biometryCurrentSet = iosConfig?.biometryCurrentSet ?? false
-        let signatureType = iosConfig?.signatureType ?? .rsa
-        let prompt = promptMessage ?? iosConfig?.localizedReason ?? "Authenticate to create keys"
+        let useDeviceCredentials = useDeviceCredentials ?? false
+        let biometryCurrentSet = setInvalidatedByBiometricEnrollment ?? false
+        let signatureType = signatureType ?? .rsa
+        let prompt = promptMessage ?? "Authenticate to create keys"
         
         // Always delete existing keys first
         deleteExistingKeys()
@@ -175,43 +178,38 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
 
     func createSignature(
         payload: String?,
-        androidConfig: AndroidConfig?,
-        iosConfig: IosConfig?,
-        macosConfig: MacosConfig?,
+        androidConfig: AndroidCreateSignatureConfig?,
+        iosConfig: IosCreateSignatureConfig?,
+        macosConfig: MacosCreateSignatureConfig?,
+        signatureFormat: SignatureFormat,
         promptMessage: String?,
         completion: @escaping (Result<SignatureResult, Error>) -> Void
     ) {
         guard let payload = payload, let dataToSign = payload.data(using: .utf8) else {
-             completion(.success(SignatureResult(signature: nil, publicKey: nil, error: "Invalid payload", code: .invalidInput)))
+             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Invalid payload", code: .invalidInput)))
              return
         }
         
-        let prompt = promptMessage ?? iosConfig?.localizedReason ?? "Authenticate"
+        let prompt = promptMessage ?? "Authenticate"
         let shouldMigrate = iosConfig?.shouldMigrate ?? false
 
-        // Check if RSA keys exist (Hybrid mode)
         if hasRsaKey() {
-             performRsaSigning(dataToSign: dataToSign, prompt: prompt, completion: completion)
+             performRsaSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, completion: completion)
         } else if shouldMigrate {
-             // Migration logic here is complex to port directly without logic duplication
-             // For simplify, we can call createKeys if migration requested, but that changes keys.
-             // The original code migrated from old format to new Secure Enclave format.
-             // If we assume clean slate for v9.0, maybe we drop complex migration?
-             // But let's check if we can just fail or try EC.
-             
-             // If valid EC key exists, use it.
-             performEcSigning(dataToSign: dataToSign, prompt: prompt, completion: completion)
+             // Migration logic placeholder
+             performEcSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, completion: completion)
         } else {
              // Fallback to EC signing
-             performEcSigning(dataToSign: dataToSign, prompt: prompt, completion: completion)
+             performEcSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, completion: completion)
         }
     }
 
     func decrypt(
         payload: String?,
-        androidConfig: AndroidConfig?,
-        iosConfig: IosConfig?,
-        macosConfig: MacosConfig?,
+        payloadFormat: PayloadFormat,
+        androidConfig: AndroidDecryptConfig?,
+        iosConfig: IosDecryptConfig?,
+        macosConfig: MacosDecryptConfig?,
         promptMessage: String?,
         completion: @escaping (Result<DecryptResult, Error>) -> Void
     ) {
@@ -219,12 +217,12 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
              completion(.success(DecryptResult(decryptedData: nil, error: "Payload is required", code: .invalidInput)))
              return
         }
-        let prompt = promptMessage ?? iosConfig?.localizedReason ?? "Authenticate"
+        let prompt = promptMessage ?? "Authenticate"
         
         if hasRsaKey() {
-             performRsaDecryption(payload: payload, prompt: prompt, completion: completion)
+             performRsaDecryption(payload: payload, payloadFormat: payloadFormat, prompt: prompt, completion: completion)
         } else {
-             performEcDecryption(payload: payload, prompt: prompt, completion: completion)
+             performEcDecryption(payload: payload, payloadFormat: payloadFormat, prompt: prompt, completion: completion)
         }
     }
 
@@ -299,7 +297,18 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
              let keyStr = formatKey(ecPublicKey, format: keyFormat)
              let data = SecKeyCopyExternalRepresentation(ecPublicKey, &error) as Data?
              let typedData = data != nil ? FlutterStandardTypedData(bytes: data!) : nil
-             completion(.success(KeyCreationResult(publicKey: keyStr, publicKeyBytes: typedData, error: nil, code: .success)))
+             completion(.success(KeyCreationResult(
+                 publicKey: keyStr,
+                 publicKeyBytes: typedData,
+                 error: nil,
+                 code: .success,
+                 algorithm: "EC",
+                 keySize: 256,
+                 decryptingPublicKey: nil,
+                 decryptingAlgorithm: nil,
+                 decryptingKeySize: nil,
+                 isHybridMode: false
+             )))
              return
         }
         
@@ -343,13 +352,27 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
              return
         }
         
-        let keyStr = formatKey(rsaPublicKey, format: keyFormat)
-        let data = SecKeyCopyExternalRepresentation(rsaPublicKey, &error) as Data?
-        let typedData = data != nil ? FlutterStandardTypedData(bytes: data!) : nil
-        completion(.success(KeyCreationResult(publicKey: keyStr, publicKeyBytes: typedData, code: .success)))
+        let ecKeyStr = formatKey(ecPublicKey, format: keyFormat)
+        let ecData = SecKeyCopyExternalRepresentation(ecPublicKey, &error) as Data?
+        let ecTypedData = ecData != nil ? FlutterStandardTypedData(bytes: ecData!) : nil
+        
+        let rsaKeyStr = formatKey(rsaPublicKey, format: keyFormat)
+        
+        completion(.success(KeyCreationResult(
+            publicKey: ecKeyStr,
+            publicKeyBytes: ecTypedData,
+            error: nil,
+            code: .success,
+            algorithm: "EC",
+            keySize: 256,
+            decryptingPublicKey: rsaKeyStr,
+            decryptingAlgorithm: "RSA",
+            decryptingKeySize: 2048,
+            isHybridMode: true
+        )))
     }
     
-    private func performRsaSigning(dataToSign: Data, prompt: String, keyFormat: KeyFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
+    private func performRsaSigning(dataToSign: Data, prompt: String, signatureFormat: SignatureFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
         guard let rsaPrivateKey = unwrapRsaKey(prompt: prompt) else {
              completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Failed to access/unwrap RSA key", code: .unknown)))
              return
@@ -368,15 +391,17 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         }
         
         completion(.success(SignatureResult(
-            signature: formatBytes(signature, format: keyFormat),
+            signature: formatSignature(signature, format: signatureFormat),
             signatureBytes: FlutterStandardTypedData(bytes: signature),
-            publicKey: formatKey(pub, format: keyFormat),
+            publicKey: nil,
             error: nil,
-            code: .success
+            code: .success,
+            algorithm: "RSA",
+            keySize: 2048
         )))
     }
     
-    private func performEcSigning(dataToSign: Data, prompt: String, keyFormat: KeyFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
+    private func performEcSigning(dataToSign: Data, prompt: String, signatureFormat: SignatureFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
         guard let ecKey = getEcPrivateKey(prompt: prompt) else {
              completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "EC Key not found or auth failed", code: .unknown)))
              return
@@ -394,21 +419,24 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         }
         
         completion(.success(SignatureResult(
-            signature: formatBytes(signature, format: keyFormat),
+            signature: formatSignature(signature, format: signatureFormat),
             signatureBytes: FlutterStandardTypedData(bytes: signature),
-            publicKey: formatKey(pub, format: keyFormat),
-            code: .success
+            publicKey: nil,
+            error: nil,
+            code: .success,
+            algorithm: "EC",
+            keySize: 256
         )))
     }
     
-    private func performRsaDecryption(payload: String, prompt: String, completion: @escaping (Result<DecryptResult, Error>) -> Void) {
+    private func performRsaDecryption(payload: String, payloadFormat: PayloadFormat, prompt: String, completion: @escaping (Result<DecryptResult, Error>) -> Void) {
         guard let rsaPrivateKey = unwrapRsaKey(prompt: prompt) else {
-              completion(.success(DecryptResult(decryptedData: nil, error: "Failed to access/unwrap RSA key", code: .unknown)))
-              return
+               completion(.success(DecryptResult(decryptedData: nil, error: "Failed to access/unwrap RSA key", code: .unknown)))
+               return
         }
         
         var error: Unmanaged<CFError>?
-        guard let encryptedData = Data(base64Encoded: payload, options: .ignoreUnknownCharacters) else {
+        guard let encryptedData = parsePayload(payload, format: payloadFormat) else {
              completion(.success(DecryptResult(decryptedData: nil, error: "Invalid payload", code: .invalidInput)))
              return
         }
@@ -423,13 +451,13 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         completion(.success(DecryptResult(decryptedData: str, error: nil, code: .success)))
     }
     
-    private func performEcDecryption(payload: String, prompt: String, completion: @escaping (Result<DecryptResult, Error>) -> Void) {
+    private func performEcDecryption(payload: String, payloadFormat: PayloadFormat, prompt: String, completion: @escaping (Result<DecryptResult, Error>) -> Void) {
          guard let ecKey = getEcPrivateKey(prompt: prompt) else {
-               completion(.success(DecryptResult(decryptedData: nil, error: "EC Key not found or auth failed", code: .unknown)))
-              return
+                completion(.success(DecryptResult(decryptedData: nil, error: "EC Key not found or auth failed", code: .unknown)))
+               return
         }
         
-        guard let encryptedData = Data(base64Encoded: payload, options: .ignoreUnknownCharacters) else {
+        guard let encryptedData = parsePayload(payload, format: payloadFormat) else {
              completion(.success(DecryptResult(decryptedData: nil, error: "Invalid payload", code: .invalidInput)))
              return
         }
@@ -535,10 +563,47 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         var error: Unmanaged<CFError>?
         guard let data = SecKeyCopyExternalRepresentation(key, &error) as Data? else { return "" }
         
-        if format == .pem {
-             let base64 = data.base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
-             return "-----BEGIN PUBLIC KEY-----\n\(base64)\n-----END PUBLIC KEY-----"
+        switch format {
+        case .base64, .raw:
+            return data.base64EncodedString()
+        case .pem:
+            let base64 = data.base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
+            return "-----BEGIN PUBLIC KEY-----\n\(base64)\n-----END PUBLIC KEY-----"
+        case .hex:
+             return data.map { String(format: "%02x", $0) }.joined()
         }
-        return data.base64EncodedString()
+    }
+
+    private func formatSignature(_ data: Data, format: SignatureFormat) -> String {
+        switch format {
+        case .base64, .raw:
+            return data.base64EncodedString()
+        case .hex:
+             return data.map { String(format: "%02x", $0) }.joined()
+        }
+    }
+
+    private func parsePayload(_ payload: String, format: PayloadFormat) -> Data? {
+        switch format {
+        case .base64:
+            return Data(base64Encoded: payload, options: .ignoreUnknownCharacters)
+        case .hex:
+            return parseHex(payload)
+        case .raw:
+            return Data(base64Encoded: payload, options: .ignoreUnknownCharacters) // Raw assumes base64 input string for transport
+        }
+    }
+
+    private func parseHex(_ hex: String) -> Data? {
+        var data = Data()
+        var hexStr = hex
+         if hexStr.count % 2 != 0 { hexStr = "0" + hexStr }
+         for i in stride(from: 0, to: hexStr.count, by: 2) {
+             let start = hexStr.index(hexStr.startIndex, offsetBy: i)
+             let end = hexStr.index(start, offsetBy: 2)
+             guard let byte = UInt8(hexStr[start..<end], radix: 16) else { return nil }
+             data.append(byte)
+         }
+         return data
     }
 }

@@ -2,11 +2,19 @@ import 'biometric_signature_platform_interface.dart';
 
 export 'biometric_signature_platform_interface.dart'
     show
-        AndroidConfig,
-        IosConfig,
-        MacosConfig,
+        AndroidCreateKeysConfig,
+        IosCreateKeysConfig,
+        MacosCreateKeysConfig,
+        AndroidCreateSignatureConfig,
+        IosCreateSignatureConfig,
+        MacosCreateSignatureConfig,
+        AndroidDecryptConfig,
+        IosDecryptConfig,
+        MacosDecryptConfig,
         SignatureType,
         KeyFormat,
+        SignatureFormat,
+        PayloadFormat,
         BiometricError,
         BiometricType,
         BiometricAvailability,
@@ -18,9 +26,12 @@ export 'biometric_signature_platform_interface.dart'
 class BiometricSignature {
   /// Creates a new biometric-protected key pair.
   Future<KeyCreationResult> createKeys({
-    AndroidConfig? androidConfig,
-    IosConfig? iosConfig,
-    MacosConfig? macosConfig,
+    AndroidCreateKeysConfig? androidConfig,
+    IosCreateKeysConfig? iosConfig,
+    MacosCreateKeysConfig? macosConfig,
+    bool useDeviceCredentials = false,
+    SignatureType? signatureType,
+    bool setInvalidatedByBiometricEnrollment = false,
     KeyFormat keyFormat = KeyFormat.base64,
     bool enforceBiometric = false,
     String? promptMessage,
@@ -29,6 +40,9 @@ class BiometricSignature {
       androidConfig,
       iosConfig,
       macosConfig,
+      useDeviceCredentials,
+      signatureType,
+      setInvalidatedByBiometricEnrollment,
       keyFormat,
       enforceBiometric,
       promptMessage,
@@ -38,10 +52,10 @@ class BiometricSignature {
   /// Creates a digital signature using biometric authentication.
   Future<SignatureResult> createSignature({
     required String payload,
-    AndroidConfig? androidConfig,
-    IosConfig? iosConfig,
-    MacosConfig? macosConfig,
-    KeyFormat keyFormat = KeyFormat.base64,
+    AndroidCreateSignatureConfig? androidConfig,
+    IosCreateSignatureConfig? iosConfig,
+    MacosCreateSignatureConfig? macosConfig,
+    SignatureFormat signatureFormat = SignatureFormat.base64,
     String? promptMessage,
   }) async {
     return BiometricSignaturePlatform.instance.createSignature(
@@ -49,21 +63,23 @@ class BiometricSignature {
       androidConfig,
       iosConfig,
       macosConfig,
-      keyFormat,
+      signatureFormat,
       promptMessage,
     );
   }
 
-  /// Decrypts a payload using biometric authentication.
+  /// Decrypts data.
   Future<DecryptResult> decrypt({
     required String payload,
-    AndroidConfig? androidConfig,
-    IosConfig? iosConfig,
-    MacosConfig? macosConfig,
+    required PayloadFormat payloadFormat,
+    AndroidDecryptConfig? androidConfig,
+    IosDecryptConfig? iosConfig,
+    MacosDecryptConfig? macosConfig,
     String? promptMessage,
   }) async {
     return BiometricSignaturePlatform.instance.decrypt(
       payload,
+      payloadFormat,
       androidConfig,
       iosConfig,
       macosConfig,

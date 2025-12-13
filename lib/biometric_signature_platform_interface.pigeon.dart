@@ -78,6 +78,18 @@ enum KeyFormat {
   raw,
 }
 
+enum SignatureFormat {
+  base64,
+  hex,
+  raw,
+}
+
+enum PayloadFormat {
+  base64,
+  hex,
+  raw,
+}
+
 class BiometricAvailability {
   BiometricAvailability({
     required this.canAuthenticate,
@@ -140,6 +152,12 @@ class KeyCreationResult {
     this.publicKeyBytes,
     this.error,
     this.code,
+    this.algorithm,
+    this.keySize,
+    this.decryptingPublicKey,
+    this.decryptingAlgorithm,
+    this.decryptingKeySize,
+    this.isHybridMode,
   });
 
   String? publicKey;
@@ -150,12 +168,30 @@ class KeyCreationResult {
 
   BiometricError? code;
 
+  String? algorithm;
+
+  int? keySize;
+
+  String? decryptingPublicKey;
+
+  String? decryptingAlgorithm;
+
+  int? decryptingKeySize;
+
+  bool? isHybridMode;
+
   List<Object?> _toList() {
     return <Object?>[
       publicKey,
       publicKeyBytes,
       error,
       code,
+      algorithm,
+      keySize,
+      decryptingPublicKey,
+      decryptingAlgorithm,
+      decryptingKeySize,
+      isHybridMode,
     ];
   }
 
@@ -169,6 +205,12 @@ class KeyCreationResult {
       publicKeyBytes: result[1] as Uint8List?,
       error: result[2] as String?,
       code: result[3] as BiometricError?,
+      algorithm: result[4] as String?,
+      keySize: result[5] as int?,
+      decryptingPublicKey: result[6] as String?,
+      decryptingAlgorithm: result[7] as String?,
+      decryptingKeySize: result[8] as int?,
+      isHybridMode: result[9] as bool?,
     );
   }
 
@@ -197,6 +239,8 @@ class SignatureResult {
     this.publicKey,
     this.error,
     this.code,
+    this.algorithm,
+    this.keySize,
   });
 
   String? signature;
@@ -209,6 +253,10 @@ class SignatureResult {
 
   BiometricError? code;
 
+  String? algorithm;
+
+  int? keySize;
+
   List<Object?> _toList() {
     return <Object?>[
       signature,
@@ -216,6 +264,8 @@ class SignatureResult {
       publicKey,
       error,
       code,
+      algorithm,
+      keySize,
     ];
   }
 
@@ -230,6 +280,8 @@ class SignatureResult {
       publicKey: result[2] as String?,
       error: result[3] as String?,
       code: result[4] as BiometricError?,
+      algorithm: result[5] as String?,
+      keySize: result[6] as int?,
     );
   }
 
@@ -302,28 +354,16 @@ class DecryptResult {
 ;
 }
 
-/// Configuration for Android.
-class AndroidConfig {
-  AndroidConfig({
-    this.useDeviceCredentials,
-    this.setInvalidatedByBiometricEnrollment,
+/// Configuration for Android key creation.
+class AndroidCreateKeysConfig {
+  AndroidCreateKeysConfig({
     this.enableDecryption,
-    this.signatureType,
-    this.promptTitle,
     this.promptSubtitle,
     this.promptDescription,
     this.cancelButtonText,
   });
 
-  bool? useDeviceCredentials;
-
-  bool? setInvalidatedByBiometricEnrollment;
-
   bool? enableDecryption;
-
-  SignatureType? signatureType;
-
-  String? promptTitle;
 
   String? promptSubtitle;
 
@@ -333,11 +373,7 @@ class AndroidConfig {
 
   List<Object?> _toList() {
     return <Object?>[
-      useDeviceCredentials,
-      setInvalidatedByBiometricEnrollment,
       enableDecryption,
-      signatureType,
-      promptTitle,
       promptSubtitle,
       promptDescription,
       cancelButtonText,
@@ -347,24 +383,20 @@ class AndroidConfig {
   Object encode() {
     return _toList();  }
 
-  static AndroidConfig decode(Object result) {
+  static AndroidCreateKeysConfig decode(Object result) {
     result as List<Object?>;
-    return AndroidConfig(
-      useDeviceCredentials: result[0] as bool?,
-      setInvalidatedByBiometricEnrollment: result[1] as bool?,
-      enableDecryption: result[2] as bool?,
-      signatureType: result[3] as SignatureType?,
-      promptTitle: result[4] as String?,
-      promptSubtitle: result[5] as String?,
-      promptDescription: result[6] as String?,
-      cancelButtonText: result[7] as String?,
+    return AndroidCreateKeysConfig(
+      enableDecryption: result[0] as bool?,
+      promptSubtitle: result[1] as String?,
+      promptDescription: result[2] as String?,
+      cancelButtonText: result[3] as String?,
     );
   }
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
-    if (other is! AndroidConfig || other.runtimeType != runtimeType) {
+    if (other is! AndroidCreateKeysConfig || other.runtimeType != runtimeType) {
       return false;
     }
     if (identical(this, other)) {
@@ -379,32 +411,157 @@ class AndroidConfig {
 ;
 }
 
-/// Configuration for iOS.
-class IosConfig {
-  IosConfig({
-    this.useDeviceCredentials,
-    this.biometryCurrentSet,
-    this.signatureType,
-    this.localizedReason,
-    this.shouldMigrate,
+/// Configuration for iOS key creation.
+class IosCreateKeysConfig {
+  IosCreateKeysConfig({
+    this.reserved,
   });
 
-  bool? useDeviceCredentials;
+  String? reserved;
 
-  bool? biometryCurrentSet;
+  List<Object?> _toList() {
+    return <Object?>[
+      reserved,
+    ];
+  }
 
-  SignatureType? signatureType;
+  Object encode() {
+    return _toList();  }
 
-  String? localizedReason;
+  static IosCreateKeysConfig decode(Object result) {
+    result as List<Object?>;
+    return IosCreateKeysConfig(
+      reserved: result[0] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! IosCreateKeysConfig || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(encode(), other.encode());
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => Object.hashAll(_toList())
+;
+}
+
+/// Configuration for macOS key creation.
+class MacosCreateKeysConfig {
+  MacosCreateKeysConfig({
+    this.reserved,
+  });
+
+  String? reserved;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      reserved,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static MacosCreateKeysConfig decode(Object result) {
+    result as List<Object?>;
+    return MacosCreateKeysConfig(
+      reserved: result[0] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! MacosCreateKeysConfig || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(encode(), other.encode());
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => Object.hashAll(_toList())
+;
+}
+
+/// Configuration for Android signature creation.
+class AndroidCreateSignatureConfig {
+  AndroidCreateSignatureConfig({
+    this.promptSubtitle,
+    this.promptDescription,
+    this.cancelButtonText,
+    this.allowDeviceCredentials,
+  });
+
+  String? promptSubtitle;
+
+  String? promptDescription;
+
+  String? cancelButtonText;
+
+  bool? allowDeviceCredentials;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      promptSubtitle,
+      promptDescription,
+      cancelButtonText,
+      allowDeviceCredentials,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static AndroidCreateSignatureConfig decode(Object result) {
+    result as List<Object?>;
+    return AndroidCreateSignatureConfig(
+      promptSubtitle: result[0] as String?,
+      promptDescription: result[1] as String?,
+      cancelButtonText: result[2] as String?,
+      allowDeviceCredentials: result[3] as bool?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! AndroidCreateSignatureConfig || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(encode(), other.encode());
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => Object.hashAll(_toList())
+;
+}
+
+/// Configuration for iOS signature creation.
+class IosCreateSignatureConfig {
+  IosCreateSignatureConfig({
+    this.shouldMigrate,
+  });
 
   bool? shouldMigrate;
 
   List<Object?> _toList() {
     return <Object?>[
-      useDeviceCredentials,
-      biometryCurrentSet,
-      signatureType,
-      localizedReason,
       shouldMigrate,
     ];
   }
@@ -412,21 +569,17 @@ class IosConfig {
   Object encode() {
     return _toList();  }
 
-  static IosConfig decode(Object result) {
+  static IosCreateSignatureConfig decode(Object result) {
     result as List<Object?>;
-    return IosConfig(
-      useDeviceCredentials: result[0] as bool?,
-      biometryCurrentSet: result[1] as bool?,
-      signatureType: result[2] as SignatureType?,
-      localizedReason: result[3] as String?,
-      shouldMigrate: result[4] as bool?,
+    return IosCreateSignatureConfig(
+      shouldMigrate: result[0] as bool?,
     );
   }
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
-    if (other is! IosConfig || other.runtimeType != runtimeType) {
+    if (other is! IosCreateSignatureConfig || other.runtimeType != runtimeType) {
       return false;
     }
     if (identical(this, other)) {
@@ -441,49 +594,175 @@ class IosConfig {
 ;
 }
 
-/// Configuration for macOS.
-class MacosConfig {
-  MacosConfig({
-    this.useDeviceCredentials,
-    this.biometryCurrentSet,
-    this.signatureType,
-    this.localizedReason,
+/// Configuration for macOS signature creation.
+class MacosCreateSignatureConfig {
+  MacosCreateSignatureConfig({
+    this.reserved,
   });
 
-  bool? useDeviceCredentials;
-
-  bool? biometryCurrentSet;
-
-  SignatureType? signatureType;
-
-  String? localizedReason;
+  String? reserved;
 
   List<Object?> _toList() {
     return <Object?>[
-      useDeviceCredentials,
-      biometryCurrentSet,
-      signatureType,
-      localizedReason,
+      reserved,
     ];
   }
 
   Object encode() {
     return _toList();  }
 
-  static MacosConfig decode(Object result) {
+  static MacosCreateSignatureConfig decode(Object result) {
     result as List<Object?>;
-    return MacosConfig(
-      useDeviceCredentials: result[0] as bool?,
-      biometryCurrentSet: result[1] as bool?,
-      signatureType: result[2] as SignatureType?,
-      localizedReason: result[3] as String?,
+    return MacosCreateSignatureConfig(
+      reserved: result[0] as String?,
     );
   }
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
   bool operator ==(Object other) {
-    if (other is! MacosConfig || other.runtimeType != runtimeType) {
+    if (other is! MacosCreateSignatureConfig || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(encode(), other.encode());
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => Object.hashAll(_toList())
+;
+}
+
+/// Configuration for Android decryption.
+class AndroidDecryptConfig {
+  AndroidDecryptConfig({
+    this.promptSubtitle,
+    this.promptDescription,
+    this.cancelButtonText,
+    this.allowDeviceCredentials,
+  });
+
+  String? promptSubtitle;
+
+  String? promptDescription;
+
+  String? cancelButtonText;
+
+  bool? allowDeviceCredentials;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      promptSubtitle,
+      promptDescription,
+      cancelButtonText,
+      allowDeviceCredentials,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static AndroidDecryptConfig decode(Object result) {
+    result as List<Object?>;
+    return AndroidDecryptConfig(
+      promptSubtitle: result[0] as String?,
+      promptDescription: result[1] as String?,
+      cancelButtonText: result[2] as String?,
+      allowDeviceCredentials: result[3] as bool?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! AndroidDecryptConfig || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(encode(), other.encode());
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => Object.hashAll(_toList())
+;
+}
+
+/// Configuration for iOS decryption.
+class IosDecryptConfig {
+  IosDecryptConfig({
+    this.shouldMigrate,
+  });
+
+  bool? shouldMigrate;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      shouldMigrate,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static IosDecryptConfig decode(Object result) {
+    result as List<Object?>;
+    return IosDecryptConfig(
+      shouldMigrate: result[0] as bool?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! IosDecryptConfig || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(encode(), other.encode());
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => Object.hashAll(_toList())
+;
+}
+
+/// Configuration for macOS decryption.
+class MacosDecryptConfig {
+  MacosDecryptConfig({
+    this.reserved,
+  });
+
+  String? reserved;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      reserved,
+    ];
+  }
+
+  Object encode() {
+    return _toList();  }
+
+  static MacosDecryptConfig decode(Object result) {
+    result as List<Object?>;
+    return MacosDecryptConfig(
+      reserved: result[0] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! MacosDecryptConfig || other.runtimeType != runtimeType) {
       return false;
     }
     if (identical(this, other)) {
@@ -518,26 +797,50 @@ class _PigeonCodec extends StandardMessageCodec {
     }    else if (value is KeyFormat) {
       buffer.putUint8(132);
       writeValue(buffer, value.index);
-    }    else if (value is BiometricAvailability) {
+    }    else if (value is SignatureFormat) {
       buffer.putUint8(133);
-      writeValue(buffer, value.encode());
-    }    else if (value is KeyCreationResult) {
+      writeValue(buffer, value.index);
+    }    else if (value is PayloadFormat) {
       buffer.putUint8(134);
-      writeValue(buffer, value.encode());
-    }    else if (value is SignatureResult) {
+      writeValue(buffer, value.index);
+    }    else if (value is BiometricAvailability) {
       buffer.putUint8(135);
       writeValue(buffer, value.encode());
-    }    else if (value is DecryptResult) {
+    }    else if (value is KeyCreationResult) {
       buffer.putUint8(136);
       writeValue(buffer, value.encode());
-    }    else if (value is AndroidConfig) {
+    }    else if (value is SignatureResult) {
       buffer.putUint8(137);
       writeValue(buffer, value.encode());
-    }    else if (value is IosConfig) {
+    }    else if (value is DecryptResult) {
       buffer.putUint8(138);
       writeValue(buffer, value.encode());
-    }    else if (value is MacosConfig) {
+    }    else if (value is AndroidCreateKeysConfig) {
       buffer.putUint8(139);
+      writeValue(buffer, value.encode());
+    }    else if (value is IosCreateKeysConfig) {
+      buffer.putUint8(140);
+      writeValue(buffer, value.encode());
+    }    else if (value is MacosCreateKeysConfig) {
+      buffer.putUint8(141);
+      writeValue(buffer, value.encode());
+    }    else if (value is AndroidCreateSignatureConfig) {
+      buffer.putUint8(142);
+      writeValue(buffer, value.encode());
+    }    else if (value is IosCreateSignatureConfig) {
+      buffer.putUint8(143);
+      writeValue(buffer, value.encode());
+    }    else if (value is MacosCreateSignatureConfig) {
+      buffer.putUint8(144);
+      writeValue(buffer, value.encode());
+    }    else if (value is AndroidDecryptConfig) {
+      buffer.putUint8(145);
+      writeValue(buffer, value.encode());
+    }    else if (value is IosDecryptConfig) {
+      buffer.putUint8(146);
+      writeValue(buffer, value.encode());
+    }    else if (value is MacosDecryptConfig) {
+      buffer.putUint8(147);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -560,19 +863,37 @@ class _PigeonCodec extends StandardMessageCodec {
         final value = readValue(buffer) as int?;
         return value == null ? null : KeyFormat.values[value];
       case 133: 
-        return BiometricAvailability.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : SignatureFormat.values[value];
       case 134: 
-        return KeyCreationResult.decode(readValue(buffer)!);
+        final value = readValue(buffer) as int?;
+        return value == null ? null : PayloadFormat.values[value];
       case 135: 
-        return SignatureResult.decode(readValue(buffer)!);
+        return BiometricAvailability.decode(readValue(buffer)!);
       case 136: 
-        return DecryptResult.decode(readValue(buffer)!);
+        return KeyCreationResult.decode(readValue(buffer)!);
       case 137: 
-        return AndroidConfig.decode(readValue(buffer)!);
+        return SignatureResult.decode(readValue(buffer)!);
       case 138: 
-        return IosConfig.decode(readValue(buffer)!);
+        return DecryptResult.decode(readValue(buffer)!);
       case 139: 
-        return MacosConfig.decode(readValue(buffer)!);
+        return AndroidCreateKeysConfig.decode(readValue(buffer)!);
+      case 140: 
+        return IosCreateKeysConfig.decode(readValue(buffer)!);
+      case 141: 
+        return MacosCreateKeysConfig.decode(readValue(buffer)!);
+      case 142: 
+        return AndroidCreateSignatureConfig.decode(readValue(buffer)!);
+      case 143: 
+        return IosCreateSignatureConfig.decode(readValue(buffer)!);
+      case 144: 
+        return MacosCreateSignatureConfig.decode(readValue(buffer)!);
+      case 145: 
+        return AndroidDecryptConfig.decode(readValue(buffer)!);
+      case 146: 
+        return IosDecryptConfig.decode(readValue(buffer)!);
+      case 147: 
+        return MacosDecryptConfig.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
     }
@@ -621,14 +942,14 @@ class BiometricSignatureApi {
   }
 
   /// Creates a new key pair.
-  Future<KeyCreationResult> createKeys(AndroidConfig? androidConfig, IosConfig? iosConfig, MacosConfig? macosConfig, KeyFormat keyFormat, bool enforceBiometric, String? promptMessage) async {
+  Future<KeyCreationResult> createKeys(AndroidCreateKeysConfig? androidConfig, IosCreateKeysConfig? iosConfig, MacosCreateKeysConfig? macosConfig, bool? useDeviceCredentials, SignatureType? signatureType, bool? setInvalidatedByBiometricEnrollment, KeyFormat keyFormat, bool enforceBiometric, String? promptMessage) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.createKeys$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[androidConfig, iosConfig, macosConfig, keyFormat, enforceBiometric, promptMessage]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[androidConfig, iosConfig, macosConfig, useDeviceCredentials, signatureType, setInvalidatedByBiometricEnrollment, keyFormat, enforceBiometric, promptMessage]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);
@@ -649,14 +970,14 @@ class BiometricSignatureApi {
   }
 
   /// Creates a signature.
-  Future<SignatureResult> createSignature(String? payload, AndroidConfig? androidConfig, IosConfig? iosConfig, MacosConfig? macosConfig, KeyFormat keyFormat, String? promptMessage) async {
+  Future<SignatureResult> createSignature(String? payload, AndroidCreateSignatureConfig? androidConfig, IosCreateSignatureConfig? iosConfig, MacosCreateSignatureConfig? macosConfig, SignatureFormat signatureFormat, String? promptMessage) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.createSignature$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[payload, androidConfig, iosConfig, macosConfig, keyFormat, promptMessage]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[payload, androidConfig, iosConfig, macosConfig, signatureFormat, promptMessage]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);
@@ -677,14 +998,14 @@ class BiometricSignatureApi {
   }
 
   /// Decrypts data.
-  Future<DecryptResult> decrypt(String? payload, AndroidConfig? androidConfig, IosConfig? iosConfig, MacosConfig? macosConfig, String? promptMessage) async {
+  Future<DecryptResult> decrypt(String? payload, PayloadFormat payloadFormat, AndroidDecryptConfig? androidConfig, IosDecryptConfig? iosConfig, MacosDecryptConfig? macosConfig, String? promptMessage) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.decrypt$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[payload, androidConfig, iosConfig, macosConfig, promptMessage]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[payload, payloadFormat, androidConfig, iosConfig, macosConfig, promptMessage]);
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);

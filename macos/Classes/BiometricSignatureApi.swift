@@ -177,6 +177,18 @@ enum KeyFormat: Int {
   case raw = 3
 }
 
+enum SignatureFormat: Int {
+  case base64 = 0
+  case hex = 1
+  case raw = 2
+}
+
+enum PayloadFormat: Int {
+  case base64 = 0
+  case hex = 1
+  case raw = 2
+}
+
 /// Generated class from Pigeon that represents data sent in messages.
 struct BiometricAvailability: Hashable {
   var canAuthenticate: Bool
@@ -215,11 +227,18 @@ struct BiometricAvailability: Hashable {
 }
 
 /// Generated class from Pigeon that represents data sent in messages.
+/// Generated class from Pigeon that represents data sent in messages.
 struct KeyCreationResult: Hashable {
   var publicKey: String? = nil
   var publicKeyBytes: FlutterStandardTypedData? = nil
   var error: String? = nil
   var code: BiometricError? = nil
+  var algorithm: String? = nil
+  var keySize: Int64? = nil
+  var decryptingPublicKey: String? = nil
+  var decryptingAlgorithm: String? = nil
+  var decryptingKeySize: Int64? = nil
+  var isHybridMode: Bool? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -228,12 +247,24 @@ struct KeyCreationResult: Hashable {
     let publicKeyBytes: FlutterStandardTypedData? = nilOrValue(pigeonVar_list[1])
     let error: String? = nilOrValue(pigeonVar_list[2])
     let code: BiometricError? = nilOrValue(pigeonVar_list[3])
+    let algorithm: String? = nilOrValue(pigeonVar_list[4])
+    let keySize: Int64? = isNullish(pigeonVar_list[5]) ? nil : (pigeonVar_list[5] is Int64? ? pigeonVar_list[5] as! Int64? : Int64(pigeonVar_list[5] as! Int32))
+    let decryptingPublicKey: String? = nilOrValue(pigeonVar_list[6])
+    let decryptingAlgorithm: String? = nilOrValue(pigeonVar_list[7])
+    let decryptingKeySize: Int64? = isNullish(pigeonVar_list[8]) ? nil : (pigeonVar_list[8] is Int64? ? pigeonVar_list[8] as! Int64? : Int64(pigeonVar_list[8] as! Int32))
+    let isHybridMode: Bool? = nilOrValue(pigeonVar_list[9])
 
     return KeyCreationResult(
       publicKey: publicKey,
       publicKeyBytes: publicKeyBytes,
       error: error,
-      code: code
+      code: code,
+      algorithm: algorithm,
+      keySize: keySize,
+      decryptingPublicKey: decryptingPublicKey,
+      decryptingAlgorithm: decryptingAlgorithm,
+      decryptingKeySize: decryptingKeySize,
+      isHybridMode: isHybridMode
     )
   }
   func toList() -> [Any?] {
@@ -242,6 +273,12 @@ struct KeyCreationResult: Hashable {
       publicKeyBytes,
       error,
       code,
+      algorithm,
+      keySize,
+      decryptingPublicKey,
+      decryptingAlgorithm,
+      decryptingKeySize,
+      isHybridMode,
     ]
   }
   static func == (lhs: KeyCreationResult, rhs: KeyCreationResult) -> Bool {
@@ -258,6 +295,8 @@ struct SignatureResult: Hashable {
   var publicKey: String? = nil
   var error: String? = nil
   var code: BiometricError? = nil
+  var algorithm: String? = nil
+  var keySize: Int64? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -267,13 +306,17 @@ struct SignatureResult: Hashable {
     let publicKey: String? = nilOrValue(pigeonVar_list[2])
     let error: String? = nilOrValue(pigeonVar_list[3])
     let code: BiometricError? = nilOrValue(pigeonVar_list[4])
+    let algorithm: String? = nilOrValue(pigeonVar_list[5])
+    let keySize: Int64? = isNullish(pigeonVar_list[6]) ? nil : (pigeonVar_list[6] is Int64? ? pigeonVar_list[6] as! Int64? : Int64(pigeonVar_list[6] as! Int32))
 
     return SignatureResult(
       signature: signature,
       signatureBytes: signatureBytes,
       publicKey: publicKey,
       error: error,
-      code: code
+      code: code,
+      algorithm: algorithm,
+      keySize: keySize
     )
   }
   func toList() -> [Any?] {
@@ -283,6 +326,8 @@ struct SignatureResult: Hashable {
       publicKey,
       error,
       code,
+      algorithm,
+      keySize,
     ]
   }
   static func == (lhs: SignatureResult, rhs: SignatureResult) -> Bool {
@@ -325,37 +370,25 @@ struct DecryptResult: Hashable {
   }
 }
 
-/// Configuration for Android.
+/// Configuration for Android key creation.
 ///
 /// Generated class from Pigeon that represents data sent in messages.
-struct AndroidConfig: Hashable {
-  var useDeviceCredentials: Bool? = nil
-  var setInvalidatedByBiometricEnrollment: Bool? = nil
+struct AndroidCreateKeysConfig: Hashable {
   var enableDecryption: Bool? = nil
-  var signatureType: SignatureType? = nil
-  var promptTitle: String? = nil
   var promptSubtitle: String? = nil
   var promptDescription: String? = nil
   var cancelButtonText: String? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
-  static func fromList(_ pigeonVar_list: [Any?]) -> AndroidConfig? {
-    let useDeviceCredentials: Bool? = nilOrValue(pigeonVar_list[0])
-    let setInvalidatedByBiometricEnrollment: Bool? = nilOrValue(pigeonVar_list[1])
-    let enableDecryption: Bool? = nilOrValue(pigeonVar_list[2])
-    let signatureType: SignatureType? = nilOrValue(pigeonVar_list[3])
-    let promptTitle: String? = nilOrValue(pigeonVar_list[4])
-    let promptSubtitle: String? = nilOrValue(pigeonVar_list[5])
-    let promptDescription: String? = nilOrValue(pigeonVar_list[6])
-    let cancelButtonText: String? = nilOrValue(pigeonVar_list[7])
+  static func fromList(_ pigeonVar_list: [Any?]) -> AndroidCreateKeysConfig? {
+    let enableDecryption: Bool? = nilOrValue(pigeonVar_list[0])
+    let promptSubtitle: String? = nilOrValue(pigeonVar_list[1])
+    let promptDescription: String? = nilOrValue(pigeonVar_list[2])
+    let cancelButtonText: String? = nilOrValue(pigeonVar_list[3])
 
-    return AndroidConfig(
-      useDeviceCredentials: useDeviceCredentials,
-      setInvalidatedByBiometricEnrollment: setInvalidatedByBiometricEnrollment,
+    return AndroidCreateKeysConfig(
       enableDecryption: enableDecryption,
-      signatureType: signatureType,
-      promptTitle: promptTitle,
       promptSubtitle: promptSubtitle,
       promptDescription: promptDescription,
       cancelButtonText: cancelButtonText
@@ -363,99 +396,253 @@ struct AndroidConfig: Hashable {
   }
   func toList() -> [Any?] {
     return [
-      useDeviceCredentials,
-      setInvalidatedByBiometricEnrollment,
       enableDecryption,
-      signatureType,
-      promptTitle,
       promptSubtitle,
       promptDescription,
       cancelButtonText,
     ]
   }
-  static func == (lhs: AndroidConfig, rhs: AndroidConfig) -> Bool {
+  static func == (lhs: AndroidCreateKeysConfig, rhs: AndroidCreateKeysConfig) -> Bool {
     return deepEqualsBiometricSignatureApi(lhs.toList(), rhs.toList())  }
   func hash(into hasher: inout Hasher) {
     deepHashBiometricSignatureApi(value: toList(), hasher: &hasher)
   }
 }
 
-/// Configuration for iOS.
+/// Configuration for iOS key creation.
 ///
 /// Generated class from Pigeon that represents data sent in messages.
-struct IosConfig: Hashable {
-  var useDeviceCredentials: Bool? = nil
-  var biometryCurrentSet: Bool? = nil
-  var signatureType: SignatureType? = nil
-  var localizedReason: String? = nil
+struct IosCreateKeysConfig: Hashable {
+  var reserved: String? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> IosCreateKeysConfig? {
+    let reserved: String? = nilOrValue(pigeonVar_list[0])
+
+    return IosCreateKeysConfig(
+      reserved: reserved
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      reserved
+    ]
+  }
+  static func == (lhs: IosCreateKeysConfig, rhs: IosCreateKeysConfig) -> Bool {
+    return deepEqualsBiometricSignatureApi(lhs.toList(), rhs.toList())  }
+  func hash(into hasher: inout Hasher) {
+    deepHashBiometricSignatureApi(value: toList(), hasher: &hasher)
+  }
+}
+
+/// Configuration for macOS key creation.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct MacosCreateKeysConfig: Hashable {
+  var reserved: String? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> MacosCreateKeysConfig? {
+    let reserved: String? = nilOrValue(pigeonVar_list[0])
+
+    return MacosCreateKeysConfig(
+      reserved: reserved
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      reserved
+    ]
+  }
+  static func == (lhs: MacosCreateKeysConfig, rhs: MacosCreateKeysConfig) -> Bool {
+    return deepEqualsBiometricSignatureApi(lhs.toList(), rhs.toList())  }
+  func hash(into hasher: inout Hasher) {
+    deepHashBiometricSignatureApi(value: toList(), hasher: &hasher)
+  }
+}
+
+/// Configuration for Android signature creation.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct AndroidCreateSignatureConfig: Hashable {
+  var promptSubtitle: String? = nil
+  var promptDescription: String? = nil
+  var cancelButtonText: String? = nil
+  var allowDeviceCredentials: Bool? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> AndroidCreateSignatureConfig? {
+    let promptSubtitle: String? = nilOrValue(pigeonVar_list[0])
+    let promptDescription: String? = nilOrValue(pigeonVar_list[1])
+    let cancelButtonText: String? = nilOrValue(pigeonVar_list[2])
+    let allowDeviceCredentials: Bool? = nilOrValue(pigeonVar_list[3])
+
+    return AndroidCreateSignatureConfig(
+      promptSubtitle: promptSubtitle,
+      promptDescription: promptDescription,
+      cancelButtonText: cancelButtonText,
+      allowDeviceCredentials: allowDeviceCredentials
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      promptSubtitle,
+      promptDescription,
+      cancelButtonText,
+      allowDeviceCredentials,
+    ]
+  }
+  static func == (lhs: AndroidCreateSignatureConfig, rhs: AndroidCreateSignatureConfig) -> Bool {
+    return deepEqualsBiometricSignatureApi(lhs.toList(), rhs.toList())  }
+  func hash(into hasher: inout Hasher) {
+    deepHashBiometricSignatureApi(value: toList(), hasher: &hasher)
+  }
+}
+
+/// Configuration for iOS signature creation.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct IosCreateSignatureConfig: Hashable {
   var shouldMigrate: Bool? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
-  static func fromList(_ pigeonVar_list: [Any?]) -> IosConfig? {
-    let useDeviceCredentials: Bool? = nilOrValue(pigeonVar_list[0])
-    let biometryCurrentSet: Bool? = nilOrValue(pigeonVar_list[1])
-    let signatureType: SignatureType? = nilOrValue(pigeonVar_list[2])
-    let localizedReason: String? = nilOrValue(pigeonVar_list[3])
-    let shouldMigrate: Bool? = nilOrValue(pigeonVar_list[4])
+  static func fromList(_ pigeonVar_list: [Any?]) -> IosCreateSignatureConfig? {
+    let shouldMigrate: Bool? = nilOrValue(pigeonVar_list[0])
 
-    return IosConfig(
-      useDeviceCredentials: useDeviceCredentials,
-      biometryCurrentSet: biometryCurrentSet,
-      signatureType: signatureType,
-      localizedReason: localizedReason,
+    return IosCreateSignatureConfig(
       shouldMigrate: shouldMigrate
     )
   }
   func toList() -> [Any?] {
     return [
-      useDeviceCredentials,
-      biometryCurrentSet,
-      signatureType,
-      localizedReason,
-      shouldMigrate,
+      shouldMigrate
     ]
   }
-  static func == (lhs: IosConfig, rhs: IosConfig) -> Bool {
+  static func == (lhs: IosCreateSignatureConfig, rhs: IosCreateSignatureConfig) -> Bool {
     return deepEqualsBiometricSignatureApi(lhs.toList(), rhs.toList())  }
   func hash(into hasher: inout Hasher) {
     deepHashBiometricSignatureApi(value: toList(), hasher: &hasher)
   }
 }
 
-/// Configuration for macOS.
+/// Configuration for macOS signature creation.
 ///
 /// Generated class from Pigeon that represents data sent in messages.
-struct MacosConfig: Hashable {
-  var useDeviceCredentials: Bool? = nil
-  var biometryCurrentSet: Bool? = nil
-  var signatureType: SignatureType? = nil
-  var localizedReason: String? = nil
+struct MacosCreateSignatureConfig: Hashable {
+  var reserved: String? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
-  static func fromList(_ pigeonVar_list: [Any?]) -> MacosConfig? {
-    let useDeviceCredentials: Bool? = nilOrValue(pigeonVar_list[0])
-    let biometryCurrentSet: Bool? = nilOrValue(pigeonVar_list[1])
-    let signatureType: SignatureType? = nilOrValue(pigeonVar_list[2])
-    let localizedReason: String? = nilOrValue(pigeonVar_list[3])
+  static func fromList(_ pigeonVar_list: [Any?]) -> MacosCreateSignatureConfig? {
+    let reserved: String? = nilOrValue(pigeonVar_list[0])
 
-    return MacosConfig(
-      useDeviceCredentials: useDeviceCredentials,
-      biometryCurrentSet: biometryCurrentSet,
-      signatureType: signatureType,
-      localizedReason: localizedReason
+    return MacosCreateSignatureConfig(
+      reserved: reserved
     )
   }
   func toList() -> [Any?] {
     return [
-      useDeviceCredentials,
-      biometryCurrentSet,
-      signatureType,
-      localizedReason,
+      reserved
     ]
   }
-  static func == (lhs: MacosConfig, rhs: MacosConfig) -> Bool {
+  static func == (lhs: MacosCreateSignatureConfig, rhs: MacosCreateSignatureConfig) -> Bool {
+    return deepEqualsBiometricSignatureApi(lhs.toList(), rhs.toList())  }
+  func hash(into hasher: inout Hasher) {
+    deepHashBiometricSignatureApi(value: toList(), hasher: &hasher)
+  }
+}
+
+/// Configuration for Android decryption.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct AndroidDecryptConfig: Hashable {
+  var promptSubtitle: String? = nil
+  var promptDescription: String? = nil
+  var cancelButtonText: String? = nil
+  var allowDeviceCredentials: Bool? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> AndroidDecryptConfig? {
+    let promptSubtitle: String? = nilOrValue(pigeonVar_list[0])
+    let promptDescription: String? = nilOrValue(pigeonVar_list[1])
+    let cancelButtonText: String? = nilOrValue(pigeonVar_list[2])
+    let allowDeviceCredentials: Bool? = nilOrValue(pigeonVar_list[3])
+
+    return AndroidDecryptConfig(
+      promptSubtitle: promptSubtitle,
+      promptDescription: promptDescription,
+      cancelButtonText: cancelButtonText,
+      allowDeviceCredentials: allowDeviceCredentials
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      promptSubtitle,
+      promptDescription,
+      cancelButtonText,
+      allowDeviceCredentials,
+    ]
+  }
+  static func == (lhs: AndroidDecryptConfig, rhs: AndroidDecryptConfig) -> Bool {
+    return deepEqualsBiometricSignatureApi(lhs.toList(), rhs.toList())  }
+  func hash(into hasher: inout Hasher) {
+    deepHashBiometricSignatureApi(value: toList(), hasher: &hasher)
+  }
+}
+
+/// Configuration for iOS decryption.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct IosDecryptConfig: Hashable {
+  var shouldMigrate: Bool? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> IosDecryptConfig? {
+    let shouldMigrate: Bool? = nilOrValue(pigeonVar_list[0])
+
+    return IosDecryptConfig(
+      shouldMigrate: shouldMigrate
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      shouldMigrate
+    ]
+  }
+  static func == (lhs: IosDecryptConfig, rhs: IosDecryptConfig) -> Bool {
+    return deepEqualsBiometricSignatureApi(lhs.toList(), rhs.toList())  }
+  func hash(into hasher: inout Hasher) {
+    deepHashBiometricSignatureApi(value: toList(), hasher: &hasher)
+  }
+}
+
+/// Configuration for macOS decryption.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct MacosDecryptConfig: Hashable {
+  var reserved: String? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> MacosDecryptConfig? {
+    let reserved: String? = nilOrValue(pigeonVar_list[0])
+
+    return MacosDecryptConfig(
+      reserved: reserved
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      reserved
+    ]
+  }
+  static func == (lhs: MacosDecryptConfig, rhs: MacosDecryptConfig) -> Bool {
     return deepEqualsBiometricSignatureApi(lhs.toList(), rhs.toList())  }
   func hash(into hasher: inout Hasher) {
     deepHashBiometricSignatureApi(value: toList(), hasher: &hasher)
@@ -490,19 +677,43 @@ private class BiometricSignatureApiPigeonCodecReader: FlutterStandardReader {
       }
       return nil
     case 133:
-      return BiometricAvailability.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return SignatureFormat(rawValue: enumResultAsInt)
+      }
+      return nil
     case 134:
-      return KeyCreationResult.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return PayloadFormat(rawValue: enumResultAsInt)
+      }
+      return nil
     case 135:
-      return SignatureResult.fromList(self.readValue() as! [Any?])
+      return BiometricAvailability.fromList(self.readValue() as! [Any?])
     case 136:
-      return DecryptResult.fromList(self.readValue() as! [Any?])
+      return KeyCreationResult.fromList(self.readValue() as! [Any?])
     case 137:
-      return AndroidConfig.fromList(self.readValue() as! [Any?])
+      return SignatureResult.fromList(self.readValue() as! [Any?])
     case 138:
-      return IosConfig.fromList(self.readValue() as! [Any?])
+      return DecryptResult.fromList(self.readValue() as! [Any?])
     case 139:
-      return MacosConfig.fromList(self.readValue() as! [Any?])
+      return AndroidCreateKeysConfig.fromList(self.readValue() as! [Any?])
+    case 140:
+      return IosCreateKeysConfig.fromList(self.readValue() as! [Any?])
+    case 141:
+      return MacosCreateKeysConfig.fromList(self.readValue() as! [Any?])
+    case 142:
+      return AndroidCreateSignatureConfig.fromList(self.readValue() as! [Any?])
+    case 143:
+      return IosCreateSignatureConfig.fromList(self.readValue() as! [Any?])
+    case 144:
+      return MacosCreateSignatureConfig.fromList(self.readValue() as! [Any?])
+    case 145:
+      return AndroidDecryptConfig.fromList(self.readValue() as! [Any?])
+    case 146:
+      return IosDecryptConfig.fromList(self.readValue() as! [Any?])
+    case 147:
+      return MacosDecryptConfig.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
     }
@@ -523,26 +734,50 @@ private class BiometricSignatureApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? KeyFormat {
       super.writeByte(132)
       super.writeValue(value.rawValue)
-    } else if let value = value as? BiometricAvailability {
+    } else if let value = value as? SignatureFormat {
       super.writeByte(133)
-      super.writeValue(value.toList())
-    } else if let value = value as? KeyCreationResult {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? PayloadFormat {
       super.writeByte(134)
-      super.writeValue(value.toList())
-    } else if let value = value as? SignatureResult {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? BiometricAvailability {
       super.writeByte(135)
       super.writeValue(value.toList())
-    } else if let value = value as? DecryptResult {
+    } else if let value = value as? KeyCreationResult {
       super.writeByte(136)
       super.writeValue(value.toList())
-    } else if let value = value as? AndroidConfig {
+    } else if let value = value as? SignatureResult {
       super.writeByte(137)
       super.writeValue(value.toList())
-    } else if let value = value as? IosConfig {
+    } else if let value = value as? DecryptResult {
       super.writeByte(138)
       super.writeValue(value.toList())
-    } else if let value = value as? MacosConfig {
+    } else if let value = value as? AndroidCreateKeysConfig {
       super.writeByte(139)
+      super.writeValue(value.toList())
+    } else if let value = value as? IosCreateKeysConfig {
+      super.writeByte(140)
+      super.writeValue(value.toList())
+    } else if let value = value as? MacosCreateKeysConfig {
+      super.writeByte(141)
+      super.writeValue(value.toList())
+    } else if let value = value as? AndroidCreateSignatureConfig {
+      super.writeByte(142)
+      super.writeValue(value.toList())
+    } else if let value = value as? IosCreateSignatureConfig {
+      super.writeByte(143)
+      super.writeValue(value.toList())
+    } else if let value = value as? MacosCreateSignatureConfig {
+      super.writeByte(144)
+      super.writeValue(value.toList())
+    } else if let value = value as? AndroidDecryptConfig {
+      super.writeByte(145)
+      super.writeValue(value.toList())
+    } else if let value = value as? IosDecryptConfig {
+      super.writeByte(146)
+      super.writeValue(value.toList())
+    } else if let value = value as? MacosDecryptConfig {
+      super.writeByte(147)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -570,11 +805,11 @@ protocol BiometricSignatureApi {
   /// Checks if biometric authentication is available.
   func getBiometricAvailability() throws -> BiometricAvailability
   /// Creates a new key pair.
-  func createKeys(androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, keyFormat: KeyFormat, enforceBiometric: Bool, promptMessage: String?, completion: @escaping (Result<KeyCreationResult, Error>) -> Void)
+  func createKeys(androidConfig: AndroidCreateKeysConfig?, iosConfig: IosCreateKeysConfig?, macosConfig: MacosCreateKeysConfig?, useDeviceCredentials: Bool?, signatureType: SignatureType?, setInvalidatedByBiometricEnrollment: Bool?, keyFormat: KeyFormat, enforceBiometric: Bool, promptMessage: String?, completion: @escaping (Result<KeyCreationResult, Error>) -> Void)
   /// Creates a signature.
-  func createSignature(payload: String?, androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, keyFormat: KeyFormat, promptMessage: String?, completion: @escaping (Result<SignatureResult, Error>) -> Void)
+  func createSignature(payload: String?, androidConfig: AndroidCreateSignatureConfig?, iosConfig: IosCreateSignatureConfig?, macosConfig: MacosCreateSignatureConfig?, signatureFormat: SignatureFormat, promptMessage: String?, completion: @escaping (Result<SignatureResult, Error>) -> Void)
   /// Decrypts data.
-  func decrypt(payload: String?, androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, promptMessage: String?, completion: @escaping (Result<DecryptResult, Error>) -> Void)
+  func decrypt(payload: String?, payloadFormat: PayloadFormat, androidConfig: AndroidDecryptConfig?, iosConfig: IosDecryptConfig?, macosConfig: MacosDecryptConfig?, promptMessage: String?, completion: @escaping (Result<DecryptResult, Error>) -> Void)
   /// Deletes keys.
   func deleteKeys() throws -> Bool
   /// Checks if a key exists.
@@ -606,13 +841,16 @@ class BiometricSignatureApiSetup {
     if let api = api {
       createKeysChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
-        let androidConfigArg: AndroidConfig? = nilOrValue(args[0])
-        let iosConfigArg: IosConfig? = nilOrValue(args[1])
-        let macosConfigArg: MacosConfig? = nilOrValue(args[2])
-        let keyFormatArg = args[3] as! KeyFormat
-        let enforceBiometricArg = args[4] as! Bool
-        let promptMessageArg: String? = nilOrValue(args[5])
-        api.createKeys(androidConfig: androidConfigArg, iosConfig: iosConfigArg, macosConfig: macosConfigArg, keyFormat: keyFormatArg, enforceBiometric: enforceBiometricArg, promptMessage: promptMessageArg) { result in
+        let androidConfigArg: AndroidCreateKeysConfig? = nilOrValue(args[0])
+        let iosConfigArg: IosCreateKeysConfig? = nilOrValue(args[1])
+        let macosConfigArg: MacosCreateKeysConfig? = nilOrValue(args[2])
+        let useDeviceCredentialsArg: Bool? = nilOrValue(args[3])
+        let signatureTypeArg: SignatureType? = nilOrValue(args[4])
+        let setInvalidatedByBiometricEnrollmentArg: Bool? = nilOrValue(args[5])
+        let keyFormatArg = args[6] as! KeyFormat
+        let enforceBiometricArg = args[7] as! Bool
+        let promptMessageArg: String? = nilOrValue(args[8])
+        api.createKeys(androidConfig: androidConfigArg, iosConfig: iosConfigArg, macosConfig: macosConfigArg, useDeviceCredentials: useDeviceCredentialsArg, signatureType: signatureTypeArg, setInvalidatedByBiometricEnrollment: setInvalidatedByBiometricEnrollmentArg, keyFormat: keyFormatArg, enforceBiometric: enforceBiometricArg, promptMessage: promptMessageArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))
@@ -630,12 +868,12 @@ class BiometricSignatureApiSetup {
       createSignatureChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let payloadArg: String? = nilOrValue(args[0])
-        let androidConfigArg: AndroidConfig? = nilOrValue(args[1])
-        let iosConfigArg: IosConfig? = nilOrValue(args[2])
-        let macosConfigArg: MacosConfig? = nilOrValue(args[3])
-        let keyFormatArg = args[4] as! KeyFormat
+        let androidConfigArg: AndroidCreateSignatureConfig? = nilOrValue(args[1])
+        let iosConfigArg: IosCreateSignatureConfig? = nilOrValue(args[2])
+        let macosConfigArg: MacosCreateSignatureConfig? = nilOrValue(args[3])
+        let signatureFormatArg = args[4] as! SignatureFormat
         let promptMessageArg: String? = nilOrValue(args[5])
-        api.createSignature(payload: payloadArg, androidConfig: androidConfigArg, iosConfig: iosConfigArg, macosConfig: macosConfigArg, keyFormat: keyFormatArg, promptMessage: promptMessageArg) { result in
+        api.createSignature(payload: payloadArg, androidConfig: androidConfigArg, iosConfig: iosConfigArg, macosConfig: macosConfigArg, signatureFormat: signatureFormatArg, promptMessage: promptMessageArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))
@@ -653,11 +891,12 @@ class BiometricSignatureApiSetup {
       decryptChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let payloadArg: String? = nilOrValue(args[0])
-        let androidConfigArg: AndroidConfig? = nilOrValue(args[1])
-        let iosConfigArg: IosConfig? = nilOrValue(args[2])
-        let macosConfigArg: MacosConfig? = nilOrValue(args[3])
-        let promptMessageArg: String? = nilOrValue(args[4])
-        api.decrypt(payload: payloadArg, androidConfig: androidConfigArg, iosConfig: iosConfigArg, macosConfig: macosConfigArg, promptMessage: promptMessageArg) { result in
+        let payloadFormatArg = args[1] as! PayloadFormat
+        let androidConfigArg: AndroidDecryptConfig? = nilOrValue(args[2])
+        let iosConfigArg: IosDecryptConfig? = nilOrValue(args[3])
+        let macosConfigArg: MacosDecryptConfig? = nilOrValue(args[4])
+        let promptMessageArg: String? = nilOrValue(args[5])
+        api.decrypt(payload: payloadArg, payloadFormat: payloadFormatArg, androidConfig: androidConfigArg, iosConfig: iosConfigArg, macosConfig: macosConfigArg, promptMessage: promptMessageArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))

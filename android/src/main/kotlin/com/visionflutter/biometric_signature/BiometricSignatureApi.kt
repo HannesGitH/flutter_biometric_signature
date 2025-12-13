@@ -151,6 +151,30 @@ enum class KeyFormat(val raw: Int) {
   }
 }
 
+enum class SignatureFormat(val raw: Int) {
+  BASE64(0),
+  HEX(1),
+  RAW(2);
+
+  companion object {
+    fun ofRaw(raw: Int): SignatureFormat? {
+      return values().firstOrNull { it.raw == raw }
+    }
+  }
+}
+
+enum class PayloadFormat(val raw: Int) {
+  BASE64(0),
+  HEX(1),
+  RAW(2);
+
+  companion object {
+    fun ofRaw(raw: Int): PayloadFormat? {
+      return values().firstOrNull { it.raw == raw }
+    }
+  }
+}
+
 /** Generated class from Pigeon that represents data sent in messages. */
 data class BiometricAvailability (
   val canAuthenticate: Boolean,
@@ -193,7 +217,13 @@ data class KeyCreationResult (
   val publicKey: String? = null,
   val publicKeyBytes: ByteArray? = null,
   val error: String? = null,
-  val code: BiometricError? = null
+  val code: BiometricError? = null,
+  val algorithm: String? = null,
+  val keySize: Long? = null,
+  val decryptingPublicKey: String? = null,
+  val decryptingAlgorithm: String? = null,
+  val decryptingKeySize: Long? = null,
+  val isHybridMode: Boolean? = null
 )
  {
   companion object {
@@ -202,7 +232,13 @@ data class KeyCreationResult (
       val publicKeyBytes = pigeonVar_list[1] as ByteArray?
       val error = pigeonVar_list[2] as String?
       val code = pigeonVar_list[3] as BiometricError?
-      return KeyCreationResult(publicKey, publicKeyBytes, error, code)
+      val algorithm = pigeonVar_list[4] as String?
+      val keySize = pigeonVar_list[5] as Long?
+      val decryptingPublicKey = pigeonVar_list[6] as String?
+      val decryptingAlgorithm = pigeonVar_list[7] as String?
+      val decryptingKeySize = pigeonVar_list[8] as Long?
+      val isHybridMode = pigeonVar_list[9] as Boolean?
+      return KeyCreationResult(publicKey, publicKeyBytes, error, code, algorithm, keySize, decryptingPublicKey, decryptingAlgorithm, decryptingKeySize, isHybridMode)
     }
   }
   fun toList(): List<Any?> {
@@ -211,6 +247,12 @@ data class KeyCreationResult (
       publicKeyBytes,
       error,
       code,
+      algorithm,
+      keySize,
+      decryptingPublicKey,
+      decryptingAlgorithm,
+      decryptingKeySize,
+      isHybridMode,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -231,7 +273,9 @@ data class SignatureResult (
   val signatureBytes: ByteArray? = null,
   val publicKey: String? = null,
   val error: String? = null,
-  val code: BiometricError? = null
+  val code: BiometricError? = null,
+  val algorithm: String? = null,
+  val keySize: Long? = null
 )
  {
   companion object {
@@ -241,7 +285,9 @@ data class SignatureResult (
       val publicKey = pigeonVar_list[2] as String?
       val error = pigeonVar_list[3] as String?
       val code = pigeonVar_list[4] as BiometricError?
-      return SignatureResult(signature, signatureBytes, publicKey, error, code)
+      val algorithm = pigeonVar_list[5] as String?
+      val keySize = pigeonVar_list[6] as Long?
+      return SignatureResult(signature, signatureBytes, publicKey, error, code, algorithm, keySize)
     }
   }
   fun toList(): List<Any?> {
@@ -251,6 +297,8 @@ data class SignatureResult (
       publicKey,
       error,
       code,
+      algorithm,
+      keySize,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -300,48 +348,36 @@ data class DecryptResult (
 }
 
 /**
- * Configuration for Android.
+ * Configuration for Android key creation.
  *
  * Generated class from Pigeon that represents data sent in messages.
  */
-data class AndroidConfig (
-  val useDeviceCredentials: Boolean? = null,
-  val setInvalidatedByBiometricEnrollment: Boolean? = null,
+data class AndroidCreateKeysConfig (
   val enableDecryption: Boolean? = null,
-  val signatureType: SignatureType? = null,
-  val promptTitle: String? = null,
   val promptSubtitle: String? = null,
   val promptDescription: String? = null,
   val cancelButtonText: String? = null
 )
  {
   companion object {
-    fun fromList(pigeonVar_list: List<Any?>): AndroidConfig {
-      val useDeviceCredentials = pigeonVar_list[0] as Boolean?
-      val setInvalidatedByBiometricEnrollment = pigeonVar_list[1] as Boolean?
-      val enableDecryption = pigeonVar_list[2] as Boolean?
-      val signatureType = pigeonVar_list[3] as SignatureType?
-      val promptTitle = pigeonVar_list[4] as String?
-      val promptSubtitle = pigeonVar_list[5] as String?
-      val promptDescription = pigeonVar_list[6] as String?
-      val cancelButtonText = pigeonVar_list[7] as String?
-      return AndroidConfig(useDeviceCredentials, setInvalidatedByBiometricEnrollment, enableDecryption, signatureType, promptTitle, promptSubtitle, promptDescription, cancelButtonText)
+    fun fromList(pigeonVar_list: List<Any?>): AndroidCreateKeysConfig {
+      val enableDecryption = pigeonVar_list[0] as Boolean?
+      val promptSubtitle = pigeonVar_list[1] as String?
+      val promptDescription = pigeonVar_list[2] as String?
+      val cancelButtonText = pigeonVar_list[3] as String?
+      return AndroidCreateKeysConfig(enableDecryption, promptSubtitle, promptDescription, cancelButtonText)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
-      useDeviceCredentials,
-      setInvalidatedByBiometricEnrollment,
       enableDecryption,
-      signatureType,
-      promptTitle,
       promptSubtitle,
       promptDescription,
       cancelButtonText,
     )
   }
   override fun equals(other: Any?): Boolean {
-    if (other !is AndroidConfig) {
+    if (other !is AndroidCreateKeysConfig) {
       return false
     }
     if (this === other) {
@@ -353,39 +389,132 @@ data class AndroidConfig (
 }
 
 /**
- * Configuration for iOS.
+ * Configuration for iOS key creation.
  *
  * Generated class from Pigeon that represents data sent in messages.
  */
-data class IosConfig (
-  val useDeviceCredentials: Boolean? = null,
-  val biometryCurrentSet: Boolean? = null,
-  val signatureType: SignatureType? = null,
-  val localizedReason: String? = null,
+data class IosCreateKeysConfig (
+  val reserved: String? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): IosCreateKeysConfig {
+      val reserved = pigeonVar_list[0] as String?
+      return IosCreateKeysConfig(reserved)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      reserved,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other !is IosCreateKeysConfig) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    return BiometricSignatureApiPigeonUtils.deepEquals(toList(), other.toList())  }
+
+  override fun hashCode(): Int = toList().hashCode()
+}
+
+/**
+ * Configuration for macOS key creation.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class MacosCreateKeysConfig (
+  val reserved: String? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): MacosCreateKeysConfig {
+      val reserved = pigeonVar_list[0] as String?
+      return MacosCreateKeysConfig(reserved)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      reserved,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other !is MacosCreateKeysConfig) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    return BiometricSignatureApiPigeonUtils.deepEquals(toList(), other.toList())  }
+
+  override fun hashCode(): Int = toList().hashCode()
+}
+
+/**
+ * Configuration for Android signature creation.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class AndroidCreateSignatureConfig (
+  val promptSubtitle: String? = null,
+  val promptDescription: String? = null,
+  val cancelButtonText: String? = null,
+  val allowDeviceCredentials: Boolean? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): AndroidCreateSignatureConfig {
+      val promptSubtitle = pigeonVar_list[0] as String?
+      val promptDescription = pigeonVar_list[1] as String?
+      val cancelButtonText = pigeonVar_list[2] as String?
+      val allowDeviceCredentials = pigeonVar_list[3] as Boolean?
+      return AndroidCreateSignatureConfig(promptSubtitle, promptDescription, cancelButtonText, allowDeviceCredentials)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      promptSubtitle,
+      promptDescription,
+      cancelButtonText,
+      allowDeviceCredentials,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other !is AndroidCreateSignatureConfig) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    return BiometricSignatureApiPigeonUtils.deepEquals(toList(), other.toList())  }
+
+  override fun hashCode(): Int = toList().hashCode()
+}
+
+/**
+ * Configuration for iOS signature creation.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class IosCreateSignatureConfig (
   val shouldMigrate: Boolean? = null
 )
  {
   companion object {
-    fun fromList(pigeonVar_list: List<Any?>): IosConfig {
-      val useDeviceCredentials = pigeonVar_list[0] as Boolean?
-      val biometryCurrentSet = pigeonVar_list[1] as Boolean?
-      val signatureType = pigeonVar_list[2] as SignatureType?
-      val localizedReason = pigeonVar_list[3] as String?
-      val shouldMigrate = pigeonVar_list[4] as Boolean?
-      return IosConfig(useDeviceCredentials, biometryCurrentSet, signatureType, localizedReason, shouldMigrate)
+    fun fromList(pigeonVar_list: List<Any?>): IosCreateSignatureConfig {
+      val shouldMigrate = pigeonVar_list[0] as Boolean?
+      return IosCreateSignatureConfig(shouldMigrate)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
-      useDeviceCredentials,
-      biometryCurrentSet,
-      signatureType,
-      localizedReason,
       shouldMigrate,
     )
   }
   override fun equals(other: Any?): Boolean {
-    if (other !is IosConfig) {
+    if (other !is IosCreateSignatureConfig) {
       return false
     }
     if (this === other) {
@@ -397,36 +526,132 @@ data class IosConfig (
 }
 
 /**
- * Configuration for macOS.
+ * Configuration for macOS signature creation.
  *
  * Generated class from Pigeon that represents data sent in messages.
  */
-data class MacosConfig (
-  val useDeviceCredentials: Boolean? = null,
-  val biometryCurrentSet: Boolean? = null,
-  val signatureType: SignatureType? = null,
-  val localizedReason: String? = null
+data class MacosCreateSignatureConfig (
+  val reserved: String? = null
 )
  {
   companion object {
-    fun fromList(pigeonVar_list: List<Any?>): MacosConfig {
-      val useDeviceCredentials = pigeonVar_list[0] as Boolean?
-      val biometryCurrentSet = pigeonVar_list[1] as Boolean?
-      val signatureType = pigeonVar_list[2] as SignatureType?
-      val localizedReason = pigeonVar_list[3] as String?
-      return MacosConfig(useDeviceCredentials, biometryCurrentSet, signatureType, localizedReason)
+    fun fromList(pigeonVar_list: List<Any?>): MacosCreateSignatureConfig {
+      val reserved = pigeonVar_list[0] as String?
+      return MacosCreateSignatureConfig(reserved)
     }
   }
   fun toList(): List<Any?> {
     return listOf(
-      useDeviceCredentials,
-      biometryCurrentSet,
-      signatureType,
-      localizedReason,
+      reserved,
     )
   }
   override fun equals(other: Any?): Boolean {
-    if (other !is MacosConfig) {
+    if (other !is MacosCreateSignatureConfig) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    return BiometricSignatureApiPigeonUtils.deepEquals(toList(), other.toList())  }
+
+  override fun hashCode(): Int = toList().hashCode()
+}
+
+/**
+ * Configuration for Android decryption.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class AndroidDecryptConfig (
+  val promptSubtitle: String? = null,
+  val promptDescription: String? = null,
+  val cancelButtonText: String? = null,
+  val allowDeviceCredentials: Boolean? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): AndroidDecryptConfig {
+      val promptSubtitle = pigeonVar_list[0] as String?
+      val promptDescription = pigeonVar_list[1] as String?
+      val cancelButtonText = pigeonVar_list[2] as String?
+      val allowDeviceCredentials = pigeonVar_list[3] as Boolean?
+      return AndroidDecryptConfig(promptSubtitle, promptDescription, cancelButtonText, allowDeviceCredentials)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      promptSubtitle,
+      promptDescription,
+      cancelButtonText,
+      allowDeviceCredentials,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other !is AndroidDecryptConfig) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    return BiometricSignatureApiPigeonUtils.deepEquals(toList(), other.toList())  }
+
+  override fun hashCode(): Int = toList().hashCode()
+}
+
+/**
+ * Configuration for iOS decryption.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class IosDecryptConfig (
+  val shouldMigrate: Boolean? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): IosDecryptConfig {
+      val shouldMigrate = pigeonVar_list[0] as Boolean?
+      return IosDecryptConfig(shouldMigrate)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      shouldMigrate,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other !is IosDecryptConfig) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    return BiometricSignatureApiPigeonUtils.deepEquals(toList(), other.toList())  }
+
+  override fun hashCode(): Int = toList().hashCode()
+}
+
+/**
+ * Configuration for macOS decryption.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class MacosDecryptConfig (
+  val reserved: String? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): MacosDecryptConfig {
+      val reserved = pigeonVar_list[0] as String?
+      return MacosDecryptConfig(reserved)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      reserved,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other !is MacosDecryptConfig) {
       return false
     }
     if (this === other) {
@@ -460,38 +685,78 @@ private open class BiometricSignatureApiPigeonCodec : StandardMessageCodec() {
         }
       }
       133.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let {
-          BiometricAvailability.fromList(it)
+        return (readValue(buffer) as Long?)?.let {
+          SignatureFormat.ofRaw(it.toInt())
         }
       }
       134.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let {
-          KeyCreationResult.fromList(it)
+        return (readValue(buffer) as Long?)?.let {
+          PayloadFormat.ofRaw(it.toInt())
         }
       }
       135.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          SignatureResult.fromList(it)
+          BiometricAvailability.fromList(it)
         }
       }
       136.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          DecryptResult.fromList(it)
+          KeyCreationResult.fromList(it)
         }
       }
       137.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          AndroidConfig.fromList(it)
+          SignatureResult.fromList(it)
         }
       }
       138.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          IosConfig.fromList(it)
+          DecryptResult.fromList(it)
         }
       }
       139.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          MacosConfig.fromList(it)
+          AndroidCreateKeysConfig.fromList(it)
+        }
+      }
+      140.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          IosCreateKeysConfig.fromList(it)
+        }
+      }
+      141.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          MacosCreateKeysConfig.fromList(it)
+        }
+      }
+      142.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          AndroidCreateSignatureConfig.fromList(it)
+        }
+      }
+      143.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          IosCreateSignatureConfig.fromList(it)
+        }
+      }
+      144.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          MacosCreateSignatureConfig.fromList(it)
+        }
+      }
+      145.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          AndroidDecryptConfig.fromList(it)
+        }
+      }
+      146.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          IosDecryptConfig.fromList(it)
+        }
+      }
+      147.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          MacosDecryptConfig.fromList(it)
         }
       }
       else -> super.readValueOfType(type, buffer)
@@ -515,32 +780,64 @@ private open class BiometricSignatureApiPigeonCodec : StandardMessageCodec() {
         stream.write(132)
         writeValue(stream, value.raw.toLong())
       }
-      is BiometricAvailability -> {
+      is SignatureFormat -> {
         stream.write(133)
-        writeValue(stream, value.toList())
+        writeValue(stream, value.raw.toLong())
       }
-      is KeyCreationResult -> {
+      is PayloadFormat -> {
         stream.write(134)
-        writeValue(stream, value.toList())
+        writeValue(stream, value.raw.toLong())
       }
-      is SignatureResult -> {
+      is BiometricAvailability -> {
         stream.write(135)
         writeValue(stream, value.toList())
       }
-      is DecryptResult -> {
+      is KeyCreationResult -> {
         stream.write(136)
         writeValue(stream, value.toList())
       }
-      is AndroidConfig -> {
+      is SignatureResult -> {
         stream.write(137)
         writeValue(stream, value.toList())
       }
-      is IosConfig -> {
+      is DecryptResult -> {
         stream.write(138)
         writeValue(stream, value.toList())
       }
-      is MacosConfig -> {
+      is AndroidCreateKeysConfig -> {
         stream.write(139)
+        writeValue(stream, value.toList())
+      }
+      is IosCreateKeysConfig -> {
+        stream.write(140)
+        writeValue(stream, value.toList())
+      }
+      is MacosCreateKeysConfig -> {
+        stream.write(141)
+        writeValue(stream, value.toList())
+      }
+      is AndroidCreateSignatureConfig -> {
+        stream.write(142)
+        writeValue(stream, value.toList())
+      }
+      is IosCreateSignatureConfig -> {
+        stream.write(143)
+        writeValue(stream, value.toList())
+      }
+      is MacosCreateSignatureConfig -> {
+        stream.write(144)
+        writeValue(stream, value.toList())
+      }
+      is AndroidDecryptConfig -> {
+        stream.write(145)
+        writeValue(stream, value.toList())
+      }
+      is IosDecryptConfig -> {
+        stream.write(146)
+        writeValue(stream, value.toList())
+      }
+      is MacosDecryptConfig -> {
+        stream.write(147)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -554,11 +851,11 @@ interface BiometricSignatureApi {
   /** Checks if biometric authentication is available. */
   fun getBiometricAvailability(): BiometricAvailability
   /** Creates a new key pair. */
-  fun createKeys(androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, keyFormat: KeyFormat, enforceBiometric: Boolean, promptMessage: String?, callback: (Result<KeyCreationResult>) -> Unit)
+  fun createKeys(androidConfig: AndroidCreateKeysConfig?, iosConfig: IosCreateKeysConfig?, macosConfig: MacosCreateKeysConfig?, useDeviceCredentials: Boolean?, signatureType: SignatureType?, setInvalidatedByBiometricEnrollment: Boolean?, keyFormat: KeyFormat, enforceBiometric: Boolean, promptMessage: String?, callback: (Result<KeyCreationResult>) -> Unit)
   /** Creates a signature. */
-  fun createSignature(payload: String?, androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, keyFormat: KeyFormat, promptMessage: String?, callback: (Result<SignatureResult>) -> Unit)
+  fun createSignature(payload: String?, androidConfig: AndroidCreateSignatureConfig?, iosConfig: IosCreateSignatureConfig?, macosConfig: MacosCreateSignatureConfig?, signatureFormat: SignatureFormat, promptMessage: String?, callback: (Result<SignatureResult>) -> Unit)
   /** Decrypts data. */
-  fun decrypt(payload: String?, androidConfig: AndroidConfig?, iosConfig: IosConfig?, macosConfig: MacosConfig?, promptMessage: String?, callback: (Result<DecryptResult>) -> Unit)
+  fun decrypt(payload: String?, payloadFormat: PayloadFormat, androidConfig: AndroidDecryptConfig?, iosConfig: IosDecryptConfig?, macosConfig: MacosDecryptConfig?, promptMessage: String?, callback: (Result<DecryptResult>) -> Unit)
   /** Deletes keys. */
   fun deleteKeys(): Boolean
   /** Checks if a key exists. */
@@ -593,13 +890,16 @@ interface BiometricSignatureApi {
         if (api != null) {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
-            val androidConfigArg = args[0] as AndroidConfig?
-            val iosConfigArg = args[1] as IosConfig?
-            val macosConfigArg = args[2] as MacosConfig?
-            val keyFormatArg = args[3] as KeyFormat
-            val enforceBiometricArg = args[4] as Boolean
-            val promptMessageArg = args[5] as String?
-            api.createKeys(androidConfigArg, iosConfigArg, macosConfigArg, keyFormatArg, enforceBiometricArg, promptMessageArg) { result: Result<KeyCreationResult> ->
+            val androidConfigArg = args[0] as AndroidCreateKeysConfig?
+            val iosConfigArg = args[1] as IosCreateKeysConfig?
+            val macosConfigArg = args[2] as MacosCreateKeysConfig?
+            val useDeviceCredentialsArg = args[3] as Boolean?
+            val signatureTypeArg = args[4] as SignatureType?
+            val setInvalidatedByBiometricEnrollmentArg = args[5] as Boolean?
+            val keyFormatArg = args[6] as KeyFormat
+            val enforceBiometricArg = args[7] as Boolean
+            val promptMessageArg = args[8] as String?
+            api.createKeys(androidConfigArg, iosConfigArg, macosConfigArg, useDeviceCredentialsArg, signatureTypeArg, setInvalidatedByBiometricEnrollmentArg, keyFormatArg, enforceBiometricArg, promptMessageArg) { result: Result<KeyCreationResult> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
@@ -619,12 +919,12 @@ interface BiometricSignatureApi {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
             val payloadArg = args[0] as String?
-            val androidConfigArg = args[1] as AndroidConfig?
-            val iosConfigArg = args[2] as IosConfig?
-            val macosConfigArg = args[3] as MacosConfig?
-            val keyFormatArg = args[4] as KeyFormat
+            val androidConfigArg = args[1] as AndroidCreateSignatureConfig?
+            val iosConfigArg = args[2] as IosCreateSignatureConfig?
+            val macosConfigArg = args[3] as MacosCreateSignatureConfig?
+            val signatureFormatArg = args[4] as SignatureFormat
             val promptMessageArg = args[5] as String?
-            api.createSignature(payloadArg, androidConfigArg, iosConfigArg, macosConfigArg, keyFormatArg, promptMessageArg) { result: Result<SignatureResult> ->
+            api.createSignature(payloadArg, androidConfigArg, iosConfigArg, macosConfigArg, signatureFormatArg, promptMessageArg) { result: Result<SignatureResult> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
@@ -644,11 +944,12 @@ interface BiometricSignatureApi {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
             val payloadArg = args[0] as String?
-            val androidConfigArg = args[1] as AndroidConfig?
-            val iosConfigArg = args[2] as IosConfig?
-            val macosConfigArg = args[3] as MacosConfig?
-            val promptMessageArg = args[4] as String?
-            api.decrypt(payloadArg, androidConfigArg, iosConfigArg, macosConfigArg, promptMessageArg) { result: Result<DecryptResult> ->
+            val payloadFormatArg = args[1] as PayloadFormat
+            val androidConfigArg = args[2] as AndroidDecryptConfig?
+            val iosConfigArg = args[3] as IosDecryptConfig?
+            val macosConfigArg = args[4] as MacosDecryptConfig?
+            val promptMessageArg = args[5] as String?
+            api.decrypt(payloadArg, payloadFormatArg, androidConfigArg, iosConfigArg, macosConfigArg, promptMessageArg) { result: Result<DecryptResult> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
