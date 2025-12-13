@@ -4,9 +4,23 @@ import LocalAuthentication
 import Security
 
 private enum Constants {
-    static let biometricKeyAlias = "biometric_key"
-    static let ecKeyAlias = "com.visionflutter.eckey".data(using: .utf8)!
-    static let invalidationSettingKey = "com.visionflutter.biometric_signature.invalidation_setting"
+    // App-specific prefix to isolate keychain items per app on macOS
+    private static var appPrefix: String {
+        Bundle.main.bundleIdentifier ?? "com.visionflutter.biometric_signature"
+    }
+
+    // Bundle-specific keychain identifiers to prevent cross-app conflicts
+    static var biometricKeyAlias: String {
+        "\(appPrefix).biometric_key"
+    }
+
+    static var ecKeyAlias: Data {
+        "\(appPrefix).eckey".data(using: .utf8)!
+    }
+
+    static var invalidationSettingKey: String {
+        "\(appPrefix).invalidation_setting"
+    }
 }
 
 // MARK: - Domain State & Invalidation Helpers (Unchanged logic, just namespaced)
