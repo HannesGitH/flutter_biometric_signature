@@ -437,9 +437,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                       ? 'Biometrics Available'
                       : 'Biometrics Unavailable',
                 ),
-                subtitle: Text(
-                  availability!.availableBiometrics.toString(),
-                ),
+                subtitle: Text(availability!.availableBiometrics.toString()),
               ),
             ),
 
@@ -581,8 +579,9 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                         const SizedBox(width: 10),
                         Chip(
                           label: Text(_keyExists! ? 'Yes' : 'No'),
-                          backgroundColor:
-                              _keyExists! ? Colors.green.shade100 : Colors.grey.shade200,
+                          backgroundColor: _keyExists!
+                              ? Colors.green.shade100
+                              : Colors.grey.shade200,
                         ),
                       ],
                     ],

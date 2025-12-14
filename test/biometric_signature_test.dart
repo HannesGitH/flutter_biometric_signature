@@ -125,12 +125,14 @@ void main() {
       BiometricSignature biometricSignature = BiometricSignature();
       MockBiometricSignaturePlatform fakePlatform =
           MockBiometricSignaturePlatform();
-      fakePlatform.setAuthAvailableResult(BiometricAvailability(
-        canAuthenticate: false,
-        hasEnrolledBiometrics: false,
-        availableBiometrics: [BiometricType.unavailable],
-        reason: 'No biometric hardware',
-      ));
+      fakePlatform.setAuthAvailableResult(
+        BiometricAvailability(
+          canAuthenticate: false,
+          hasEnrolledBiometrics: false,
+          availableBiometrics: [BiometricType.unavailable],
+          reason: 'No biometric hardware',
+        ),
+      );
       BiometricSignaturePlatform.instance = fakePlatform;
 
       final result = await biometricSignature.biometricAuthAvailable();

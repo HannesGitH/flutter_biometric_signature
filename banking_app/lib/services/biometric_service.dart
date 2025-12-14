@@ -1,7 +1,7 @@
 import 'package:biometric_signature/biometric_signature.dart'
     hide BiometricAvailability;
-import 'package:biometric_signature/biometric_signature.dart'
-    as plugin show BiometricAvailability;
+import 'package:biometric_signature/biometric_signature.dart' as plugin
+    show BiometricAvailability;
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

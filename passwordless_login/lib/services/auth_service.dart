@@ -38,7 +38,8 @@ class AuthService {
 
     final publicKey = keyResult.publicKey;
     if (publicKey == null) {
-      throw Exception('Failed to generate cryptographic keys: ${keyResult.error}');
+      throw Exception(
+          'Failed to generate cryptographic keys: ${keyResult.error}');
     }
 
     // Create user
