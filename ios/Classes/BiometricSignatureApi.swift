@@ -797,7 +797,7 @@ class BiometricSignatureApiPigeonCodec: FlutterStandardMessageCodec, @unchecked 
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol BiometricSignatureApi {
   /// Checks if biometric authentication is available.
-  func getBiometricAvailability() throws -> BiometricAvailability
+  func biometricAuthAvailable() throws -> BiometricAvailability
   /// Creates a new key pair.
   func createKeys(androidConfig: AndroidCreateKeysConfig?, iosConfig: IosCreateKeysConfig?, macosConfig: MacosCreateKeysConfig?, useDeviceCredentials: Bool?, signatureType: SignatureType?, setInvalidatedByBiometricEnrollment: Bool?, keyFormat: KeyFormat, enforceBiometric: Bool, promptMessage: String?, completion: @escaping (Result<KeyCreationResult, Error>) -> Void)
   /// Creates a signature.
@@ -817,18 +817,18 @@ class BiometricSignatureApiSetup {
   static func setUp(binaryMessenger: FlutterBinaryMessenger, api: BiometricSignatureApi?, messageChannelSuffix: String = "") {
     let channelSuffix = messageChannelSuffix.count > 0 ? ".\(messageChannelSuffix)" : ""
     /// Checks if biometric authentication is available.
-    let getBiometricAvailabilityChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.getBiometricAvailability\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    let biometricAuthAvailableChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.biometricAuthAvailable\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
-      getBiometricAvailabilityChannel.setMessageHandler { _, reply in
+      biometricAuthAvailableChannel.setMessageHandler { _, reply in
         do {
-          let result = try api.getBiometricAvailability()
+          let result = try api.biometricAuthAvailable()
           reply(wrapResult(result))
         } catch {
           reply(wrapError(error))
         }
       }
     } else {
-      getBiometricAvailabilityChannel.setMessageHandler(nil)
+      biometricAuthAvailableChannel.setMessageHandler(nil)
     }
     /// Creates a new key pair.
     let createKeysChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.createKeys\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)

@@ -844,7 +844,7 @@ private open class BiometricSignatureApiPigeonCodec : StandardMessageCodec() {
 /** Generated interface from Pigeon that represents a handler of messages from Flutter. */
 interface BiometricSignatureApi {
   /** Checks if biometric authentication is available. */
-  fun getBiometricAvailability(): BiometricAvailability
+  fun biometricAuthAvailable(): BiometricAvailability
   /** Creates a new key pair. */
   fun createKeys(androidConfig: AndroidCreateKeysConfig?, iosConfig: IosCreateKeysConfig?, macosConfig: MacosCreateKeysConfig?, useDeviceCredentials: Boolean?, signatureType: SignatureType?, setInvalidatedByBiometricEnrollment: Boolean?, keyFormat: KeyFormat, enforceBiometric: Boolean, promptMessage: String?, callback: (Result<KeyCreationResult>) -> Unit)
   /** Creates a signature. */
@@ -866,11 +866,11 @@ interface BiometricSignatureApi {
     fun setUp(binaryMessenger: BinaryMessenger, api: BiometricSignatureApi?, messageChannelSuffix: String = "") {
       val separatedMessageChannelSuffix = if (messageChannelSuffix.isNotEmpty()) ".$messageChannelSuffix" else ""
       run {
-        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.getBiometricAvailability$separatedMessageChannelSuffix", codec)
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.biometricAuthAvailable$separatedMessageChannelSuffix", codec)
         if (api != null) {
           channel.setMessageHandler { _, reply ->
             val wrapped: List<Any?> = try {
-              listOf(api.getBiometricAvailability())
+              listOf(api.biometricAuthAvailable())
             } catch (exception: Throwable) {
               BiometricSignatureApiPigeonUtils.wrapError(exception)
             }

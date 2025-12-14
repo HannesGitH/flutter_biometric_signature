@@ -151,7 +151,7 @@ enum PayloadFormat { base64, hex, raw }
 @HostApi()
 abstract class BiometricSignatureApi {
   /// Checks if biometric authentication is available.
-  BiometricAvailability getBiometricAvailability();
+  BiometricAvailability biometricAuthAvailable();
 
   /// Creates a new key pair.
   @async

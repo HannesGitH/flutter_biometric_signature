@@ -96,7 +96,7 @@ class BiometricSignature {
 
   /// Determines whether biometric authentication is available on the device.
   Future<BiometricAvailability> biometricAuthAvailable() async {
-    return BiometricSignaturePlatform.instance.getBiometricAvailability();
+    return BiometricSignaturePlatform.instance.biometricAuthAvailable();
   }
 
   /// Checks whether a hardware-backed signing key currently exists.

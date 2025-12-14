@@ -26,9 +26,9 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
   }
 
   /// Checks if biometric authentication is available.
-  Future<BiometricAvailability> getBiometricAvailability() {
+  Future<BiometricAvailability> biometricAuthAvailable() {
     throw UnimplementedError(
-      'getBiometricAvailability() has not been implemented.',
+      'biometricAuthAvailable() has not been implemented.',
     );
   }
 
@@ -87,8 +87,8 @@ class _PigeonBiometricSignature extends BiometricSignaturePlatform {
   final BiometricSignatureApi _api = BiometricSignatureApi();
 
   @override
-  Future<BiometricAvailability> getBiometricAvailability() {
-    return _api.getBiometricAvailability();
+  Future<BiometricAvailability> biometricAuthAvailable() {
+    return _api.biometricAuthAvailable();
   }
 
   @override

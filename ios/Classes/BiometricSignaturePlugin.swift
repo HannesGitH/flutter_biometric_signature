@@ -130,7 +130,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
 
     // MARK: - BiometricSignatureApi Implementation
 
-    func getBiometricAvailability() throws -> BiometricAvailability {
+    func biometricAuthAvailable() throws -> BiometricAvailability {
         let context = LAContext()
         var error: NSError?
         let canEvaluate = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)

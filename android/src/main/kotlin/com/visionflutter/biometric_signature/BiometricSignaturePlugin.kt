@@ -95,7 +95,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
 
     // ==================== BiometricSignatureApi Implementation ====================
 
-    override fun getBiometricAvailability(): BiometricAvailability {
+    override fun biometricAuthAvailable(): BiometricAvailability {
         val act = activity
         if (act == null) {
             return BiometricAvailability(
