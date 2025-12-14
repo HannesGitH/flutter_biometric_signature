@@ -9,51 +9,59 @@ Even if an attacker bypasses or hooks biometric APIs, your backend will still re
 
 ## Features
 
-- **Cryptographic Proof Of Identity:** Hardware-backed RSA or ECDSA signatures that your backend can independently verify.
+- **Cryptographic Proof Of Identity:** Hardware-backed RSA (Android) or ECDSA (all platforms) signatures that your backend can independently verify.
 - **Decryption Support:** 
-  - **RSA**: RSA/ECB/PKCS1Padding (Android + iOS)
-  - **EC**: ECIES (X9.63 → SHA-256 → AES-GCM)
-- **Hardware Security:** Uses Secure Enclave (iOS) and Keystore/StrongBox (Android).
+  - **RSA**: RSA/ECB/PKCS1Padding (Android native, iOS/macOS via Hybrid mode)
+  - **EC**: ECIES (`eciesEncryptionStandardX963SHA256AESGCM`)
+- **Hardware Security:** Uses Secure Enclave (iOS/macOS) and Keystore/StrongBox (Android).
 - **Hybrid Architectures:**
-- **Android Hybrid EC:**
-
-  Hardware EC signing + software ECIES decryption.
-  The software EC private key is AES-wrapped using a StrongBox/Keystore AES-256 master key that requires biometric authentication for every unwrap.
-- **iOS Hybrid RSA:**
-
-  Hardware EC signing + software RSA decryption key.
-  The RSA key is encrypted using ECIES with Secure Enclave EC public key material.
+  - **Android Hybrid EC:** Hardware EC signing + software ECIES decryption. Software EC private key is AES-wrapped using a Keystore/StrongBox AES-256 master key that requires biometric authentication for every unwrap.
+  - **iOS/macOS Hybrid RSA:** Hardware EC signing (Secure Enclave) + software RSA decryption. RSA key is encrypted using ECIES with Secure Enclave EC public key.
 - **Key Invalidation:** Keys can be bound to biometric enrollment state (fingerprint/Face ID changes).
 - **Device Credentials:** Optional PIN/Pattern/Password fallback on Android.
+
 
 ## Security Architecture
 
 ### Key Modes
 
-The plugin supports three secure operational modes:
+The plugin supports different operational modes depending on the platform:
 
-1. **RSA Mode**:
-   - RSA-2048 signing (always hardware-backed)
-   - Optional RSA decryption
+#### Android
+
+Android supports three key modes:
+
+1. **RSA Mode** (`SignatureType.rsa`):
+   - Hardware-backed RSA-2048 signing (Keystore/StrongBox)
+   - Optional RSA decryption (PKCS#1 padding)
    - Private key never leaves secure hardware
-2.  **EC Signing-Only**: 
-   - Hardware-backed P-256 key
+
+2. **EC Signing-Only** (`SignatureType.ecdsa`, `enableDecryption: false`):
+   - Hardware-backed P-256 key in Keystore/StrongBox
    - ECDSA signing only
    - No decryption support
-3.  **Hybrid EC Mode**: Combines hardware signing with software decryption keys:
-    - **Android**:
-      - Hardware EC key for signing
-      - Software EC key for ECIES decryption
-      - Software EC private key encrypted using:
-        - AES-256 GCM master key stored in Keystore/StrongBox
-        - Per-operation biometric authentication required
-      - Wrapped EC private key blob stored in app-private files (MODE_PRIVATE)
-      - Public EC key also stored in app-private files
-    - **iOS**:
-      - Hardware EC key for signing
-      - Software RSA key for PKCS#1 decryption
-      - RSA private key is wrapped using ECIES with Secure Enclave EC public key
-      - Wrapped RSA key stored in Keychain as `kSecClassGenericPassword`
+
+3. **Hybrid EC Mode** (`SignatureType.ecdsa`, `enableDecryption: true`):
+   - Hardware EC key for signing
+   - Software EC key for ECIES decryption
+   - Software EC private key encrypted using AES-256 GCM master key (Keystore/StrongBox)
+   - Per-operation biometric authentication required for decryption
+
+#### iOS / macOS
+
+Apple platforms support two key modes (Secure Enclave only supports EC keys):
+
+1. **EC Signing-Only** (`SignatureType.ecdsa`):
+   - Hardware-backed P-256 key in Secure Enclave
+   - ECDSA signing
+   - Native ECIES decryption (`eciesEncryptionStandardX963SHA256AESGCM`)
+
+2. **Hybrid RSA Mode** (`SignatureType.rsa`):
+   - Hardware EC key for signing (Secure Enclave)
+   - Software RSA-2048 key for PKCS#1 decryption
+   - RSA private key wrapped using ECIES with Secure Enclave EC public key
+   - Wrapped RSA key stored in Keychain as `kSecClassGenericPassword`
+   - Supports both signing and decryption
 
 
 ### Workflow Overview
@@ -154,7 +162,7 @@ To get started with Biometric Signature, follow these steps:
 
 ```yaml
 dependencies:
-  biometric_signature: ^8.5.0
+  biometric_signature: ^9.0.0
 ```
 
 |             | Android | iOS   | macOS    |
@@ -180,9 +188,14 @@ to your Info.plist file.
 
 #### Activity Changes
 
-This plugin requires the use of a FragmentActivity as opposed to Activity. This can be easily done
-by switching to use FlutterFragmentActivity as opposed to FlutterActivity in your manifest or your
-own Activity class if you are extending the base class.
+This plugin requires the use of a `FragmentActivity` instead of `Activity`. Update your `MainActivity.kt` to extend `FlutterFragmentActivity`:
+
+```kotlin
+import io.flutter.embedding.android.FlutterFragmentActivity
+
+class MainActivity : FlutterFragmentActivity() {
+}
+```
 
 #### Permissions
 
@@ -228,11 +241,6 @@ platform :osx, '10.15'
 
 ```dart
 import 'package:biometric_signature/biometric_signature.dart';
-import 'package:biometric_signature/android_config.dart';
-import 'package:biometric_signature/ios_config.dart';
-import 'package:biometric_signature/macos_config.dart';
-import 'package:biometric_signature/signature_options.dart';
-import 'package:biometric_signature/decryption_options.dart';
 ```
 
 3. Initialize the Biometric Signature instance:
@@ -254,7 +262,7 @@ When a user enrolls in biometrics, a key pair is generated. The private key is s
 
 This class provides methods to manage and utilize biometric authentication for secure server interactions. It supports both Android and iOS platforms.
 
-### `createKeys({ androidConfig, iosConfig, macosConfig, keyFormat, enforceBiometric, promptMessage })`
+### `createKeys({ androidConfig, iosConfig, macosConfig, useDeviceCredentials, signatureType, setInvalidatedByBiometricEnrollment, keyFormat, enforceBiometric, promptMessage })`
 
 Generates a new key pair (RSA 2048 or EC) for biometric authentication. The private key is securely stored on the device.
 
@@ -264,16 +272,13 @@ Generates a new key pair (RSA 2048 or EC) for biometric authentication. The priv
   - `error`: Descriptive error message.
 
 ```dart
-final result = await biometricSignature.createKeys(
-  keyFormat: KeyFormat.pem,
-  androidConfig: AndroidConfig(
+final result = await _biometricSignature.createKeys(
+    keyFormat: KeyFormat.pem,
     useDeviceCredentials: false,
     signatureType: SignatureType.rsa,
-  ),
-  iosConfig: IosConfig(
-    biometryCurrentSet: true,
-    signatureType: SignatureType.rsa,
-  ),
+    setInvalidatedByBiometricEnrollment: true,
+    enforceBiometric: true,
+    promptMessage: 'Authenticate to create keys',
 );
 
 if (result.code == BiometricError.success) {
@@ -281,7 +286,7 @@ if (result.code == BiometricError.success) {
 }
 ```
 
-### `createSignature(options)`
+### `createSignature({ payload, androidConfig, iosConfig, macosConfig, signatureFormat, keyFormat, promptMessage })`
 
 Prompts the user for biometric authentication and generates a cryptographic signature.
 
@@ -297,7 +302,7 @@ final result = await biometricSignature.createSignature(
 );
 ```
 
-### `decrypt(options)`
+### `decrypt({ payload, payloadFormat, androidConfig, iosConfig, macosConfig, promptMessage })`
 
 Decrypts the given payload using the private key and biometrics.
 
@@ -326,100 +331,8 @@ if (availability.canAuthenticate) {
 
 ### `biometricKeyExists(checkValidity: bool)`
 
-Checks if the biometric key pair exists on the device.
+Checks if the biometric key pair exists on the device. Optionally, it can also verify the validity of the key by attempting to initialize a signature with it. Since the key requires that user authentication takes place for every use of the key, it is also irreversibly invalidated once a new biometric is enrolled or once no more biometrics are enrolled (when `setInvalidatedByBiometricEnrollment` is `true`).
 
-- **Returns**: `Future<bool>`.
-
-
-## Example
-
-```dart
-import 'package:biometric_signature/biometric_signature.dart';
-import 'package:flutter/material.dart';
-
-void main() => runApp(const MyApp());
-
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const MaterialApp(home: Scaffold(body: BiometricDemo()));
-  }
-}
-
-class BiometricDemo extends StatefulWidget {
-  const BiometricDemo({super.key});
-
-  @override
-  State<BiometricDemo> createState() => _BiometricDemoState();
-}
-
-class _BiometricDemoState extends State<BiometricDemo> {
-  final _biometricSignature = BiometricSignature();
-  KeyCreationResult? keyResult;
-  SignatureResult? signatureResult;
-
-  Future<void> _generateKeys() async {
-    keyResult = await _biometricSignature.createKeys(
-      keyFormat: KeyFormat.pem,
-      androidConfig: AndroidConfig(
-        useDeviceCredentials: false,
-        signatureType: AndroidSignatureType.RSA,
-        setInvalidatedByBiometricEnrollment: true, // Key invalidated when new biometric is enrolled
-        enableDecryption: true, // Enable decryption support
-      ),
-      iosConfig: IosConfig(
-        useDeviceCredentials: false,
-        signatureType: IOSSignatureType.RSA,
-        biometryCurrentSet: true, // Key constrained to current biometric enrollment
-      ),
-      enforceBiometric: true, // Require biometric authentication before generating keys
-    );
-    debugPrint('Public key (${keyResult.publicKey.format.wireValue}):\n${keyResult?.publicKey.asString()}');
-    setState(() {});
-  }
-
-  Future<void> _sign() async {
-    signatureResult = await _biometricSignature.createSignature(
-      SignatureOptions(
-        payload: 'Payload to sign',
-        keyFormat: KeyFormat.base64,
-        promptMessage: 'Authenticate to Sign',
-        androidOptions: const AndroidSignatureOptions(
-          subtitle: 'Approve the login to continue',
-          allowDeviceCredentials: false,
-        ),
-        iosOptions: const IosSignatureOptions(shouldMigrate: false),
-      ),
-    );
-    debugPrint('Signature (${signatureResult.signature.format.wireValue}): ${signatureResult?.signature}');
-    setState(() {});
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ElevatedButton(
-            onPressed: _generateKeys,
-            child: const Text('Create keys (PEM)'),
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: _sign,
-            child: const Text('Sign payload (RAW)'),
-          ),
-          if (signatureResult != null) ...[
-            const SizedBox(height: 16),
-            Text('Signature HEX:\n${signatureResult!.signature.toHex()}'),
-          ],
-        ],
-      ),
-    );
-  }
-}
-```
+-   **Parameters**:
+    -   `checkValidity`: A bool indicating whether to check the validity of the key by initializing a signature. Default is `false`.
+-   **Returns**: `bool` - `true` if the key pair exists (and is valid if `checkValidity` is `true`), `false` otherwise.
