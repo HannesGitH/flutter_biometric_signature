@@ -262,7 +262,6 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         writeFileAtomic(EC_WRAPPED_FILENAME, wrappedBlob)
         writeFileAtomic(EC_PUB_FILENAME, publicKeyBytes)
 
-        // For hybrid, we return the decryption public key as the main key
         // For hybrid, we return the Signing Key as default, and Decryption Key as optional
         val decryptingPublicKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(publicKeyBytes))
 
@@ -659,7 +658,6 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         }
     }
 
-    // ... Helper functions
     private fun createX509ForRawEcPub(raw: ByteArray): ByteArray {
         val header = byteArrayOf(
             0x30, 0x59, 0x30, 0x13, 0x06, 0x07, 0x2A.toByte(), 0x86.toByte(),

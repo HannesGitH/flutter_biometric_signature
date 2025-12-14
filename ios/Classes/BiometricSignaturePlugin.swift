@@ -9,7 +9,7 @@ private enum Constants {
     static let invalidationSettingKey = "com.visionflutter.biometric_signature.invalidation_setting"
 }
 
-// MARK: - Domain State & Invalidation Helpers (Unchanged logic, just namespaced)
+// MARK: - Domain State (biometry change detection)
 private enum DomainState {
     static let service = "com.visionflutter.biometric_signature.domain_state"
     private static func account() -> String { "biometric_domain_state_v1" }
@@ -57,8 +57,24 @@ private enum DomainState {
         let s = SecItemDelete(q as CFDictionary)
         return s == errSecSuccess || s == errSecItemNotFound
     }
+
+    /// Returns true if biometry changed vs saved baseline (no UI).
+    static func biometryChangedOrUnknown() -> Bool {
+        let ctx = LAContext()
+        var laErr: NSError?
+        guard ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &laErr),
+        let current = ctx.evaluatedPolicyDomainState else {
+            // If we can't evaluate and we *had* a baseline, be conservative.
+            return loadSaved() != nil
+        }
+        if let saved = loadSaved() { return saved != current }
+        // First run / no baseline: save now and consider valid this time.
+        saveCurrent()
+        return false
+    }
 }
 
+// MARK: - Invalidation Setting Storage
 private enum InvalidationSetting {
     static func save(_ invalidateOnEnrollment: Bool) {
         let data = invalidateOnEnrollment ? Data([1]) : Data([0])
@@ -74,6 +90,22 @@ private enum InvalidationSetting {
             add[kSecValueData as String] = data
             _ = SecItemAdd(add as CFDictionary, nil)
         }
+    }
+
+    static func load() -> Bool? {
+        let q: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: Constants.invalidationSettingKey,
+            kSecAttrAccount as String: Constants.invalidationSettingKey,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var out: CFTypeRef?
+        let s = SecItemCopyMatching(q as CFDictionary, &out)
+        if s == errSecSuccess, let d = out as? Data, let first = d.first {
+            return first == 1
+        }
+        return nil
     }
 
     @discardableResult
@@ -110,7 +142,6 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
                  switch context.biometryType {
                  case .faceID: availableBiometrics.append(.face)
                  case .touchID: availableBiometrics.append(.fingerprint)
-                 case .opticID: availableBiometrics.append(.iris) // Mapping OpticID to Iris for now if needed, or close enough
                  default: break
                  }
              }
@@ -349,20 +380,72 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     }
 
     func biometricKeyExists(checkValidity: Bool, completion: @escaping (Result<Bool, Error>) -> Void) {
-        // Checking validity implies checking if we can get reference which might trigger auth if configured so.
-        // Usually existence check shouldn't trigger auth.
-        // We will just check existence in Keychain.
-        
-        // Check EC Key
+        // Check EC key existence
         let ecTag = Constants.ecKeyAlias
-        let query: [String: Any] = [
+        let ecKeyQuery: [String: Any] = [
             kSecClass as String: kSecClassKey,
             kSecAttrApplicationTag as String: ecTag,
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-            kSecReturnRef as String: false
+            kSecReturnRef as String: true,
         ]
-        let status = SecItemCopyMatching(query as CFDictionary, nil)
-        completion(.success(status == errSecSuccess))
+        var ecItem: CFTypeRef?
+        let ecStatus = SecItemCopyMatching(ecKeyQuery as CFDictionary, &ecItem)
+        let ecKeyExists = (ecStatus == errSecSuccess)
+
+        // Check if encrypted RSA key exists
+        let encryptedKeyTag = Constants.biometricKeyAlias
+        let encryptedKeyQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: encryptedKeyTag,
+            kSecAttrAccount as String: encryptedKeyTag,
+            kSecReturnData as String: true,
+        ]
+        var rsaItem: CFTypeRef?
+        let rsaStatus = SecItemCopyMatching(encryptedKeyQuery as CFDictionary, &rsaItem)
+        let rsaKeyExists = (rsaStatus == errSecSuccess)
+
+        // For EC-only mode, only EC key needs to exist
+        if ecKeyExists && !rsaKeyExists {
+            guard checkValidity else {
+                completion(.success(true))
+                return
+            }
+
+            // Check if invalidation was enabled for this key
+            let shouldInvalidateOnEnrollment = InvalidationSetting.load() ?? true
+
+            // Only check domain state if invalidation is enabled
+            if shouldInvalidateOnEnrollment {
+                completion(.success(!DomainState.biometryChangedOrUnknown()))
+                return
+            }
+
+            // If invalidation is disabled (biometryAny), key remains valid
+            completion(.success(true))
+            return
+        }
+
+        // Hybrid: both must exist
+        guard ecKeyExists, rsaKeyExists else {
+            completion(.success(false))
+            return
+        }
+        guard checkValidity else {
+            completion(.success(true))
+            return
+        }
+
+        // Check if invalidation was enabled for this key
+        let shouldInvalidateOnEnrollment = InvalidationSetting.load() ?? true
+
+        // Only check domain state if invalidation is enabled
+        if shouldInvalidateOnEnrollment {
+            completion(.success(!DomainState.biometryChangedOrUnknown()))
+            return
+        }
+
+        // If invalidation is disabled (biometryAny), key remains valid
+        completion(.success(true))
     }
 
     // MARK: - Private Implementations
