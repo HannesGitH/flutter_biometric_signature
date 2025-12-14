@@ -47,6 +47,8 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
   KeyFormat _publicKeyFormat = KeyFormat.pem;
   KeyFormat _signatureKeyFormat = KeyFormat.base64;
   SignatureFormat _signatureFormat = SignatureFormat.base64;
+  bool? _keyExists;
+  bool _checkKeyValidity = false;
 
   // Results
   KeyCreationResult? keyResult;
@@ -185,6 +187,18 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
       debugPrint('❌ Error: $e\n$stack');
     } finally {
       setState(() => isLoading = false);
+    }
+  }
+
+  Future<void> _checkKeyExists() async {
+    try {
+      final exists = await _biometricSignature.biometricKeyExists(
+        checkValidity: _checkKeyValidity,
+      );
+      setState(() => _keyExists = exists);
+      _showSnack('Key exists: $exists');
+    } catch (e) {
+      setState(() => errorMessage = e.toString());
     }
   }
 
@@ -541,6 +555,45 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                 ),
               ),
             ),
+
+          const SizedBox(height: 10),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Check Validity'),
+                      Switch(
+                        value: _checkKeyValidity,
+                        onChanged: (v) => setState(() => _checkKeyValidity = v),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _checkKeyExists,
+                          child: const Text('Check Key Exists'),
+                        ),
+                      ),
+                      if (_keyExists != null) ...[
+                        const SizedBox(width: 10),
+                        Chip(
+                          label: Text(_keyExists! ? 'Yes' : 'No'),
+                          backgroundColor:
+                              _keyExists! ? Colors.green.shade100 : Colors.grey.shade200,
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
 
           const SizedBox(height: 20),
 
