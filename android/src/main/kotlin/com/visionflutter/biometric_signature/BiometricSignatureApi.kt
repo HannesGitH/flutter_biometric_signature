@@ -78,11 +78,17 @@ class FlutterError (
   val details: Any? = null
 ) : Throwable()
 
+/** Types of biometric authentication supported by the device. */
 enum class BiometricType(val raw: Int) {
+  /** Face recognition (Face ID on iOS, face unlock on Android). */
   FACE(0),
+  /** Fingerprint recognition (Touch ID on iOS/macOS, fingerprint on Android). */
   FINGERPRINT(1),
+  /** Iris scanner (Android only, rare on consumer devices). */
   IRIS(2),
+  /** Multiple biometric types are available on the device. */
   MULTIPLE(3),
+  /** No biometric hardware available or biometrics are disabled. */
   UNAVAILABLE(4);
 
   companion object {
@@ -122,8 +128,11 @@ enum class BiometricError(val raw: Int) {
   }
 }
 
+/** The cryptographic algorithm to use for key generation. */
 enum class SignatureType(val raw: Int) {
+  /** RSA-2048 (Android: native, iOS/macOS: hybrid mode with Secure Enclave EC). */
   RSA(0),
+  /** ECDSA P-256 (hardware-backed on all platforms). */
   ECDSA(1);
 
   companion object {
@@ -133,10 +142,15 @@ enum class SignatureType(val raw: Int) {
   }
 }
 
+/** Output format for public keys. */
 enum class KeyFormat(val raw: Int) {
+  /** Base64-encoded DER (SubjectPublicKeyInfo). */
   BASE64(0),
+  /** PEM format with BEGIN/END PUBLIC KEY headers. */
   PEM(1),
+  /** Hexadecimal-encoded DER. */
   HEX(2),
+  /** Raw DER bytes (returned via `publicKeyBytes`). */
   RAW(3);
 
   companion object {
@@ -146,9 +160,13 @@ enum class KeyFormat(val raw: Int) {
   }
 }
 
+/** Output format for cryptographic signatures. */
 enum class SignatureFormat(val raw: Int) {
+  /** Base64-encoded signature bytes. */
   BASE64(0),
+  /** Hexadecimal-encoded signature bytes. */
   HEX(1),
+  /** Raw signature bytes (returned via `signatureBytes`). */
   RAW(2);
 
   companion object {
@@ -158,9 +176,13 @@ enum class SignatureFormat(val raw: Int) {
   }
 }
 
+/** Input format for encrypted payloads to decrypt. */
 enum class PayloadFormat(val raw: Int) {
+  /** Base64-encoded ciphertext. */
   BASE64(0),
+  /** Hexadecimal-encoded ciphertext. */
   HEX(1),
+  /** Raw UTF-8 string (not recommended for binary data). */
   RAW(2);
 
   companion object {
@@ -848,9 +870,9 @@ interface BiometricSignatureApi {
   /** Creates a new key pair. */
   fun createKeys(androidConfig: AndroidCreateKeysConfig?, iosConfig: IosCreateKeysConfig?, macosConfig: MacosCreateKeysConfig?, useDeviceCredentials: Boolean?, signatureType: SignatureType?, setInvalidatedByBiometricEnrollment: Boolean?, keyFormat: KeyFormat, enforceBiometric: Boolean, promptMessage: String?, callback: (Result<KeyCreationResult>) -> Unit)
   /** Creates a signature. */
-  fun createSignature(payload: String?, androidConfig: AndroidCreateSignatureConfig?, iosConfig: IosCreateSignatureConfig?, macosConfig: MacosCreateSignatureConfig?, signatureFormat: SignatureFormat, keyFormat: KeyFormat, promptMessage: String?, callback: (Result<SignatureResult>) -> Unit)
+  fun createSignature(payload: String, androidConfig: AndroidCreateSignatureConfig?, iosConfig: IosCreateSignatureConfig?, macosConfig: MacosCreateSignatureConfig?, signatureFormat: SignatureFormat, keyFormat: KeyFormat, promptMessage: String?, callback: (Result<SignatureResult>) -> Unit)
   /** Decrypts data. */
-  fun decrypt(payload: String?, payloadFormat: PayloadFormat, androidConfig: AndroidDecryptConfig?, iosConfig: IosDecryptConfig?, macosConfig: MacosDecryptConfig?, promptMessage: String?, callback: (Result<DecryptResult>) -> Unit)
+  fun decrypt(payload: String, payloadFormat: PayloadFormat, androidConfig: AndroidDecryptConfig?, iosConfig: IosDecryptConfig?, macosConfig: MacosDecryptConfig?, promptMessage: String?, callback: (Result<DecryptResult>) -> Unit)
   /** Deletes keys. */
   fun deleteKeys(): Boolean
   /** Checks if a key exists. */
@@ -913,7 +935,7 @@ interface BiometricSignatureApi {
         if (api != null) {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
-            val payloadArg = args[0] as String?
+            val payloadArg = args[0] as String
             val androidConfigArg = args[1] as AndroidCreateSignatureConfig?
             val iosConfigArg = args[2] as IosCreateSignatureConfig?
             val macosConfigArg = args[3] as MacosCreateSignatureConfig?
@@ -939,7 +961,7 @@ interface BiometricSignatureApi {
         if (api != null) {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
-            val payloadArg = args[0] as String?
+            val payloadArg = args[0] as String
             val payloadFormatArg = args[1] as PayloadFormat
             val androidConfigArg = args[2] as AndroidDecryptConfig?
             val iosConfigArg = args[3] as IosDecryptConfig?

@@ -310,6 +310,24 @@ Decrypts the given payload using the private key and biometrics.
   - `decryptedData`: The plaintext string.
   - `code`: `BiometricError` code.
 
+### `deleteKeys()`
+
+Deletes all biometric key material (signing and decryption keys) from the device's secure storage.
+
+- **Returns**: `Future<bool>`.
+  - `true`: Keys were successfully deleted, or no keys existed (idempotent).
+  - `false`: Deletion failed due to a system error.
+
+> **Note**: This operation is idempotent—calling `deleteKeys()` when no keys exist will still return `true`. This allows safe "logout" or "reset" flows without checking key existence first.
+
+```dart
+final deleted = await biometricSignature.deleteKeys();
+if (deleted) {
+  print('All biometric keys removed');
+}
+```
+
+
 ### `biometricAuthAvailable()`
 
 Checks if biometric authentication is available on the device and returns a structured response.

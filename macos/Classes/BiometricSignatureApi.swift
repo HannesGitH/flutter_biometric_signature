@@ -128,11 +128,17 @@ func deepHashBiometricSignatureApi(value: Any?, hasher: inout Hasher) {
 
     
 
+/// Types of biometric authentication supported by the device.
 enum BiometricType: Int {
+  /// Face recognition (Face ID on iOS, face unlock on Android).
   case face = 0
+  /// Fingerprint recognition (Touch ID on iOS/macOS, fingerprint on Android).
   case fingerprint = 1
+  /// Iris scanner (Android only, rare on consumer devices).
   case iris = 2
+  /// Multiple biometric types are available on the device.
   case multiple = 3
+  /// No biometric hardware available or biometrics are disabled.
   case unavailable = 4
 }
 
@@ -160,27 +166,43 @@ enum BiometricError: Int {
   case invalidInput = 9
 }
 
+/// The cryptographic algorithm to use for key generation.
 enum SignatureType: Int {
+  /// RSA-2048 (Android: native, iOS/macOS: hybrid mode with Secure Enclave EC).
   case rsa = 0
+  /// ECDSA P-256 (hardware-backed on all platforms).
   case ecdsa = 1
 }
 
+/// Output format for public keys.
 enum KeyFormat: Int {
+  /// Base64-encoded DER (SubjectPublicKeyInfo).
   case base64 = 0
+  /// PEM format with BEGIN/END PUBLIC KEY headers.
   case pem = 1
+  /// Hexadecimal-encoded DER.
   case hex = 2
+  /// Raw DER bytes (returned via `publicKeyBytes`).
   case raw = 3
 }
 
+/// Output format for cryptographic signatures.
 enum SignatureFormat: Int {
+  /// Base64-encoded signature bytes.
   case base64 = 0
+  /// Hexadecimal-encoded signature bytes.
   case hex = 1
+  /// Raw signature bytes (returned via `signatureBytes`).
   case raw = 2
 }
 
+/// Input format for encrypted payloads to decrypt.
 enum PayloadFormat: Int {
+  /// Base64-encoded ciphertext.
   case base64 = 0
+  /// Hexadecimal-encoded ciphertext.
   case hex = 1
+  /// Raw UTF-8 string (not recommended for binary data).
   case raw = 2
 }
 
@@ -222,7 +244,6 @@ struct BiometricAvailability: Hashable {
 }
 
 /// Generated class from Pigeon that represents data sent in messages.
-/// Generated class from Pigeon that represents data sent in messages.
 struct KeyCreationResult: Hashable {
   var publicKey: String? = nil
   var publicKeyBytes: FlutterStandardTypedData? = nil
@@ -243,10 +264,10 @@ struct KeyCreationResult: Hashable {
     let error: String? = nilOrValue(pigeonVar_list[2])
     let code: BiometricError? = nilOrValue(pigeonVar_list[3])
     let algorithm: String? = nilOrValue(pigeonVar_list[4])
-    let keySize: Int64? = isNullish(pigeonVar_list[5]) ? nil : (pigeonVar_list[5] is Int64? ? pigeonVar_list[5] as! Int64? : Int64(pigeonVar_list[5] as! Int32))
+    let keySize: Int64? = nilOrValue(pigeonVar_list[5])
     let decryptingPublicKey: String? = nilOrValue(pigeonVar_list[6])
     let decryptingAlgorithm: String? = nilOrValue(pigeonVar_list[7])
-    let decryptingKeySize: Int64? = isNullish(pigeonVar_list[8]) ? nil : (pigeonVar_list[8] is Int64? ? pigeonVar_list[8] as! Int64? : Int64(pigeonVar_list[8] as! Int32))
+    let decryptingKeySize: Int64? = nilOrValue(pigeonVar_list[8])
     let isHybridMode: Bool? = nilOrValue(pigeonVar_list[9])
 
     return KeyCreationResult(
@@ -302,7 +323,7 @@ struct SignatureResult: Hashable {
     let error: String? = nilOrValue(pigeonVar_list[3])
     let code: BiometricError? = nilOrValue(pigeonVar_list[4])
     let algorithm: String? = nilOrValue(pigeonVar_list[5])
-    let keySize: Int64? = isNullish(pigeonVar_list[6]) ? nil : (pigeonVar_list[6] is Int64? ? pigeonVar_list[6] as! Int64? : Int64(pigeonVar_list[6] as! Int32))
+    let keySize: Int64? = nilOrValue(pigeonVar_list[6])
 
     return SignatureResult(
       signature: signature,
@@ -802,9 +823,9 @@ protocol BiometricSignatureApi {
   /// Creates a new key pair.
   func createKeys(androidConfig: AndroidCreateKeysConfig?, iosConfig: IosCreateKeysConfig?, macosConfig: MacosCreateKeysConfig?, useDeviceCredentials: Bool?, signatureType: SignatureType?, setInvalidatedByBiometricEnrollment: Bool?, keyFormat: KeyFormat, enforceBiometric: Bool, promptMessage: String?, completion: @escaping (Result<KeyCreationResult, Error>) -> Void)
   /// Creates a signature.
-  func createSignature(payload: String?, androidConfig: AndroidCreateSignatureConfig?, iosConfig: IosCreateSignatureConfig?, macosConfig: MacosCreateSignatureConfig?, signatureFormat: SignatureFormat, keyFormat: KeyFormat, promptMessage: String?, completion: @escaping (Result<SignatureResult, Error>) -> Void)
+  func createSignature(payload: String, androidConfig: AndroidCreateSignatureConfig?, iosConfig: IosCreateSignatureConfig?, macosConfig: MacosCreateSignatureConfig?, signatureFormat: SignatureFormat, keyFormat: KeyFormat, promptMessage: String?, completion: @escaping (Result<SignatureResult, Error>) -> Void)
   /// Decrypts data.
-  func decrypt(payload: String?, payloadFormat: PayloadFormat, androidConfig: AndroidDecryptConfig?, iosConfig: IosDecryptConfig?, macosConfig: MacosDecryptConfig?, promptMessage: String?, completion: @escaping (Result<DecryptResult, Error>) -> Void)
+  func decrypt(payload: String, payloadFormat: PayloadFormat, androidConfig: AndroidDecryptConfig?, iosConfig: IosDecryptConfig?, macosConfig: MacosDecryptConfig?, promptMessage: String?, completion: @escaping (Result<DecryptResult, Error>) -> Void)
   /// Deletes keys.
   func deleteKeys() throws -> Bool
   /// Checks if a key exists.
@@ -862,7 +883,7 @@ class BiometricSignatureApiSetup {
     if let api = api {
       createSignatureChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
-        let payloadArg: String? = nilOrValue(args[0])
+        let payloadArg = args[0] as! String
         let androidConfigArg: AndroidCreateSignatureConfig? = nilOrValue(args[1])
         let iosConfigArg: IosCreateSignatureConfig? = nilOrValue(args[2])
         let macosConfigArg: MacosCreateSignatureConfig? = nilOrValue(args[3])
@@ -886,7 +907,7 @@ class BiometricSignatureApiSetup {
     if let api = api {
       decryptChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
-        let payloadArg: String? = nilOrValue(args[0])
+        let payloadArg = args[0] as! String
         let payloadFormatArg = args[1] as! PayloadFormat
         let androidConfigArg: AndroidDecryptConfig? = nilOrValue(args[2])
         let iosConfigArg: IosDecryptConfig? = nilOrValue(args[3])

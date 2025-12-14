@@ -6,10 +6,16 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 class MockBiometricSignaturePlatform
     with MockPlatformInterfaceMixin
     implements BiometricSignaturePlatform {
-  String? _authAvailableResult = 'fingerprint';
+  BiometricAvailability _authAvailableResult = BiometricAvailability(
+    canAuthenticate: true,
+    hasEnrolledBiometrics: true,
+    availableBiometrics: [BiometricType.fingerprint],
+    reason: null,
+  );
   bool _shouldThrowError = false;
+  SignatureType _signatureType = SignatureType.rsa;
 
-  void setAuthAvailableResult(String? result) {
+  void setAuthAvailableResult(BiometricAvailability result) {
     _authAvailableResult = result;
   }
 
@@ -17,56 +23,80 @@ class MockBiometricSignaturePlatform
     _shouldThrowError = value;
   }
 
-  @override
-  Future<String?> biometricAuthAvailable() async {
-    if (_shouldThrowError) throw Exception('Auth check failed');
-    return Future.value(_authAvailableResult);
+  void setSignatureType(SignatureType type) {
+    _signatureType = type;
   }
 
   @override
-  Future<bool?> biometricKeyExists(bool checkValidity) => Future.value(true);
+  Future<BiometricAvailability> biometricAuthAvailable() async {
+    if (_shouldThrowError) throw Exception('Auth check failed');
+    return _authAvailableResult;
+  }
 
   @override
-  Future<Map<String, dynamic>?> createKeys(
-    AndroidConfig androidConfig,
-    IosConfig iosConfig,
-    MacosConfig macosConfig, {
-    required KeyFormat keyFormat,
-    bool enforceBiometric = false,
+  Future<bool> biometricKeyExists(bool checkValidity) => Future.value(true);
+
+  @override
+  Future<KeyCreationResult> createKeys(
+    AndroidCreateKeysConfig? androidConfig,
+    IosCreateKeysConfig? iosConfig,
+    MacosCreateKeysConfig? macosConfig,
+    bool? useDeviceCredentials,
+    SignatureType? signatureType,
+    bool? setInvalidatedByBiometricEnrollment,
+    KeyFormat keyFormat,
+    bool enforceBiometric,
     String? promptMessage,
-  }) {
+  ) async {
     if (_shouldThrowError) throw Exception('Key creation failed');
 
-    final isEc = androidConfig.signatureType == AndroidSignatureType.ECDSA;
-    return Future.value({
-      'publicKey': 'test_public_key',
-      'publicKeyFormat': keyFormat.wireValue,
-      'algorithm': isEc ? 'EC' : 'RSA',
-      'keySize': isEc ? 256 : 2048,
-    });
+    final isEc = (signatureType ?? _signatureType) == SignatureType.ecdsa;
+    return KeyCreationResult(
+      publicKey: 'test_public_key',
+      code: BiometricError.success,
+      algorithm: isEc ? 'EC' : 'RSA',
+      keySize: isEc ? 256 : 2048,
+    );
   }
 
   @override
-  Future<Map<String, dynamic>?> createSignature(SignatureOptions options) {
+  Future<SignatureResult> createSignature(
+    String payload,
+    AndroidCreateSignatureConfig? androidConfig,
+    IosCreateSignatureConfig? iosConfig,
+    MacosCreateSignatureConfig? macosConfig,
+    SignatureFormat signatureFormat,
+    KeyFormat keyFormat,
+    String? promptMessage,
+  ) async {
     if (_shouldThrowError) throw Exception('Signing failed');
 
-    return Future.value({
-      'signature': 'test_signature',
-      'signatureFormat': options.keyFormat.wireValue,
-      'publicKey': 'test_public_key',
-      'publicKeyFormat': options.keyFormat.wireValue,
-      'algorithm': 'RSA', // Simplified for mock
-      'keySize': 2048,
-    });
+    return SignatureResult(
+      signature: 'test_signature',
+      publicKey: 'test_public_key',
+      code: BiometricError.success,
+      algorithm: 'RSA',
+      keySize: 2048,
+    );
   }
 
   @override
-  Future<bool?> deleteKeys() => Future.value(true);
+  Future<bool> deleteKeys() => Future.value(true);
 
   @override
-  Future<Map<String, dynamic>?> decrypt(DecryptionOptions options) {
+  Future<DecryptResult> decrypt(
+    String payload,
+    PayloadFormat payloadFormat,
+    AndroidDecryptConfig? androidConfig,
+    IosDecryptConfig? iosConfig,
+    MacosDecryptConfig? macosConfig,
+    String? promptMessage,
+  ) async {
     if (_shouldThrowError) throw Exception('Decryption failed');
-    return Future.value({'decryptedData': 'decrypted_${options.payload}'});
+    return DecryptResult(
+      decryptedData: 'decrypted_$payload',
+      code: BiometricError.success,
+    );
   }
 }
 
@@ -74,17 +104,39 @@ void main() {
   final BiometricSignaturePlatform initialPlatform =
       BiometricSignaturePlatform.instance;
 
-  test('$BiometricSignaturePlatform is the default instance', () {
+  test('\$BiometricSignaturePlatform is the default instance', () {
     expect(initialPlatform, isInstanceOf<BiometricSignaturePlatform>());
   });
 
-  test('biometricAuthAvailable', () async {
-    BiometricSignature biometricSignature = BiometricSignature();
-    MockBiometricSignaturePlatform fakePlatform =
-        MockBiometricSignaturePlatform();
-    BiometricSignaturePlatform.instance = fakePlatform;
+  group('biometricAuthAvailable', () {
+    test('returns availability info', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
 
-    expect(await biometricSignature.biometricAuthAvailable(), 'fingerprint');
+      final result = await biometricSignature.biometricAuthAvailable();
+      expect(result.canAuthenticate, true);
+      expect(result.hasEnrolledBiometrics, true);
+      expect(result.availableBiometrics, contains(BiometricType.fingerprint));
+    });
+
+    test('handles unavailable biometrics', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      fakePlatform.setAuthAvailableResult(BiometricAvailability(
+        canAuthenticate: false,
+        hasEnrolledBiometrics: false,
+        availableBiometrics: [BiometricType.unavailable],
+        reason: 'No biometric hardware',
+      ));
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final result = await biometricSignature.biometricAuthAvailable();
+      expect(result.canAuthenticate, false);
+      expect(result.reason, 'No biometric hardware');
+    });
   });
 
   group('createKeys', () {
@@ -95,9 +147,10 @@ void main() {
       BiometricSignaturePlatform.instance = fakePlatform;
 
       final result = await biometricSignature.createKeys();
-      expect(result?.publicKey.asString(), 'test_public_key');
-      expect(result?.algorithm, 'RSA');
-      expect(result?.keySize, 2048);
+      expect(result.publicKey, 'test_public_key');
+      expect(result.algorithm, 'RSA');
+      expect(result.keySize, 2048);
+      expect(result.code, BiometricError.success);
     });
 
     test('EC keys', () async {
@@ -107,13 +160,25 @@ void main() {
       BiometricSignaturePlatform.instance = fakePlatform;
 
       final result = await biometricSignature.createKeys(
-        androidConfig: AndroidConfig(
-          useDeviceCredentials: false,
-          signatureType: AndroidSignatureType.ECDSA,
+        signatureType: SignatureType.ecdsa,
+      );
+      expect(result.algorithm, 'EC');
+      expect(result.keySize, 256);
+    });
+
+    test('with Android config', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final result = await biometricSignature.createKeys(
+        androidConfig: AndroidCreateKeysConfig(
+          enableDecryption: true,
+          promptSubtitle: 'Test subtitle',
         ),
       );
-      expect(result?.algorithm, 'EC');
-      expect(result?.keySize, 256);
+      expect(result.code, BiometricError.success);
     });
 
     test('Error handling', () async {
@@ -135,13 +200,24 @@ void main() {
       BiometricSignaturePlatform.instance = fakePlatform;
 
       final result = await biometricSignature.createSignature(
-        SignatureOptions(
-          payload: 'test',
-          androidOptions: AndroidSignatureOptions(),
-        ),
+        payload: 'test_data',
       );
-      expect(result?.signature.asString(), 'test_signature');
-      expect(result?.publicKey.asString(), 'test_public_key');
+      expect(result.signature, 'test_signature');
+      expect(result.publicKey, 'test_public_key');
+      expect(result.code, BiometricError.success);
+    });
+
+    test('with custom prompt message', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final result = await biometricSignature.createSignature(
+        payload: 'test_data',
+        promptMessage: 'Please authenticate',
+      );
+      expect(result.code, BiometricError.success);
     });
 
     test('Error handling', () async {
@@ -152,9 +228,7 @@ void main() {
       BiometricSignaturePlatform.instance = fakePlatform;
 
       expect(
-        () => biometricSignature.createSignature(
-          SignatureOptions(payload: 'test'),
-        ),
+        () => biometricSignature.createSignature(payload: 'test'),
         throwsException,
       );
     });
@@ -186,9 +260,11 @@ void main() {
       BiometricSignaturePlatform.instance = fakePlatform;
 
       final result = await biometricSignature.decrypt(
-        DecryptionOptions(payload: 'encrypted_payload'),
+        payload: 'encrypted_payload',
+        payloadFormat: PayloadFormat.base64,
       );
-      expect(result?.decryptedData, 'decrypted_encrypted_payload');
+      expect(result.decryptedData, 'decrypted_encrypted_payload');
+      expect(result.code, BiometricError.success);
     });
 
     test('Error handling', () async {
@@ -200,7 +276,8 @@ void main() {
 
       expect(
         () => biometricSignature.decrypt(
-          DecryptionOptions(payload: 'encrypted_payload'),
+          payload: 'encrypted_payload',
+          payloadFormat: PayloadFormat.base64,
         ),
         throwsException,
       );

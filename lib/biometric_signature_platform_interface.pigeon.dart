@@ -29,11 +29,17 @@ bool _deepEquals(Object? a, Object? b) {
 }
 
 
+/// Types of biometric authentication supported by the device.
 enum BiometricType {
+  /// Face recognition (Face ID on iOS, face unlock on Android).
   face,
+  /// Fingerprint recognition (Touch ID on iOS/macOS, fingerprint on Android).
   fingerprint,
+  /// Iris scanner (Android only, rare on consumer devices).
   iris,
+  /// Multiple biometric types are available on the device.
   multiple,
+  /// No biometric hardware available or biometrics are disabled.
   unavailable,
 }
 
@@ -61,27 +67,43 @@ enum BiometricError {
   invalidInput,
 }
 
+/// The cryptographic algorithm to use for key generation.
 enum SignatureType {
+  /// RSA-2048 (Android: native, iOS/macOS: hybrid mode with Secure Enclave EC).
   rsa,
+  /// ECDSA P-256 (hardware-backed on all platforms).
   ecdsa,
 }
 
+/// Output format for public keys.
 enum KeyFormat {
+  /// Base64-encoded DER (SubjectPublicKeyInfo).
   base64,
+  /// PEM format with BEGIN/END PUBLIC KEY headers.
   pem,
+  /// Hexadecimal-encoded DER.
   hex,
+  /// Raw DER bytes (returned via `publicKeyBytes`).
   raw,
 }
 
+/// Output format for cryptographic signatures.
 enum SignatureFormat {
+  /// Base64-encoded signature bytes.
   base64,
+  /// Hexadecimal-encoded signature bytes.
   hex,
+  /// Raw signature bytes (returned via `signatureBytes`).
   raw,
 }
 
+/// Input format for encrypted payloads to decrypt.
 enum PayloadFormat {
+  /// Base64-encoded ciphertext.
   base64,
+  /// Hexadecimal-encoded ciphertext.
   hex,
+  /// Raw UTF-8 string (not recommended for binary data).
   raw,
 }
 
@@ -965,7 +987,7 @@ class BiometricSignatureApi {
   }
 
   /// Creates a signature.
-  Future<SignatureResult> createSignature(String? payload, AndroidCreateSignatureConfig? androidConfig, IosCreateSignatureConfig? iosConfig, MacosCreateSignatureConfig? macosConfig, SignatureFormat signatureFormat, KeyFormat keyFormat, String? promptMessage) async {
+  Future<SignatureResult> createSignature(String payload, AndroidCreateSignatureConfig? androidConfig, IosCreateSignatureConfig? iosConfig, MacosCreateSignatureConfig? macosConfig, SignatureFormat signatureFormat, KeyFormat keyFormat, String? promptMessage) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.createSignature$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
@@ -993,7 +1015,7 @@ class BiometricSignatureApi {
   }
 
   /// Decrypts data.
-  Future<DecryptResult> decrypt(String? payload, PayloadFormat payloadFormat, AndroidDecryptConfig? androidConfig, IosDecryptConfig? iosConfig, MacosDecryptConfig? macosConfig, String? promptMessage) async {
+  Future<DecryptResult> decrypt(String payload, PayloadFormat payloadFormat, AndroidDecryptConfig? androidConfig, IosDecryptConfig? iosConfig, MacosDecryptConfig? macosConfig, String? promptMessage) async {
     final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.decrypt$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,

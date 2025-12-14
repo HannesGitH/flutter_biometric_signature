@@ -275,7 +275,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
     }
 
     override fun createSignature(
-        payload: String?,
+        payload: String,
         androidConfig: AndroidCreateSignatureConfig?,
         iosConfig: IosCreateSignatureConfig?,
         macosConfig: MacosCreateSignatureConfig?,
@@ -289,8 +289,8 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
             callback(Result.success(SignatureResult(code = BiometricError.UNKNOWN, error = "Foreground activity required")))
             return
         }
-        if (payload.isNullOrBlank()) {
-            callback(Result.success(SignatureResult(code = BiometricError.UNKNOWN, error = "Payload is required")))
+        if (payload.isBlank()) {
+            callback(Result.success(SignatureResult(code = BiometricError.INVALID_INPUT, error = "Payload is required")))
             return
         }
 
@@ -336,7 +336,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
     }
 
     override fun decrypt(
-        payload: String?,
+        payload: String,
         payloadFormat: PayloadFormat,
         androidConfig: AndroidDecryptConfig?,
         iosConfig: IosDecryptConfig?,
@@ -349,8 +349,8 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
             callback(Result.success(DecryptResult(code = BiometricError.UNKNOWN, error = "Foreground activity required")))
             return
         }
-        if (payload.isNullOrBlank()) {
-            callback(Result.success(DecryptResult(code = BiometricError.UNKNOWN, error = "Payload is required")))
+        if (payload.isBlank()) {
+            callback(Result.success(DecryptResult(code = BiometricError.INVALID_INPUT, error = "Payload is required")))
             return
         }
 

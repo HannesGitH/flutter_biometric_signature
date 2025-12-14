@@ -15,7 +15,23 @@ import 'package:pigeon/pigeon.dart';
     macosOptions: MacosOptions(),
   ),
 )
-enum BiometricType { face, fingerprint, iris, multiple, unavailable }
+/// Types of biometric authentication supported by the device.
+enum BiometricType {
+  /// Face recognition (Face ID on iOS, face unlock on Android).
+  face,
+
+  /// Fingerprint recognition (Touch ID on iOS/macOS, fingerprint on Android).
+  fingerprint,
+
+  /// Iris scanner (Android only, rare on consumer devices).
+  iris,
+
+  /// Multiple biometric types are available on the device.
+  multiple,
+
+  /// No biometric hardware available or biometrics are disabled.
+  unavailable,
+}
 
 /// Standardized error codes for the plugin.
 enum BiometricError {
@@ -86,7 +102,14 @@ class DecryptResult {
   BiometricError? code;
 }
 
-enum SignatureType { rsa, ecdsa }
+/// The cryptographic algorithm to use for key generation.
+enum SignatureType {
+  /// RSA-2048 (Android: native, iOS/macOS: hybrid mode with Secure Enclave EC).
+  rsa,
+
+  /// ECDSA P-256 (hardware-backed on all platforms).
+  ecdsa,
+}
 
 /// Configuration for Android key creation.
 class AndroidCreateKeysConfig {
@@ -142,11 +165,44 @@ class MacosDecryptConfig {
   String? reserved;
 }
 
-enum KeyFormat { base64, pem, hex, raw }
+/// Output format for public keys.
+enum KeyFormat {
+  /// Base64-encoded DER (SubjectPublicKeyInfo).
+  base64,
 
-enum SignatureFormat { base64, hex, raw }
+  /// PEM format with BEGIN/END PUBLIC KEY headers.
+  pem,
 
-enum PayloadFormat { base64, hex, raw }
+  /// Hexadecimal-encoded DER.
+  hex,
+
+  /// Raw DER bytes (returned via `publicKeyBytes`).
+  raw,
+}
+
+/// Output format for cryptographic signatures.
+enum SignatureFormat {
+  /// Base64-encoded signature bytes.
+  base64,
+
+  /// Hexadecimal-encoded signature bytes.
+  hex,
+
+  /// Raw signature bytes (returned via `signatureBytes`).
+  raw,
+}
+
+/// Input format for encrypted payloads to decrypt.
+enum PayloadFormat {
+  /// Base64-encoded ciphertext.
+  base64,
+
+  /// Hexadecimal-encoded ciphertext.
+  hex,
+
+  /// Raw UTF-8 string (not recommended for binary data).
+  raw,
+}
 
 @HostApi()
 abstract class BiometricSignatureApi {
@@ -170,7 +226,7 @@ abstract class BiometricSignatureApi {
   /// Creates a signature.
   @async
   SignatureResult createSignature(
-    String? payload,
+    String payload,
     AndroidCreateSignatureConfig? androidConfig,
     IosCreateSignatureConfig? iosConfig,
     MacosCreateSignatureConfig? macosConfig,
@@ -182,7 +238,7 @@ abstract class BiometricSignatureApi {
   /// Decrypts data.
   @async
   DecryptResult decrypt(
-    String? payload,
+    String payload,
     PayloadFormat payloadFormat,
     AndroidDecryptConfig? androidConfig,
     IosDecryptConfig? iosConfig,

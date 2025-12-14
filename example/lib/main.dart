@@ -8,7 +8,6 @@ import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter/material.dart';
 import 'package:pointycastle/asn1/asn1_parser.dart';
 import 'package:pointycastle/asn1/primitives/asn1_bit_string.dart';
-import 'package:pointycastle/asn1/primitives/asn1_integer.dart';
 import 'package:pointycastle/asn1/primitives/asn1_sequence.dart';
 import 'package:pointycastle/export.dart' hide Padding, State;
 
@@ -439,9 +438,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                       : 'Biometrics Unavailable',
                 ),
                 subtitle: Text(
-                  availability!.availableBiometrics?.toString() ??
-                      availability!.reason ??
-                      '',
+                  availability!.availableBiometrics.toString(),
                 ),
               ),
             ),

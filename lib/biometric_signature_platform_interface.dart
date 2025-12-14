@@ -49,7 +49,7 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
 
   /// Creates a signature.
   Future<SignatureResult> createSignature(
-    String? payload,
+    String payload,
     AndroidCreateSignatureConfig? androidConfig,
     IosCreateSignatureConfig? iosConfig,
     MacosCreateSignatureConfig? macosConfig,
@@ -62,7 +62,7 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
 
   /// Decrypts data.
   Future<DecryptResult> decrypt(
-    String? payload,
+    String payload,
     PayloadFormat payloadFormat,
     AndroidDecryptConfig? androidConfig,
     IosDecryptConfig? iosConfig,
@@ -118,7 +118,7 @@ class _PigeonBiometricSignature extends BiometricSignaturePlatform {
 
   @override
   Future<SignatureResult> createSignature(
-    String? payload,
+    String payload,
     AndroidCreateSignatureConfig? androidConfig,
     IosCreateSignatureConfig? iosConfig,
     MacosCreateSignatureConfig? macosConfig,
@@ -139,7 +139,7 @@ class _PigeonBiometricSignature extends BiometricSignaturePlatform {
 
   @override
   Future<DecryptResult> decrypt(
-    String? payload,
+    String payload,
     PayloadFormat payloadFormat,
     AndroidDecryptConfig? androidConfig,
     IosDecryptConfig? iosConfig,
