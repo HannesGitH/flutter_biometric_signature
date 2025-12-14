@@ -25,17 +25,11 @@ enum BiometricError {
   /// The user canceled the operation.
   userCanceled,
 
-  /// The system canceled the operation (e.g. another app took focus).
-  systemCanceled,
-
   /// Biometric authentication is not available on this device.
   notAvailable,
 
   /// No biometrics are enrolled.
   notEnrolled,
-
-  /// The user has not set a passcode/PIN.
-  passcodeNotSet,
 
   /// The user is temporarily locked out due to too many failed attempts.
   lockedOut,
@@ -68,7 +62,6 @@ class KeyCreationResult {
   Uint8List? publicKeyBytes;
   String? error;
   BiometricError? code;
-  // Added for v8.5.0 parity (Refactored to Decrypting fields)
   String? algorithm;
   int? keySize;
   String? decryptingPublicKey;
@@ -83,7 +76,6 @@ class SignatureResult {
   String? publicKey;
   String? error;
   BiometricError? code;
-  // Added for v8.5.0 parity
   String? algorithm;
   int? keySize;
 }

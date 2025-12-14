@@ -98,26 +98,22 @@ enum class BiometricError(val raw: Int) {
   SUCCESS(0),
   /** The user canceled the operation. */
   USER_CANCELED(1),
-  /** The system canceled the operation (e.g. another app took focus). */
-  SYSTEM_CANCELED(2),
   /** Biometric authentication is not available on this device. */
-  NOT_AVAILABLE(3),
+  NOT_AVAILABLE(2),
   /** No biometrics are enrolled. */
-  NOT_ENROLLED(4),
-  /** The user has not set a passcode/PIN. */
-  PASSCODE_NOT_SET(5),
+  NOT_ENROLLED(3),
   /** The user is temporarily locked out due to too many failed attempts. */
-  LOCKED_OUT(6),
+  LOCKED_OUT(4),
   /** The user is permanently locked out until they log in with a strong method. */
-  LOCKED_OUT_PERMANENT(7),
+  LOCKED_OUT_PERMANENT(5),
   /** The requested key was not found. */
-  KEY_NOT_FOUND(8),
+  KEY_NOT_FOUND(6),
   /** The key has been invalidated (e.g. by new biometric enrollment). */
-  KEY_INVALIDATED(9),
+  KEY_INVALIDATED(7),
   /** An unknown error occurred. */
-  UNKNOWN(10),
+  UNKNOWN(8),
   /** The input payload was invalid (e.g. not valid Base64). */
-  INVALID_INPUT(11);
+  INVALID_INPUT(9);
 
   companion object {
     fun ofRaw(raw: Int): BiometricError? {

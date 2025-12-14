@@ -43,17 +43,11 @@ enum BiometricError {
   /// The user canceled the operation.
   userCanceled,
 
-  /// The system canceled the operation (e.g. another app took focus).
-  systemCanceled,
-
   /// Biometric authentication is not available on this device.
   notAvailable,
 
   /// No biometrics are enrolled.
   notEnrolled,
-
-  /// The user has not set a passcode/PIN.
-  passcodeNotSet,
 
   /// The user is temporarily locked out due to too many failed attempts.
   lockedOut,

@@ -142,26 +142,22 @@ enum BiometricError: Int {
   case success = 0
   /// The user canceled the operation.
   case userCanceled = 1
-  /// The system canceled the operation (e.g. another app took focus).
-  case systemCanceled = 2
   /// Biometric authentication is not available on this device.
-  case notAvailable = 3
+  case notAvailable = 2
   /// No biometrics are enrolled.
-  case notEnrolled = 4
-  /// The user has not set a passcode/PIN.
-  case passcodeNotSet = 5
+  case notEnrolled = 3
   /// The user is temporarily locked out due to too many failed attempts.
-  case lockedOut = 6
+  case lockedOut = 4
   /// The user is permanently locked out until they log in with a strong method.
-  case lockedOutPermanent = 7
+  case lockedOutPermanent = 5
   /// The requested key was not found.
-  case keyNotFound = 8
+  case keyNotFound = 6
   /// The key has been invalidated (e.g. by new biometric enrollment).
-  case keyInvalidated = 9
+  case keyInvalidated = 7
   /// An unknown error occurred.
-  case unknown = 10
+  case unknown = 8
   /// The input payload was invalid (e.g. not valid Base64).
-  case invalidInput = 11
+  case invalidInput = 9
 }
 
 enum SignatureType: Int {

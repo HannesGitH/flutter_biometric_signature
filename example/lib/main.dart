@@ -190,14 +190,12 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
 
   /// Encrypts payload based on current key type
   Future<String> _encryptPayload(String plaintext) async {
-    // Determine algorithm from state since KeyCreationResult doesn't carry it
     // useEc is the source of truth for what we requested.
     if (!useEc) {
       return _encryptRsa(plaintext);
     } else {
       // EC - use ECIES
-      // Note: We use Dart-based ECIES for all platforms to simplify testing without native method channels.
-      return _encryptEciesDart(plaintext);
+      return _encryptEcies(plaintext);
     }
   }
 
@@ -217,8 +215,8 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     return encrypter.encrypt(plaintext).base64;
   }
 
-  /// ECIES encryption using Dart (PointyCastle)
-  String _encryptEciesDart(String plaintext) {
+  /// ECIES encryption
+  String _encryptEcies(String plaintext) {
     // Parse recipient's public key (handling both PEM and raw Base64 if needed)
     final publicKeyStr =
         keyResult!.decryptingPublicKey ?? keyResult!.publicKey!;
@@ -449,12 +447,15 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                         value: useEc,
                         onChanged: (v) => setState(() => useEc = v),
                       ),
-                      const SizedBox(width: 20),
-                      const Text('Decrypt Support'),
-                      Switch(
-                        value: enableDecryption,
-                        onChanged: (v) => setState(() => enableDecryption = v),
-                      ),
+                      if (Platform.isAndroid) ...[
+                        const SizedBox(width: 20),
+                        const Text('Decrypt Support'),
+                        Switch(
+                          value: enableDecryption,
+                          onChanged: (v) =>
+                              setState(() => enableDecryption = v),
+                        ),
+                      ],
                     ],
                   ),
                   Row(
