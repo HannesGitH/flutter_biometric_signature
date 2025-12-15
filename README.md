@@ -11,12 +11,12 @@ Even if an attacker bypasses or hooks biometric APIs, your backend will still re
 
 - **Cryptographic Proof Of Identity:** Hardware-backed RSA (Android) or ECDSA (all platforms) signatures that your backend can independently verify.
 - **Decryption Support:** 
-  - **RSA**: RSA/ECB/PKCS1Padding (Android native, iOS/macOS via Hybrid mode)
+  - **RSA**: RSA/ECB/PKCS1Padding (Android native, iOS/macOS via wrapped software key)
   - **EC**: ECIES (`eciesEncryptionStandardX963SHA256AESGCM`)
 - **Hardware Security:** Uses Secure Enclave (iOS/macOS) and Keystore/StrongBox (Android).
 - **Hybrid Architectures:**
   - **Android Hybrid EC:** Hardware EC signing + software ECIES decryption. Software EC private key is AES-wrapped using a Keystore/StrongBox AES-256 master key that requires biometric authentication for every unwrap.
-  - **iOS/macOS Hybrid RSA:** Hardware EC signing (Secure Enclave) + software RSA decryption. RSA key is encrypted using ECIES with Secure Enclave EC public key.
+  - **iOS/macOS Hybrid RSA:** Software RSA key for **both signing and decryption**, wrapped using ECIES with Secure Enclave EC public key. Hardware EC is only used for wrapping/unwrapping.
 - **Key Invalidation:** Keys can be bound to biometric enrollment state (fingerprint/Face ID changes).
 - **Device Credentials:** Optional PIN/Pattern/Password fallback on Android.
 
@@ -49,19 +49,21 @@ Android supports three key modes:
 
 #### iOS / macOS
 
-Apple platforms support two key modes (Secure Enclave only supports EC keys):
+Apple platforms support two key modes (Secure Enclave only supports EC keys natively):
 
-1. **EC Signing-Only** (`SignatureType.ecdsa`):
+1. **EC Mode** (`SignatureType.ecdsa`):
    - Hardware-backed P-256 key in Secure Enclave
    - ECDSA signing
    - Native ECIES decryption (`eciesEncryptionStandardX963SHA256AESGCM`)
+   - Single key for both operations
 
-2. **Hybrid RSA Mode** (`SignatureType.rsa`):
-   - Hardware EC key for signing (Secure Enclave)
-   - Software RSA-2048 key for PKCS#1 decryption
+2. **RSA Mode** (`SignatureType.rsa`) - Hybrid Architecture:
+   - Software RSA-2048 key for **both signing and decryption**
    - RSA private key wrapped using ECIES with Secure Enclave EC public key
+   - Hardware EC key is **only** used for wrapping/unwrapping the RSA key
    - Wrapped RSA key stored in Keychain as `kSecClassGenericPassword`
-   - Supports both signing and decryption
+   - Per-operation biometric authentication required to unwrap RSA key
+
 
 
 ### Workflow Overview
@@ -347,10 +349,43 @@ if (availability.canAuthenticate) {
 }
 ```
 
-### `biometricKeyExists(checkValidity: bool)`
+### `getKeyInfo({ checkValidity, keyFormat })`
 
-Checks if the biometric key pair exists on the device. Optionally, it can also verify the validity of the key by attempting to initialize a signature with it. Since the key requires that user authentication takes place for every use of the key, it is also irreversibly invalidated once a new biometric is enrolled or once no more biometrics are enrolled (when `setInvalidatedByBiometricEnrollment` is `true`).
+Retrieves detailed information about existing biometric keys without prompting for authentication.
 
--   **Parameters**:
-    -   `checkValidity`: A bool indicating whether to check the validity of the key by initializing a signature. Default is `false`.
--   **Returns**: `bool` - `true` if the key pair exists (and is valid if `checkValidity` is `true`), `false` otherwise.
+- **Parameters**:
+  - `checkValidity`: Whether to verify the key hasn't been invalidated by biometric changes. Default is `false`.
+  - `keyFormat`: Output format for public keys (`KeyFormat.base64`, `pem`, `hex`). Default is `base64`.
+- **Returns**: `Future<KeyInfo>`.
+  - `exists`: Whether any biometric key exists.
+  - `isValid`: Key validity status (only populated when `checkValidity: true`).
+  - `algorithm`: `"RSA"` or `"EC"`.
+  - `keySize`: Key size in bits (e.g., 2048, 256).
+  - `isHybridMode`: Whether using hybrid signing/decryption keys.
+  - `publicKey`: The signing public key.
+  - `decryptingPublicKey`: Decryption key (hybrid mode only).
+
+```dart
+final info = await biometricSignature.getKeyInfo(
+  checkValidity: true,
+  keyFormat: KeyFormat.pem,
+);
+
+if (info.exists && (info.isValid ?? true)) {
+  print('Algorithm: ${info.algorithm}, Size: ${info.keySize}');
+  print('Hybrid Mode: ${info.isHybridMode}');
+}
+```
+
+### `biometricKeyExists({ checkValidity })`
+
+Convenience method that wraps `getKeyInfo()` and returns a simple boolean.
+
+- **Parameters**:
+  - `checkValidity`: Whether to check key validity. Default is `false`.
+- **Returns**: `Future<bool>` - `true` if key exists and is valid.
+
+```dart
+final exists = await biometricSignature.biometricKeyExists(checkValidity: true);
+```
+

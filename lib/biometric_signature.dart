@@ -20,7 +20,8 @@ export 'biometric_signature_platform_interface.dart'
         BiometricAvailability,
         KeyCreationResult,
         SignatureResult,
-        DecryptResult;
+        DecryptResult,
+        KeyInfo;
 
 /// High-level API for interacting with the Biometric Signature plugin.
 class BiometricSignature {
@@ -30,7 +31,7 @@ class BiometricSignature {
     IosCreateKeysConfig? iosConfig,
     MacosCreateKeysConfig? macosConfig,
     bool useDeviceCredentials = false,
-    SignatureType? signatureType,
+    SignatureType signatureType = SignatureType.rsa,
     bool setInvalidatedByBiometricEnrollment = false,
     KeyFormat keyFormat = KeyFormat.base64,
     bool enforceBiometric = false,
@@ -99,10 +100,22 @@ class BiometricSignature {
     return BiometricSignaturePlatform.instance.biometricAuthAvailable();
   }
 
-  /// Checks whether a hardware-backed signing key currently exists.
-  Future<bool> biometricKeyExists({bool checkValidity = false}) async {
-    return BiometricSignaturePlatform.instance.biometricKeyExists(
+  /// Gets detailed information about existing biometric keys.
+  Future<KeyInfo> getKeyInfo({
+    bool checkValidity = false,
+    KeyFormat keyFormat = KeyFormat.base64,
+  }) async {
+    return BiometricSignaturePlatform.instance.getKeyInfo(
       checkValidity,
+      keyFormat,
     );
+  }
+
+  /// Checks whether a hardware-backed signing key currently exists.
+  ///
+  /// This is a convenience wrapper around [getKeyInfo].
+  Future<bool> biometricKeyExists({bool checkValidity = false}) async {
+    final info = await getKeyInfo(checkValidity: checkValidity);
+    return info.exists && (info.isValid ?? true);
   }
 }

@@ -365,6 +365,74 @@ data class DecryptResult (
 }
 
 /**
+ * Detailed information about existing biometric keys.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class KeyInfo (
+  /** Whether any biometric key exists on the device. */
+  val exists: Boolean,
+  /**
+   * Whether the key is still valid (not invalidated by biometric changes).
+   * Only populated when `checkValidity: true` is passed.
+   */
+  val isValid: Boolean? = null,
+  /** The algorithm of the signing key (e.g., "RSA", "EC"). */
+  val algorithm: String? = null,
+  /** The key size in bits (e.g., 2048 for RSA, 256 for EC). */
+  val keySize: Long? = null,
+  /** Whether the key is in hybrid mode (separate signing and decryption keys). */
+  val isHybridMode: Boolean? = null,
+  /** Signing key public key (formatted according to the requested format). */
+  val publicKey: String? = null,
+  /** Decryption key public key for hybrid mode. */
+  val decryptingPublicKey: String? = null,
+  /** Algorithm of the decryption key (hybrid mode only). */
+  val decryptingAlgorithm: String? = null,
+  /** Key size of the decryption key in bits (hybrid mode only). */
+  val decryptingKeySize: Long? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): KeyInfo {
+      val exists = pigeonVar_list[0] as Boolean
+      val isValid = pigeonVar_list[1] as Boolean?
+      val algorithm = pigeonVar_list[2] as String?
+      val keySize = pigeonVar_list[3] as Long?
+      val isHybridMode = pigeonVar_list[4] as Boolean?
+      val publicKey = pigeonVar_list[5] as String?
+      val decryptingPublicKey = pigeonVar_list[6] as String?
+      val decryptingAlgorithm = pigeonVar_list[7] as String?
+      val decryptingKeySize = pigeonVar_list[8] as Long?
+      return KeyInfo(exists, isValid, algorithm, keySize, isHybridMode, publicKey, decryptingPublicKey, decryptingAlgorithm, decryptingKeySize)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      exists,
+      isValid,
+      algorithm,
+      keySize,
+      isHybridMode,
+      publicKey,
+      decryptingPublicKey,
+      decryptingAlgorithm,
+      decryptingKeySize,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other !is KeyInfo) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    return BiometricSignatureApiPigeonUtils.deepEquals(toList(), other.toList())  }
+
+  override fun hashCode(): Int = toList().hashCode()
+}
+
+/**
  * Configuration for Android key creation.
  *
  * Generated class from Pigeon that represents data sent in messages.
@@ -733,45 +801,50 @@ private open class BiometricSignatureApiPigeonCodec : StandardMessageCodec() {
       }
       139.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          AndroidCreateKeysConfig.fromList(it)
+          KeyInfo.fromList(it)
         }
       }
       140.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          IosCreateKeysConfig.fromList(it)
+          AndroidCreateKeysConfig.fromList(it)
         }
       }
       141.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          MacosCreateKeysConfig.fromList(it)
+          IosCreateKeysConfig.fromList(it)
         }
       }
       142.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          AndroidCreateSignatureConfig.fromList(it)
+          MacosCreateKeysConfig.fromList(it)
         }
       }
       143.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          IosCreateSignatureConfig.fromList(it)
+          AndroidCreateSignatureConfig.fromList(it)
         }
       }
       144.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          MacosCreateSignatureConfig.fromList(it)
+          IosCreateSignatureConfig.fromList(it)
         }
       }
       145.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          AndroidDecryptConfig.fromList(it)
+          MacosCreateSignatureConfig.fromList(it)
         }
       }
       146.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          IosDecryptConfig.fromList(it)
+          AndroidDecryptConfig.fromList(it)
         }
       }
       147.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          IosDecryptConfig.fromList(it)
+        }
+      }
+      148.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           MacosDecryptConfig.fromList(it)
         }
@@ -821,40 +894,44 @@ private open class BiometricSignatureApiPigeonCodec : StandardMessageCodec() {
         stream.write(138)
         writeValue(stream, value.toList())
       }
-      is AndroidCreateKeysConfig -> {
+      is KeyInfo -> {
         stream.write(139)
         writeValue(stream, value.toList())
       }
-      is IosCreateKeysConfig -> {
+      is AndroidCreateKeysConfig -> {
         stream.write(140)
         writeValue(stream, value.toList())
       }
-      is MacosCreateKeysConfig -> {
+      is IosCreateKeysConfig -> {
         stream.write(141)
         writeValue(stream, value.toList())
       }
-      is AndroidCreateSignatureConfig -> {
+      is MacosCreateKeysConfig -> {
         stream.write(142)
         writeValue(stream, value.toList())
       }
-      is IosCreateSignatureConfig -> {
+      is AndroidCreateSignatureConfig -> {
         stream.write(143)
         writeValue(stream, value.toList())
       }
-      is MacosCreateSignatureConfig -> {
+      is IosCreateSignatureConfig -> {
         stream.write(144)
         writeValue(stream, value.toList())
       }
-      is AndroidDecryptConfig -> {
+      is MacosCreateSignatureConfig -> {
         stream.write(145)
         writeValue(stream, value.toList())
       }
-      is IosDecryptConfig -> {
+      is AndroidDecryptConfig -> {
         stream.write(146)
         writeValue(stream, value.toList())
       }
-      is MacosDecryptConfig -> {
+      is IosDecryptConfig -> {
         stream.write(147)
+        writeValue(stream, value.toList())
+      }
+      is MacosDecryptConfig -> {
+        stream.write(148)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -875,8 +952,12 @@ interface BiometricSignatureApi {
   fun decrypt(payload: String, payloadFormat: PayloadFormat, androidConfig: AndroidDecryptConfig?, iosConfig: IosDecryptConfig?, macosConfig: MacosDecryptConfig?, promptMessage: String?, callback: (Result<DecryptResult>) -> Unit)
   /** Deletes keys. */
   fun deleteKeys(): Boolean
-  /** Checks if a key exists. */
-  fun biometricKeyExists(checkValidity: Boolean, callback: (Result<Boolean>) -> Unit)
+  /**
+   * Gets detailed information about existing biometric keys.
+   *
+   * Returns key metadata including algorithm, size, validity, and public keys.
+   */
+  fun getKeyInfo(checkValidity: Boolean, keyFormat: KeyFormat, callback: (Result<KeyInfo>) -> Unit)
 
   companion object {
     /** The codec used by BiometricSignatureApi. */
@@ -997,12 +1078,13 @@ interface BiometricSignatureApi {
         }
       }
       run {
-        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.biometricKeyExists$separatedMessageChannelSuffix", codec)
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.getKeyInfo$separatedMessageChannelSuffix", codec)
         if (api != null) {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
             val checkValidityArg = args[0] as Boolean
-            api.biometricKeyExists(checkValidityArg) { result: Result<Boolean> ->
+            val keyFormatArg = args[1] as KeyFormat
+            api.getKeyInfo(checkValidityArg, keyFormatArg) { result: Result<KeyInfo> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))

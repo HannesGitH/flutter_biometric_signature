@@ -233,8 +233,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
                 case .success:
                     self.performRsaSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
                 case .failure(let error):
-                    // If migration fails, returning error. Alternatively could fallback to EC signing if that was the intent,
-                    // but migration implies preservation of RSA key.
+                    // If migration fails, returning error.
                      let msg = (error as? PigeonError)?.message ?? (error as NSError).localizedDescription
                      completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Migration Error: \(msg)", code: .unknown)))
                 }
@@ -379,7 +378,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         return true
     }
 
-    func biometricKeyExists(checkValidity: Bool, completion: @escaping (Result<Bool, Error>) -> Void) {
+    func getKeyInfo(checkValidity: Bool, keyFormat: KeyFormat, completion: @escaping (Result<KeyInfo, Error>) -> Void) {
         // Check EC key existence
         let ecTag = Constants.ecKeyAlias
         let ecKeyQuery: [String: Any] = [
@@ -391,8 +390,9 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         var ecItem: CFTypeRef?
         let ecStatus = SecItemCopyMatching(ecKeyQuery as CFDictionary, &ecItem)
         let ecKeyExists = (ecStatus == errSecSuccess)
+        let ecKey = ecItem as! SecKey?
 
-        // Check if encrypted RSA key exists
+        // Check if encrypted RSA key exists (hybrid mode)
         let encryptedKeyTag = Constants.biometricKeyAlias
         let encryptedKeyQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
@@ -404,48 +404,60 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         let rsaStatus = SecItemCopyMatching(encryptedKeyQuery as CFDictionary, &rsaItem)
         let rsaKeyExists = (rsaStatus == errSecSuccess)
 
-        // For EC-only mode, only EC key needs to exist
-        if ecKeyExists && !rsaKeyExists {
-            guard checkValidity else {
-                completion(.success(true))
-                return
-            }
+        // No keys exist
+        guard ecKeyExists else {
+            completion(.success(KeyInfo(exists: false)))
+            return
+        }
 
-            // Check if invalidation was enabled for this key
+        // Determine validity
+        var isValid: Bool? = nil
+        if checkValidity {
             let shouldInvalidateOnEnrollment = InvalidationSetting.load() ?? true
-
-            // Only check domain state if invalidation is enabled
             if shouldInvalidateOnEnrollment {
-                completion(.success(!DomainState.biometryChangedOrUnknown()))
+                isValid = !DomainState.biometryChangedOrUnknown()
+            } else {
+                isValid = true
+            }
+        }
+
+        // For EC-only mode
+        if ecKeyExists && !rsaKeyExists {
+            guard let ecPublicKey = ecKey.flatMap({ SecKeyCopyPublicKey($0) }) else {
+                completion(.success(KeyInfo(exists: true, isValid: isValid, algorithm: "EC", keySize: 256, isHybridMode: false)))
                 return
             }
-
-            // If invalidation is disabled (biometryAny), key remains valid
-            completion(.success(true))
+            
+            let publicKeyStr = formatKey(ecPublicKey, format: keyFormat)
+            
+            completion(.success(KeyInfo(
+                exists: true,
+                isValid: isValid,
+                algorithm: "EC",
+                keySize: 256,
+                isHybridMode: false,
+                publicKey: publicKeyStr,
+                decryptingPublicKey: nil,
+                decryptingAlgorithm: nil,
+                decryptingKeySize: nil
+            )))
             return
         }
 
-        // Hybrid: both must exist
-        guard ecKeyExists, rsaKeyExists else {
-            completion(.success(false))
-            return
-        }
-        guard checkValidity else {
-            completion(.success(true))
-            return
-        }
-
-        // Check if invalidation was enabled for this key
-        let shouldInvalidateOnEnrollment = InvalidationSetting.load() ?? true
-
-        // Only check domain state if invalidation is enabled
-        if shouldInvalidateOnEnrollment {
-            completion(.success(!DomainState.biometryChangedOrUnknown()))
-            return
-        }
-
-        // If invalidation is disabled (biometryAny), key remains valid
-        completion(.success(true))
+        // Hybrid RSA mode: Software RSA for BOTH signing and decryption
+        // RSA key is wrapped with EC; we cannot retrieve RSA public key without auth
+        // Note: publicKey is nil because RSA key requires biometric auth to unwrap
+        completion(.success(KeyInfo(
+            exists: true,
+            isValid: isValid,
+            algorithm: "RSA",
+            keySize: 2048,
+            isHybridMode: true,
+            publicKey: nil, // RSA public key requires authentication to unwrap
+            decryptingPublicKey: nil,
+            decryptingAlgorithm: nil,
+            decryptingKeySize: nil
+        )))
     }
 
     // MARK: - Private Implementations

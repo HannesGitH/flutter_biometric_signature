@@ -34,7 +34,16 @@ class MockBiometricSignaturePlatform
   }
 
   @override
-  Future<bool> biometricKeyExists(bool checkValidity) => Future.value(true);
+  Future<KeyInfo> getKeyInfo(bool checkValidity, KeyFormat keyFormat) async {
+    return KeyInfo(
+      exists: true,
+      isValid: true,
+      algorithm: 'RSA',
+      keySize: 2048,
+      isHybridMode: false,
+      publicKey: 'test_public_key',
+    );
+  }
 
   @override
   Future<KeyCreationResult> createKeys(

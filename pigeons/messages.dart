@@ -102,6 +102,37 @@ class DecryptResult {
   BiometricError? code;
 }
 
+/// Detailed information about existing biometric keys.
+class KeyInfo {
+  /// Whether any biometric key exists on the device.
+  bool exists;
+
+  /// Whether the key is still valid (not invalidated by biometric changes).
+  /// Only populated when `checkValidity: true` is passed.
+  bool? isValid;
+
+  /// The algorithm of the signing key (e.g., "RSA", "EC").
+  String? algorithm;
+
+  /// The key size in bits (e.g., 2048 for RSA, 256 for EC).
+  int? keySize;
+
+  /// Whether the key is in hybrid mode (separate signing and decryption keys).
+  bool? isHybridMode;
+
+  /// Signing key public key (formatted according to the requested format).
+  String? publicKey;
+
+  /// Decryption key public key for hybrid mode.
+  String? decryptingPublicKey;
+
+  /// Algorithm of the decryption key (hybrid mode only).
+  String? decryptingAlgorithm;
+
+  /// Key size of the decryption key in bits (hybrid mode only).
+  int? decryptingKeySize;
+}
+
 /// The cryptographic algorithm to use for key generation.
 enum SignatureType {
   /// RSA-2048 (Android: native, iOS/macOS: hybrid mode with Secure Enclave EC).
@@ -249,7 +280,9 @@ abstract class BiometricSignatureApi {
   /// Deletes keys.
   bool deleteKeys();
 
-  /// Checks if a key exists.
+  /// Gets detailed information about existing biometric keys.
+  ///
+  /// Returns key metadata including algorithm, size, validity, and public keys.
   @async
-  bool biometricKeyExists(bool checkValidity);
+  KeyInfo getKeyInfo(bool checkValidity, KeyFormat keyFormat);
 }

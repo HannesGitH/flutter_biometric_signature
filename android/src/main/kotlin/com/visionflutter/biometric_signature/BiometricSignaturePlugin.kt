@@ -453,10 +453,82 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         return true
     }
 
-    override fun biometricKeyExists(checkValidity: Boolean, callback: (Result<Boolean>) -> Unit) {
+    override fun getKeyInfo(checkValidity: Boolean, keyFormat: KeyFormat, callback: (Result<KeyInfo>) -> Unit) {
         pluginScope.launch(Dispatchers.IO) {
-            val exists = checkKeyExistsInternal(checkValidity)
-            callback(Result.success(exists))
+            try {
+                val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
+                
+                // Check if signing key exists
+                if (!keyStore.containsAlias(BIOMETRIC_KEY_ALIAS)) {
+                    callback(Result.success(KeyInfo(exists = false)))
+                    return@launch
+                }
+                
+                val entry = keyStore.getEntry(BIOMETRIC_KEY_ALIAS, null) as? KeyStore.PrivateKeyEntry
+                if (entry == null) {
+                    callback(Result.success(KeyInfo(exists = false)))
+                    return@launch
+                }
+                
+                val publicKey = entry.certificate.publicKey
+                val mode = inferKeyModeFromKeystore()
+                
+                // Check validity if requested
+                val isValid = if (checkValidity) {
+                    runCatching {
+                        // Try to initialize signature to verify key is not invalidated
+                        val algorithm = when (mode) {
+                            KeyMode.RSA -> "SHA256withRSA"
+                            else -> "SHA256withECDSA"
+                        }
+                        val signature = java.security.Signature.getInstance(algorithm)
+                        signature.initSign(entry.privateKey)
+                        true
+                    }.getOrDefault(false)
+                } else {
+                    null
+                }
+                
+                // Get key metadata
+                val algorithm = publicKey.algorithm
+                val keySize = (publicKey as? java.security.interfaces.RSAKey)?.modulus?.bitLength()?.toLong()
+                    ?: (publicKey as? java.security.interfaces.ECKey)?.params?.order?.bitLength()?.toLong()
+                
+                // Format signing public key
+                val formattedPublicKey = formatOutput(publicKey.encoded, keyFormat)
+                
+                // Check for hybrid mode and get decryption key
+                val isHybridMode = mode == KeyMode.HYBRID_EC
+                var decryptingPublicKey: String? = null
+                var decryptingAlgorithm: String? = null
+                var decryptingKeySize: Long? = null
+                
+                if (isHybridMode) {
+                    val pubBytes = readFileIfExists(EC_PUB_FILENAME)
+                    if (pubBytes != null) {
+                        val decryptKey = KeyFactory.getInstance("EC").generatePublic(
+                            java.security.spec.X509EncodedKeySpec(pubBytes)
+                        )
+                        decryptingPublicKey = formatOutput(decryptKey.encoded, keyFormat).value
+                        decryptingAlgorithm = "EC"
+                        decryptingKeySize = 256
+                    }
+                }
+                
+                callback(Result.success(KeyInfo(
+                    exists = true,
+                    isValid = isValid,
+                    algorithm = algorithm,
+                    keySize = keySize,
+                    isHybridMode = isHybridMode,
+                    publicKey = formattedPublicKey.value,
+                    decryptingPublicKey = decryptingPublicKey,
+                    decryptingAlgorithm = decryptingAlgorithm,
+                    decryptingKeySize = decryptingKeySize
+                )))
+            } catch (e: Exception) {
+                callback(Result.success(KeyInfo(exists = false)))
+            }
         }
     }
 

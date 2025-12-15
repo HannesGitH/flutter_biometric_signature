@@ -386,6 +386,75 @@ struct DecryptResult: Hashable {
   }
 }
 
+/// Detailed information about existing biometric keys.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct KeyInfo: Hashable {
+  /// Whether any biometric key exists on the device.
+  var exists: Bool
+  /// Whether the key is still valid (not invalidated by biometric changes).
+  /// Only populated when `checkValidity: true` is passed.
+  var isValid: Bool? = nil
+  /// The algorithm of the signing key (e.g., "RSA", "EC").
+  var algorithm: String? = nil
+  /// The key size in bits (e.g., 2048 for RSA, 256 for EC).
+  var keySize: Int64? = nil
+  /// Whether the key is in hybrid mode (separate signing and decryption keys).
+  var isHybridMode: Bool? = nil
+  /// Signing key public key (formatted according to the requested format).
+  var publicKey: String? = nil
+  /// Decryption key public key for hybrid mode.
+  var decryptingPublicKey: String? = nil
+  /// Algorithm of the decryption key (hybrid mode only).
+  var decryptingAlgorithm: String? = nil
+  /// Key size of the decryption key in bits (hybrid mode only).
+  var decryptingKeySize: Int64? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> KeyInfo? {
+    let exists = pigeonVar_list[0] as! Bool
+    let isValid: Bool? = nilOrValue(pigeonVar_list[1])
+    let algorithm: String? = nilOrValue(pigeonVar_list[2])
+    let keySize: Int64? = nilOrValue(pigeonVar_list[3])
+    let isHybridMode: Bool? = nilOrValue(pigeonVar_list[4])
+    let publicKey: String? = nilOrValue(pigeonVar_list[5])
+    let decryptingPublicKey: String? = nilOrValue(pigeonVar_list[6])
+    let decryptingAlgorithm: String? = nilOrValue(pigeonVar_list[7])
+    let decryptingKeySize: Int64? = nilOrValue(pigeonVar_list[8])
+
+    return KeyInfo(
+      exists: exists,
+      isValid: isValid,
+      algorithm: algorithm,
+      keySize: keySize,
+      isHybridMode: isHybridMode,
+      publicKey: publicKey,
+      decryptingPublicKey: decryptingPublicKey,
+      decryptingAlgorithm: decryptingAlgorithm,
+      decryptingKeySize: decryptingKeySize
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      exists,
+      isValid,
+      algorithm,
+      keySize,
+      isHybridMode,
+      publicKey,
+      decryptingPublicKey,
+      decryptingAlgorithm,
+      decryptingKeySize,
+    ]
+  }
+  static func == (lhs: KeyInfo, rhs: KeyInfo) -> Bool {
+    return deepEqualsBiometricSignatureApi(lhs.toList(), rhs.toList())  }
+  func hash(into hasher: inout Hasher) {
+    deepHashBiometricSignatureApi(value: toList(), hasher: &hasher)
+  }
+}
+
 /// Configuration for Android key creation.
 ///
 /// Generated class from Pigeon that represents data sent in messages.
@@ -713,22 +782,24 @@ private class BiometricSignatureApiPigeonCodecReader: FlutterStandardReader {
     case 138:
       return DecryptResult.fromList(self.readValue() as! [Any?])
     case 139:
-      return AndroidCreateKeysConfig.fromList(self.readValue() as! [Any?])
+      return KeyInfo.fromList(self.readValue() as! [Any?])
     case 140:
-      return IosCreateKeysConfig.fromList(self.readValue() as! [Any?])
+      return AndroidCreateKeysConfig.fromList(self.readValue() as! [Any?])
     case 141:
-      return MacosCreateKeysConfig.fromList(self.readValue() as! [Any?])
+      return IosCreateKeysConfig.fromList(self.readValue() as! [Any?])
     case 142:
-      return AndroidCreateSignatureConfig.fromList(self.readValue() as! [Any?])
+      return MacosCreateKeysConfig.fromList(self.readValue() as! [Any?])
     case 143:
-      return IosCreateSignatureConfig.fromList(self.readValue() as! [Any?])
+      return AndroidCreateSignatureConfig.fromList(self.readValue() as! [Any?])
     case 144:
-      return MacosCreateSignatureConfig.fromList(self.readValue() as! [Any?])
+      return IosCreateSignatureConfig.fromList(self.readValue() as! [Any?])
     case 145:
-      return AndroidDecryptConfig.fromList(self.readValue() as! [Any?])
+      return MacosCreateSignatureConfig.fromList(self.readValue() as! [Any?])
     case 146:
-      return IosDecryptConfig.fromList(self.readValue() as! [Any?])
+      return AndroidDecryptConfig.fromList(self.readValue() as! [Any?])
     case 147:
+      return IosDecryptConfig.fromList(self.readValue() as! [Any?])
+    case 148:
       return MacosDecryptConfig.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
@@ -768,32 +839,35 @@ private class BiometricSignatureApiPigeonCodecWriter: FlutterStandardWriter {
     } else if let value = value as? DecryptResult {
       super.writeByte(138)
       super.writeValue(value.toList())
-    } else if let value = value as? AndroidCreateKeysConfig {
+    } else if let value = value as? KeyInfo {
       super.writeByte(139)
       super.writeValue(value.toList())
-    } else if let value = value as? IosCreateKeysConfig {
+    } else if let value = value as? AndroidCreateKeysConfig {
       super.writeByte(140)
       super.writeValue(value.toList())
-    } else if let value = value as? MacosCreateKeysConfig {
+    } else if let value = value as? IosCreateKeysConfig {
       super.writeByte(141)
       super.writeValue(value.toList())
-    } else if let value = value as? AndroidCreateSignatureConfig {
+    } else if let value = value as? MacosCreateKeysConfig {
       super.writeByte(142)
       super.writeValue(value.toList())
-    } else if let value = value as? IosCreateSignatureConfig {
+    } else if let value = value as? AndroidCreateSignatureConfig {
       super.writeByte(143)
       super.writeValue(value.toList())
-    } else if let value = value as? MacosCreateSignatureConfig {
+    } else if let value = value as? IosCreateSignatureConfig {
       super.writeByte(144)
       super.writeValue(value.toList())
-    } else if let value = value as? AndroidDecryptConfig {
+    } else if let value = value as? MacosCreateSignatureConfig {
       super.writeByte(145)
       super.writeValue(value.toList())
-    } else if let value = value as? IosDecryptConfig {
+    } else if let value = value as? AndroidDecryptConfig {
       super.writeByte(146)
       super.writeValue(value.toList())
-    } else if let value = value as? MacosDecryptConfig {
+    } else if let value = value as? IosDecryptConfig {
       super.writeByte(147)
+      super.writeValue(value.toList())
+    } else if let value = value as? MacosDecryptConfig {
+      super.writeByte(148)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -828,8 +902,10 @@ protocol BiometricSignatureApi {
   func decrypt(payload: String, payloadFormat: PayloadFormat, androidConfig: AndroidDecryptConfig?, iosConfig: IosDecryptConfig?, macosConfig: MacosDecryptConfig?, promptMessage: String?, completion: @escaping (Result<DecryptResult, Error>) -> Void)
   /// Deletes keys.
   func deleteKeys() throws -> Bool
-  /// Checks if a key exists.
-  func biometricKeyExists(checkValidity: Bool, completion: @escaping (Result<Bool, Error>) -> Void)
+  /// Gets detailed information about existing biometric keys.
+  ///
+  /// Returns key metadata including algorithm, size, validity, and public keys.
+  func getKeyInfo(checkValidity: Bool, keyFormat: KeyFormat, completion: @escaping (Result<KeyInfo, Error>) -> Void)
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -939,13 +1015,16 @@ class BiometricSignatureApiSetup {
     } else {
       deleteKeysChannel.setMessageHandler(nil)
     }
-    /// Checks if a key exists.
-    let biometricKeyExistsChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.biometricKeyExists\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    /// Gets detailed information about existing biometric keys.
+    ///
+    /// Returns key metadata including algorithm, size, validity, and public keys.
+    let getKeyInfoChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.getKeyInfo\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
-      biometricKeyExistsChannel.setMessageHandler { message, reply in
+      getKeyInfoChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let checkValidityArg = args[0] as! Bool
-        api.biometricKeyExists(checkValidity: checkValidityArg) { result in
+        let keyFormatArg = args[1] as! KeyFormat
+        api.getKeyInfo(checkValidity: checkValidityArg, keyFormat: keyFormatArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))
@@ -955,7 +1034,7 @@ class BiometricSignatureApiSetup {
         }
       }
     } else {
-      biometricKeyExistsChannel.setMessageHandler(nil)
+      getKeyInfoChannel.setMessageHandler(nil)
     }
   }
 }

@@ -389,6 +389,98 @@ class DecryptResult {
   int get hashCode => Object.hashAll(_toList());
 }
 
+/// Detailed information about existing biometric keys.
+class KeyInfo {
+  KeyInfo({
+    required this.exists,
+    this.isValid,
+    this.algorithm,
+    this.keySize,
+    this.isHybridMode,
+    this.publicKey,
+    this.decryptingPublicKey,
+    this.decryptingAlgorithm,
+    this.decryptingKeySize,
+  });
+
+  /// Whether any biometric key exists on the device.
+  bool exists;
+
+  /// Whether the key is still valid (not invalidated by biometric changes).
+  /// Only populated when `checkValidity: true` is passed.
+  bool? isValid;
+
+  /// The algorithm of the signing key (e.g., "RSA", "EC").
+  String? algorithm;
+
+  /// The key size in bits (e.g., 2048 for RSA, 256 for EC).
+  int? keySize;
+
+  /// Whether the key is in hybrid mode (separate signing and decryption keys).
+  bool? isHybridMode;
+
+  /// Signing key public key (formatted according to the requested format).
+  String? publicKey;
+
+  /// Decryption key public key for hybrid mode.
+  String? decryptingPublicKey;
+
+  /// Algorithm of the decryption key (hybrid mode only).
+  String? decryptingAlgorithm;
+
+  /// Key size of the decryption key in bits (hybrid mode only).
+  int? decryptingKeySize;
+
+  List<Object?> _toList() {
+    return <Object?>[
+      exists,
+      isValid,
+      algorithm,
+      keySize,
+      isHybridMode,
+      publicKey,
+      decryptingPublicKey,
+      decryptingAlgorithm,
+      decryptingKeySize,
+    ];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static KeyInfo decode(Object result) {
+    result as List<Object?>;
+    return KeyInfo(
+      exists: result[0]! as bool,
+      isValid: result[1] as bool?,
+      algorithm: result[2] as String?,
+      keySize: result[3] as int?,
+      isHybridMode: result[4] as bool?,
+      publicKey: result[5] as String?,
+      decryptingPublicKey: result[6] as String?,
+      decryptingAlgorithm: result[7] as String?,
+      decryptingKeySize: result[8] as int?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! KeyInfo || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(encode(), other.encode());
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => Object.hashAll(_toList());
+}
+
 /// Configuration for Android key creation.
 class AndroidCreateKeysConfig {
   AndroidCreateKeysConfig({
@@ -816,32 +908,35 @@ class _PigeonCodec extends StandardMessageCodec {
     } else if (value is DecryptResult) {
       buffer.putUint8(138);
       writeValue(buffer, value.encode());
-    } else if (value is AndroidCreateKeysConfig) {
+    } else if (value is KeyInfo) {
       buffer.putUint8(139);
       writeValue(buffer, value.encode());
-    } else if (value is IosCreateKeysConfig) {
+    } else if (value is AndroidCreateKeysConfig) {
       buffer.putUint8(140);
       writeValue(buffer, value.encode());
-    } else if (value is MacosCreateKeysConfig) {
+    } else if (value is IosCreateKeysConfig) {
       buffer.putUint8(141);
       writeValue(buffer, value.encode());
-    } else if (value is AndroidCreateSignatureConfig) {
+    } else if (value is MacosCreateKeysConfig) {
       buffer.putUint8(142);
       writeValue(buffer, value.encode());
-    } else if (value is IosCreateSignatureConfig) {
+    } else if (value is AndroidCreateSignatureConfig) {
       buffer.putUint8(143);
       writeValue(buffer, value.encode());
-    } else if (value is MacosCreateSignatureConfig) {
+    } else if (value is IosCreateSignatureConfig) {
       buffer.putUint8(144);
       writeValue(buffer, value.encode());
-    } else if (value is AndroidDecryptConfig) {
+    } else if (value is MacosCreateSignatureConfig) {
       buffer.putUint8(145);
       writeValue(buffer, value.encode());
-    } else if (value is IosDecryptConfig) {
+    } else if (value is AndroidDecryptConfig) {
       buffer.putUint8(146);
       writeValue(buffer, value.encode());
-    } else if (value is MacosDecryptConfig) {
+    } else if (value is IosDecryptConfig) {
       buffer.putUint8(147);
+      writeValue(buffer, value.encode());
+    } else if (value is MacosDecryptConfig) {
+      buffer.putUint8(148);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -878,22 +973,24 @@ class _PigeonCodec extends StandardMessageCodec {
       case 138:
         return DecryptResult.decode(readValue(buffer)!);
       case 139:
-        return AndroidCreateKeysConfig.decode(readValue(buffer)!);
+        return KeyInfo.decode(readValue(buffer)!);
       case 140:
-        return IosCreateKeysConfig.decode(readValue(buffer)!);
+        return AndroidCreateKeysConfig.decode(readValue(buffer)!);
       case 141:
-        return MacosCreateKeysConfig.decode(readValue(buffer)!);
+        return IosCreateKeysConfig.decode(readValue(buffer)!);
       case 142:
-        return AndroidCreateSignatureConfig.decode(readValue(buffer)!);
+        return MacosCreateKeysConfig.decode(readValue(buffer)!);
       case 143:
-        return IosCreateSignatureConfig.decode(readValue(buffer)!);
+        return AndroidCreateSignatureConfig.decode(readValue(buffer)!);
       case 144:
-        return MacosCreateSignatureConfig.decode(readValue(buffer)!);
+        return IosCreateSignatureConfig.decode(readValue(buffer)!);
       case 145:
-        return AndroidDecryptConfig.decode(readValue(buffer)!);
+        return MacosCreateSignatureConfig.decode(readValue(buffer)!);
       case 146:
-        return IosDecryptConfig.decode(readValue(buffer)!);
+        return AndroidDecryptConfig.decode(readValue(buffer)!);
       case 147:
+        return IosDecryptConfig.decode(readValue(buffer)!);
+      case 148:
         return MacosDecryptConfig.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -1117,17 +1214,19 @@ class BiometricSignatureApi {
     }
   }
 
-  /// Checks if a key exists.
-  Future<bool> biometricKeyExists(bool checkValidity) async {
+  /// Gets detailed information about existing biometric keys.
+  ///
+  /// Returns key metadata including algorithm, size, validity, and public keys.
+  Future<KeyInfo> getKeyInfo(bool checkValidity, KeyFormat keyFormat) async {
     final pigeonVar_channelName =
-        'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.biometricKeyExists$pigeonVar_messageChannelSuffix';
+        'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.getKeyInfo$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
     final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
-      <Object?>[checkValidity],
+      <Object?>[checkValidity, keyFormat],
     );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     if (pigeonVar_replyList == null) {
@@ -1144,7 +1243,7 @@ class BiometricSignatureApi {
         message: 'Host platform returned null value for non-null return value.',
       );
     } else {
-      return (pigeonVar_replyList[0] as bool?)!;
+      return (pigeonVar_replyList[0] as KeyInfo?)!;
     }
   }
 }

@@ -46,7 +46,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
   KeyFormat _publicKeyFormat = KeyFormat.pem;
   KeyFormat _signatureKeyFormat = KeyFormat.base64;
   SignatureFormat _signatureFormat = SignatureFormat.base64;
-  bool? _keyExists;
+  KeyInfo? _keyInfo;
   bool _checkKeyValidity = false;
 
   // Results
@@ -191,11 +191,14 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
 
   Future<void> _checkKeyExists() async {
     try {
-      final exists = await _biometricSignature.biometricKeyExists(
+      final info = await _biometricSignature.getKeyInfo(
         checkValidity: _checkKeyValidity,
+        keyFormat: _publicKeyFormat,
       );
-      setState(() => _keyExists = exists);
-      _showSnack('Key exists: $exists');
+      setState(() => _keyInfo = info);
+      _showSnack(
+        'Key exists: ${info.exists}${info.isValid != null ? ', valid: ${info.isValid}' : ''}',
+      );
     } catch (e) {
       setState(() => errorMessage = e.toString());
     }
@@ -556,7 +559,13 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const Text(
+                    'Key Info (getKeyInfo)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -567,25 +576,74 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                       ),
                     ],
                   ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: _checkKeyExists,
-                          child: const Text('Check Key Exists'),
+                  OutlinedButton.icon(
+                    onPressed: _checkKeyExists,
+                    icon: const Icon(Icons.vpn_key),
+                    label: const Text('Get Key Info'),
+                  ),
+                  if (_keyInfo != null) ...[
+                    const Divider(),
+                    _buildKeyInfoRow(
+                      'Exists',
+                      _keyInfo!.exists ? 'Yes ✓' : 'No',
+                    ),
+                    if (_keyInfo!.isValid != null)
+                      _buildKeyInfoRow(
+                        'Valid',
+                        _keyInfo!.isValid! ? 'Yes ✓' : 'No ✗',
+                      ),
+                    if (_keyInfo!.algorithm != null)
+                      _buildKeyInfoRow('Algorithm', _keyInfo!.algorithm!),
+                    if (_keyInfo!.keySize != null)
+                      _buildKeyInfoRow('Key Size', '${_keyInfo!.keySize} bits'),
+                    if (_keyInfo!.isHybridMode != null)
+                      _buildKeyInfoRow(
+                        'Hybrid Mode',
+                        _keyInfo!.isHybridMode! ? 'Yes' : 'No',
+                      ),
+                    if (_keyInfo!.publicKey != null) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Public Key:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
                         ),
                       ),
-                      if (_keyExists != null) ...[
-                        const SizedBox(width: 10),
-                        Chip(
-                          label: Text(_keyExists! ? 'Yes' : 'No'),
-                          backgroundColor: _keyExists!
-                              ? Colors.green.shade100
-                              : Colors.grey.shade200,
+                      const SizedBox(height: 4),
+                      SelectableText(
+                        _keyInfo!.publicKey!,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontFamily: 'monospace',
                         ),
-                      ],
+                      ),
                     ],
-                  ),
+                    if (_keyInfo!.decryptingPublicKey != null) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Decrypting Key:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      Text(
+                        '${_keyInfo!.decryptingAlgorithm} / ${_keyInfo!.decryptingKeySize} bits',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      SelectableText(
+                        _keyInfo!.decryptingPublicKey!,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ],
                 ],
               ),
             ),
@@ -692,6 +750,22 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildKeyInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+        ],
       ),
     );
   }

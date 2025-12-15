@@ -77,9 +77,9 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
     throw UnimplementedError('deleteKeys() has not been implemented.');
   }
 
-  /// Checks if a key exists.
-  Future<bool> biometricKeyExists(bool checkValidity) {
-    throw UnimplementedError('biometricKeyExists() has not been implemented.');
+  /// Gets detailed information about existing biometric keys.
+  Future<KeyInfo> getKeyInfo(bool checkValidity, KeyFormat keyFormat) {
+    throw UnimplementedError('getKeyInfo() has not been implemented.');
   }
 }
 
@@ -162,7 +162,7 @@ class _PigeonBiometricSignature extends BiometricSignaturePlatform {
   }
 
   @override
-  Future<bool> biometricKeyExists(bool checkValidity) {
-    return _api.biometricKeyExists(checkValidity);
+  Future<KeyInfo> getKeyInfo(bool checkValidity, KeyFormat keyFormat) {
+    return _api.getKeyInfo(checkValidity, keyFormat);
   }
 }
