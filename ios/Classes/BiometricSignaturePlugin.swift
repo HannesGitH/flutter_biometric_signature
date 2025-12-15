@@ -208,7 +208,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     }
 
     func createSignature(
-        payload: String?,
+        payload: String,
         androidConfig: AndroidCreateSignatureConfig?,
         iosConfig: IosCreateSignatureConfig?,
         macosConfig: MacosCreateSignatureConfig?,
@@ -217,7 +217,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         promptMessage: String?,
         completion: @escaping (Result<SignatureResult, Error>) -> Void
     ) {
-        guard let payload = payload, let dataToSign = payload.data(using: .utf8) else {
+        guard let dataToSign = payload.data(using: .utf8) else {
              completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Invalid payload", code: .invalidInput)))
              return
         }
@@ -341,7 +341,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     }
 
     func decrypt(
-        payload: String?,
+        payload: String,
         payloadFormat: PayloadFormat,
         androidConfig: AndroidDecryptConfig?,
         iosConfig: IosDecryptConfig?,
@@ -349,10 +349,6 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         promptMessage: String?,
         completion: @escaping (Result<DecryptResult, Error>) -> Void
     ) {
-        guard let payload = payload else {
-             completion(.success(DecryptResult(decryptedData: nil, error: "Payload is required", code: .invalidInput)))
-             return
-        }
         let prompt = promptMessage ?? "Authenticate"
         let shouldMigrate = iosConfig?.shouldMigrate ?? false
         
