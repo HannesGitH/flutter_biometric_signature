@@ -1,4 +1,4 @@
-## [9.0.0] - 2025-12-15
+## [9.0.0] - 2025-12-16
 
 ### Architecture - Type-safe Communication with Pigeon
 * **Breaking**: Migrated entire platform communication layer to [Pigeon](https://pub.dev/packages/pigeon).
