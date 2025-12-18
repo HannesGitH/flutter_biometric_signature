@@ -16,13 +16,12 @@ class SignatureService {
   Future<String> initializeKeys() async {
     try {
       final keyResult = await _biometric.createKeys(
-        androidConfig: AndroidCreateKeysConfig(),
-        iosConfig: IosCreateKeysConfig(),
-        macosConfig: MacosCreateKeysConfig(),
-        useDeviceCredentials: false,
-        signatureType: SignatureType.rsa,
         keyFormat: KeyFormat.base64,
-        enforceBiometric: true,
+        config: CreateKeysConfig(
+          useDeviceCredentials: false,
+          signatureType: SignatureType.rsa,
+          enforceBiometric: true,
+        ),
       );
 
       final publicKey = keyResult.publicKey;
@@ -77,7 +76,7 @@ class SignatureService {
     try {
       // Get biometric availability
       final availability = await _biometric.biometricAuthAvailable();
-      if (!availability.canAuthenticate) {
+      if (!(availability.canAuthenticate ?? false)) {
         throw Exception('Biometric authentication not available');
       }
 
@@ -100,14 +99,13 @@ class SignatureService {
       final signatureResult = await _biometric.createSignature(
         payload: payload,
         promptMessage: 'Sign "${document.title}"',
-        androidConfig: AndroidCreateSignatureConfig(
-          cancelButtonText: 'Cancel',
-          allowDeviceCredentials: false,
-        ),
-        iosConfig: IosCreateSignatureConfig(shouldMigrate: false),
-        macosConfig: MacosCreateSignatureConfig(),
         signatureFormat: SignatureFormat.base64,
         keyFormat: KeyFormat.base64,
+        config: CreateSignatureConfig(
+          cancelButtonText: 'Cancel',
+          allowDeviceCredentials: false,
+          shouldMigrate: false,
+        ),
       );
 
       final signatureValue = signatureResult.signature;
@@ -124,7 +122,7 @@ class SignatureService {
       }
 
       // Format biometric type string
-      final biometricType = availability.availableBiometrics
+      final biometricType = (availability.availableBiometrics ?? [])
           .map((b) => b?.name ?? '')
           .where((s) => s.isNotEmpty)
           .join(',');
@@ -174,7 +172,7 @@ class SignatureService {
   Future<bool> isBiometricAvailable() async {
     try {
       final result = await _biometric.biometricAuthAvailable();
-      return result.canAuthenticate;
+      return result.canAuthenticate ?? false;
     } catch (e) {
       return false;
     }

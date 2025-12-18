@@ -127,14 +127,8 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
     }
 
     override fun createKeys(
-        androidConfig: AndroidCreateKeysConfig?,
-        iosConfig: IosCreateKeysConfig?,
-        macosConfig: MacosCreateKeysConfig?,
-        useDeviceCredentials: Boolean?,
-        signatureType: SignatureType?,
-        setInvalidatedByBiometricEnrollment: Boolean?,
+        config: CreateKeysConfig?,
         keyFormat: KeyFormat,
-        enforceBiometric: Boolean,
         promptMessage: String?,
         callback: (Result<KeyCreationResult>) -> Unit
     ) {
@@ -146,10 +140,12 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
 
         pluginScope.launch {
             try {
-                val useDeviceCredentials = useDeviceCredentials ?: false
-                val enableDecryption = androidConfig?.enableDecryption ?: false
-                val invalidateOnEnrollment = setInvalidatedByBiometricEnrollment ?: true
-                val signatureType = signatureType ?: SignatureType.RSA
+                // Extract config values with defaults
+                val useDeviceCredentials = config?.useDeviceCredentials ?: false
+                val enableDecryption = config?.enableDecryption ?: false
+                val invalidateOnEnrollment = config?.setInvalidatedByBiometricEnrollment ?: true
+                val signatureType = config?.signatureType ?: SignatureType.RSA
+                val enforceBiometric = config?.enforceBiometric ?: false
 
                 val mode = when(signatureType) {
                     SignatureType.RSA -> KeyMode.RSA
@@ -276,9 +272,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
 
     override fun createSignature(
         payload: String,
-        androidConfig: AndroidCreateSignatureConfig?,
-        iosConfig: IosCreateSignatureConfig?,
-        macosConfig: MacosCreateSignatureConfig?,
+        config: CreateSignatureConfig?,
         signatureFormat: SignatureFormat,
         keyFormat: KeyFormat,
         promptMessage: String?,
@@ -298,7 +292,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
             try {
                 val mode = inferKeyModeFromKeystore() ?: throw SecurityException("Signing key not found")
 
-                val allowDeviceCredentials = androidConfig?.allowDeviceCredentials ?: false
+                val allowDeviceCredentials = config?.allowDeviceCredentials ?: false
 
                 val (signature, cryptoObject) = withContext(Dispatchers.IO) {
                     prepareSignature(mode)
@@ -309,8 +303,8 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                 val authResult = authenticate(
                     act,
                     promptMessage ?: "Authenticate",
-                    androidConfig?.promptSubtitle,
-                    androidConfig?.cancelButtonText ?: "Cancel",
+                    config?.promptSubtitle,
+                    config?.cancelButtonText ?: "Cancel",
                     allowDeviceCredentials,
                     cryptoObject
                 )
@@ -338,9 +332,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
     override fun decrypt(
         payload: String,
         payloadFormat: PayloadFormat,
-        androidConfig: AndroidDecryptConfig?,
-        iosConfig: IosDecryptConfig?,
-        macosConfig: MacosDecryptConfig?,
+        config: DecryptConfig?,
         promptMessage: String?,
         callback: (Result<DecryptResult>) -> Unit
     ) {
@@ -363,10 +355,10 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                     throw SecurityException("Decryption not enabled for EC signing-only mode")
                 }
 
-                val allowDeviceCredentials = androidConfig?.allowDeviceCredentials ?: false
+                val allowDeviceCredentials = config?.allowDeviceCredentials ?: false
                 val prompt = promptMessage ?: "Authenticate"
-                val subtitle = androidConfig?.promptSubtitle
-                val cancel = androidConfig?.cancelButtonText ?: "Cancel"
+                val subtitle = config?.promptSubtitle
+                val cancel = config?.cancelButtonText ?: "Cancel"
 
                 val decryptedData = when (mode) {
                     KeyMode.RSA -> decryptRsa(act, payload, payloadFormat, prompt, subtitle, cancel, allowDeviceCredentials)

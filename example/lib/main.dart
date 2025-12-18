@@ -78,16 +78,14 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     try {
       final result = await _biometricSignature.createKeys(
         keyFormat: _publicKeyFormat,
-        useDeviceCredentials: false,
-        signatureType: useEc ? SignatureType.ecdsa : SignatureType.rsa,
-        setInvalidatedByBiometricEnrollment: true,
-        enforceBiometric: true,
         promptMessage: 'Authenticate to create keys',
-        androidConfig: AndroidCreateKeysConfig(
+        config: CreateKeysConfig(
+          useDeviceCredentials: false,
+          signatureType: useEc ? SignatureType.ecdsa : SignatureType.rsa,
+          setInvalidatedByBiometricEnrollment: true,
+          enforceBiometric: true,
           enableDecryption: enableDecryption,
         ),
-        iosConfig: IosCreateKeysConfig(),
-        macosConfig: MacosCreateKeysConfig(),
       );
 
       if (result.code == BiometricError.success) {
@@ -119,12 +117,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
         signatureFormat: _signatureFormat,
         keyFormat: _signatureKeyFormat,
         promptMessage: 'Sign Data',
-        androidConfig: AndroidCreateSignatureConfig(
-          allowDeviceCredentials: false,
-        ),
-        iosConfig:
-            IosCreateSignatureConfig(), // shouldMigrate defaults to false/null
-        macosConfig: MacosCreateSignatureConfig(),
+        config: CreateSignatureConfig(allowDeviceCredentials: false),
       );
 
       if (result.code == BiometricError.success) {
@@ -162,9 +155,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
         payload: encryptedBase64,
         payloadFormat: PayloadFormat.base64,
         promptMessage: 'Decrypt Payload',
-        androidConfig: AndroidDecryptConfig(allowDeviceCredentials: false),
-        iosConfig: IosDecryptConfig(),
-        macosConfig: MacosDecryptConfig(),
+        config: DecryptConfig(allowDeviceCredentials: false),
       );
 
       // Only show overlay if we need to do extra processing after auth.

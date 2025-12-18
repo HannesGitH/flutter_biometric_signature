@@ -47,19 +47,14 @@ class MockBiometricSignaturePlatform
 
   @override
   Future<KeyCreationResult> createKeys(
-    AndroidCreateKeysConfig? androidConfig,
-    IosCreateKeysConfig? iosConfig,
-    MacosCreateKeysConfig? macosConfig,
-    bool? useDeviceCredentials,
-    SignatureType? signatureType,
-    bool? setInvalidatedByBiometricEnrollment,
+    CreateKeysConfig? config,
     KeyFormat keyFormat,
-    bool enforceBiometric,
     String? promptMessage,
   ) async {
     if (_shouldThrowError) throw Exception('Key creation failed');
 
-    final isEc = (signatureType ?? _signatureType) == SignatureType.ecdsa;
+    final isEc =
+        (config?.signatureType ?? _signatureType) == SignatureType.ecdsa;
     return KeyCreationResult(
       publicKey: 'test_public_key',
       code: BiometricError.success,
@@ -71,9 +66,7 @@ class MockBiometricSignaturePlatform
   @override
   Future<SignatureResult> createSignature(
     String payload,
-    AndroidCreateSignatureConfig? androidConfig,
-    IosCreateSignatureConfig? iosConfig,
-    MacosCreateSignatureConfig? macosConfig,
+    CreateSignatureConfig? config,
     SignatureFormat signatureFormat,
     KeyFormat keyFormat,
     String? promptMessage,
@@ -96,9 +89,7 @@ class MockBiometricSignaturePlatform
   Future<DecryptResult> decrypt(
     String payload,
     PayloadFormat payloadFormat,
-    AndroidDecryptConfig? androidConfig,
-    IosDecryptConfig? iosConfig,
-    MacosDecryptConfig? macosConfig,
+    DecryptConfig? config,
     String? promptMessage,
   ) async {
     if (_shouldThrowError) throw Exception('Decryption failed');
@@ -171,22 +162,24 @@ void main() {
       BiometricSignaturePlatform.instance = fakePlatform;
 
       final result = await biometricSignature.createKeys(
-        signatureType: SignatureType.ecdsa,
+        config: CreateKeysConfig(signatureType: SignatureType.ecdsa),
       );
       expect(result.algorithm, 'EC');
       expect(result.keySize, 256);
     });
 
-    test('with Android config', () async {
+    test('with config options', () async {
       BiometricSignature biometricSignature = BiometricSignature();
       MockBiometricSignaturePlatform fakePlatform =
           MockBiometricSignaturePlatform();
       BiometricSignaturePlatform.instance = fakePlatform;
 
       final result = await biometricSignature.createKeys(
-        androidConfig: AndroidCreateKeysConfig(
+        config: CreateKeysConfig(
           enableDecryption: true,
           promptSubtitle: 'Test subtitle',
+          enforceBiometric: true,
+          setInvalidatedByBiometricEnrollment: true,
         ),
       );
       expect(result.code, BiometricError.success);
@@ -227,6 +220,7 @@ void main() {
       final result = await biometricSignature.createSignature(
         payload: 'test_data',
         promptMessage: 'Please authenticate',
+        config: CreateSignatureConfig(allowDeviceCredentials: false),
       );
       expect(result.code, BiometricError.success);
     });
@@ -275,6 +269,20 @@ void main() {
         payloadFormat: PayloadFormat.base64,
       );
       expect(result.decryptedData, 'decrypted_encrypted_payload');
+      expect(result.code, BiometricError.success);
+    });
+
+    test('with config options', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final result = await biometricSignature.decrypt(
+        payload: 'encrypted_payload',
+        payloadFormat: PayloadFormat.base64,
+        config: DecryptConfig(allowDeviceCredentials: false),
+      );
       expect(result.code, BiometricError.success);
     });
 

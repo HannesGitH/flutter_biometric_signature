@@ -45,14 +45,8 @@ class BiometricSignatureWindows extends BiometricSignaturePlatform {
 
   @override
   Future<KeyCreationResult> createKeys(
-    AndroidCreateKeysConfig? androidConfig,
-    IosCreateKeysConfig? iosConfig,
-    MacosCreateKeysConfig? macosConfig,
-    bool? useDeviceCredentials,
-    SignatureType? signatureType,
-    bool? setInvalidatedByBiometricEnrollment,
+    CreateKeysConfig? config,
     KeyFormat keyFormat,
-    bool enforceBiometric,
     String? promptMessage,
   ) async {
     final result = await _channel.invokeMethod<Map<Object?, Object?>>(
@@ -78,9 +72,7 @@ class BiometricSignatureWindows extends BiometricSignaturePlatform {
   @override
   Future<SignatureResult> createSignature(
     String payload,
-    AndroidCreateSignatureConfig? androidConfig,
-    IosCreateSignatureConfig? iosConfig,
-    MacosCreateSignatureConfig? macosConfig,
+    CreateSignatureConfig? config,
     SignatureFormat signatureFormat,
     KeyFormat keyFormat,
     String? promptMessage,
@@ -139,9 +131,7 @@ class BiometricSignatureWindows extends BiometricSignaturePlatform {
   Future<DecryptResult> decrypt(
     String payload,
     PayloadFormat payloadFormat,
-    AndroidDecryptConfig? androidConfig,
-    IosDecryptConfig? iosConfig,
-    MacosDecryptConfig? macosConfig,
+    DecryptConfig? config,
     String? promptMessage,
   ) async {
     // Windows Hello doesn't support decryption

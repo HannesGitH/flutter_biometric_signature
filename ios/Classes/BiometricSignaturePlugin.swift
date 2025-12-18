@@ -158,20 +158,16 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     }
 
     func createKeys(
-        androidConfig: AndroidCreateKeysConfig?,
-        iosConfig: IosCreateKeysConfig?,
-        macosConfig: MacosCreateKeysConfig?,
-        useDeviceCredentials: Bool?,
-        signatureType: SignatureType?,
-        setInvalidatedByBiometricEnrollment: Bool?,
+        config: CreateKeysConfig?,
         keyFormat: KeyFormat,
-        enforceBiometric: Bool,
         promptMessage: String?,
         completion: @escaping (Result<KeyCreationResult, Error>) -> Void
     ) {
-        let useDeviceCredentials = useDeviceCredentials ?? false
-        let biometryCurrentSet = setInvalidatedByBiometricEnrollment ?? false
-        let signatureType = signatureType ?? .rsa
+        // Extract config values with defaults
+        let useDeviceCredentials = config?.useDeviceCredentials ?? false
+        let biometryCurrentSet = config?.setInvalidatedByBiometricEnrollment ?? false
+        let signatureType = config?.signatureType ?? .rsa
+        let enforceBiometric = config?.enforceBiometric ?? false
         let prompt = promptMessage ?? "Authenticate to create keys"
         
         // Always delete existing keys first
@@ -209,9 +205,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
 
     func createSignature(
         payload: String,
-        androidConfig: AndroidCreateSignatureConfig?,
-        iosConfig: IosCreateSignatureConfig?,
-        macosConfig: MacosCreateSignatureConfig?,
+        config: CreateSignatureConfig?,
         signatureFormat: SignatureFormat,
         keyFormat: KeyFormat,
         promptMessage: String?,
@@ -223,7 +217,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         }
         
         let prompt = promptMessage ?? "Authenticate"
-        let shouldMigrate = iosConfig?.shouldMigrate ?? false
+        let shouldMigrate = config?.shouldMigrate ?? false
 
         if hasRsaKey() {
              performRsaSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
@@ -343,14 +337,12 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     func decrypt(
         payload: String,
         payloadFormat: PayloadFormat,
-        androidConfig: AndroidDecryptConfig?,
-        iosConfig: IosDecryptConfig?,
-        macosConfig: MacosDecryptConfig?,
+        config: DecryptConfig?,
         promptMessage: String?,
         completion: @escaping (Result<DecryptResult, Error>) -> Void
     ) {
         let prompt = promptMessage ?? "Authenticate"
-        let shouldMigrate = iosConfig?.shouldMigrate ?? false
+        let shouldMigrate = config?.shouldMigrate ?? false
         
         if hasRsaKey() {
              performRsaDecryption(payload: payload, payloadFormat: payloadFormat, prompt: prompt, completion: completion)

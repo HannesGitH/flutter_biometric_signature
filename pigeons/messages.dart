@@ -11,7 +11,7 @@ import 'package:pigeon/pigeon.dart';
     ),
     swiftOut: 'ios/Classes/BiometricSignatureApi.swift',
     swiftOptions: SwiftOptions(),
-    cppOut: 'windows/messages.g.cpp',
+    cppSourceOut: 'windows/messages.g.cpp',
     cppHeaderOut: 'windows/messages.g.h',
     cppOptions: CppOptions(namespace: 'biometric_signature'),
   ),
@@ -143,58 +143,97 @@ enum SignatureType {
   ecdsa,
 }
 
-/// Configuration for Android key creation.
-class AndroidCreateKeysConfig {
+/// Configuration for key creation (all platforms).
+///
+/// Fields are documented with which platform(s) they apply to.
+/// Windows ignores most fields as it only supports RSA with mandatory
+/// Windows Hello authentication.
+class CreateKeysConfig {
+  // === Cross-platform options (availability varies by platform) ===
+
+  /// [Android/iOS/macOS] The cryptographic algorithm to use.
+  /// Windows only supports RSA and ignores this field.
+  SignatureType? signatureType;
+
+  /// [Android/iOS/macOS] Whether to require biometric authentication
+  /// during key creation. Windows always authenticates via Windows Hello.
+  bool? enforceBiometric;
+
+  /// [Android/iOS/macOS] Whether to invalidate the key when new biometrics
+  /// are enrolled. Not supported on Windows.
+  ///
+  /// **Security Note**: When `true`, keys become invalid if fingerprints/faces
+  /// are added or removed, preventing unauthorized access if an attacker
+  /// enrolls their own biometrics on a compromised device.
+  bool? setInvalidatedByBiometricEnrollment;
+
+  /// [Android/iOS/macOS] Whether to allow device credentials (PIN/pattern/passcode)
+  /// as fallback for biometric authentication. Not supported on Windows.
+  bool? useDeviceCredentials;
+
+  /// [Android] Whether to enable decryption capability for the key.
+  /// On iOS/macOS, decryption is always available with EC keys.
   bool? enableDecryption;
+
+  // === Android prompt customization ===
+
+  /// [Android] Subtitle text for the biometric prompt.
   String? promptSubtitle;
+
+  /// [Android] Description text for the biometric prompt.
   String? promptDescription;
+
+  /// [Android] Text for the cancel button in the biometric prompt.
   String? cancelButtonText;
 }
 
-/// Configuration for iOS key creation.
-class IosCreateKeysConfig {
-  String? reserved;
-}
+/// Configuration for signature creation (all platforms).
+///
+/// Fields are documented with which platform(s) they apply to.
+class CreateSignatureConfig {
+  // === Android prompt customization ===
 
-/// Configuration for macOS key creation.
-class MacosCreateKeysConfig {
-  String? reserved;
-}
-
-/// Configuration for Android signature creation.
-class AndroidCreateSignatureConfig {
+  /// [Android] Subtitle text for the biometric prompt.
   String? promptSubtitle;
+
+  /// [Android] Description text for the biometric prompt.
   String? promptDescription;
+
+  /// [Android] Text for the cancel button in the biometric prompt.
   String? cancelButtonText;
+
+  /// [Android] Whether to allow device credentials (PIN/pattern) as fallback.
   bool? allowDeviceCredentials;
-}
 
-/// Configuration for iOS signature creation.
-class IosCreateSignatureConfig {
+  // === iOS options ===
+
+  /// [iOS] Whether to migrate from legacy keychain storage.
   bool? shouldMigrate;
 }
 
-/// Configuration for macOS signature creation.
-class MacosCreateSignatureConfig {
-  String? reserved;
-}
+/// Configuration for decryption (all platforms).
+///
+/// Fields are documented with which platform(s) they apply to.
+/// Note: Decryption is not supported on Windows.
+class DecryptConfig {
+  // === Android prompt customization ===
 
-/// Configuration for Android decryption.
-class AndroidDecryptConfig {
+  /// [Android] Subtitle text for the biometric prompt.
   String? promptSubtitle;
+
+  /// [Android] Description text for the biometric prompt.
   String? promptDescription;
+
+  /// [Android] Text for the cancel button in the biometric prompt.
   String? cancelButtonText;
+
+  /// [Android] Whether to allow device credentials (PIN/pattern) as fallback.
   bool? allowDeviceCredentials;
-}
 
-/// Configuration for iOS decryption.
-class IosDecryptConfig {
+  // === iOS options ===
+
+  /// [iOS] Whether to migrate from legacy keychain storage.
   bool? shouldMigrate;
-}
-
-/// Configuration for macOS decryption.
-class MacosDecryptConfig {
-  String? reserved;
 }
 
 /// Output format for public keys.
@@ -242,39 +281,45 @@ abstract class BiometricSignatureApi {
   BiometricAvailability biometricAuthAvailable();
 
   /// Creates a new key pair.
+  ///
+  /// [config] contains platform-specific options. See [CreateKeysConfig].
+  /// [keyFormat] specifies the output format for the public key.
+  /// [promptMessage] is the message shown to the user during authentication.
   @async
   KeyCreationResult createKeys(
-    AndroidCreateKeysConfig? androidConfig,
-    IosCreateKeysConfig? iosConfig,
-    MacosCreateKeysConfig? macosConfig,
-    bool? useDeviceCredentials,
-    SignatureType? signatureType,
-    bool? setInvalidatedByBiometricEnrollment,
+    CreateKeysConfig? config,
     KeyFormat keyFormat,
-    bool enforceBiometric,
     String? promptMessage,
   );
 
   /// Creates a signature.
+  ///
+  /// [payload] is the data to sign.
+  /// [config] contains platform-specific options. See [CreateSignatureConfig].
+  /// [signatureFormat] specifies the output format for the signature.
+  /// [keyFormat] specifies the output format for the public key.
+  /// [promptMessage] is the message shown to the user during authentication.
   @async
   SignatureResult createSignature(
     String payload,
-    AndroidCreateSignatureConfig? androidConfig,
-    IosCreateSignatureConfig? iosConfig,
-    MacosCreateSignatureConfig? macosConfig,
+    CreateSignatureConfig? config,
     SignatureFormat signatureFormat,
     KeyFormat keyFormat,
     String? promptMessage,
   );
 
   /// Decrypts data.
+  ///
+  /// Note: Not supported on Windows.
+  /// [payload] is the encrypted data.
+  /// [payloadFormat] specifies the format of the encrypted data.
+  /// [config] contains platform-specific options. See [DecryptConfig].
+  /// [promptMessage] is the message shown to the user during authentication.
   @async
   DecryptResult decrypt(
     String payload,
     PayloadFormat payloadFormat,
-    AndroidDecryptConfig? androidConfig,
-    IosDecryptConfig? iosConfig,
-    MacosDecryptConfig? macosConfig,
+    DecryptConfig? config,
     String? promptMessage,
   );
 

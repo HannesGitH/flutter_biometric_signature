@@ -34,14 +34,8 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
 
   /// Creates a new key pair.
   Future<KeyCreationResult> createKeys(
-    AndroidCreateKeysConfig? androidConfig,
-    IosCreateKeysConfig? iosConfig,
-    MacosCreateKeysConfig? macosConfig,
-    bool? useDeviceCredentials,
-    SignatureType? signatureType,
-    bool? setInvalidatedByBiometricEnrollment,
+    CreateKeysConfig? config,
     KeyFormat keyFormat,
-    bool enforceBiometric,
     String? promptMessage,
   ) {
     throw UnimplementedError('createKeys() has not been implemented.');
@@ -50,9 +44,7 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
   /// Creates a signature.
   Future<SignatureResult> createSignature(
     String payload,
-    AndroidCreateSignatureConfig? androidConfig,
-    IosCreateSignatureConfig? iosConfig,
-    MacosCreateSignatureConfig? macosConfig,
+    CreateSignatureConfig? config,
     SignatureFormat signatureFormat,
     KeyFormat keyFormat,
     String? promptMessage,
@@ -64,9 +56,7 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
   Future<DecryptResult> decrypt(
     String payload,
     PayloadFormat payloadFormat,
-    AndroidDecryptConfig? androidConfig,
-    IosDecryptConfig? iosConfig,
-    MacosDecryptConfig? macosConfig,
+    DecryptConfig? config,
     String? promptMessage,
   ) {
     throw UnimplementedError('decrypt() has not been implemented.');
@@ -93,44 +83,24 @@ class _PigeonBiometricSignature extends BiometricSignaturePlatform {
 
   @override
   Future<KeyCreationResult> createKeys(
-    AndroidCreateKeysConfig? androidConfig,
-    IosCreateKeysConfig? iosConfig,
-    MacosCreateKeysConfig? macosConfig,
-    bool? useDeviceCredentials,
-    SignatureType? signatureType,
-    bool? setInvalidatedByBiometricEnrollment,
+    CreateKeysConfig? config,
     KeyFormat keyFormat,
-    bool enforceBiometric,
     String? promptMessage,
   ) {
-    return _api.createKeys(
-      androidConfig,
-      iosConfig,
-      macosConfig,
-      useDeviceCredentials,
-      signatureType,
-      setInvalidatedByBiometricEnrollment,
-      keyFormat,
-      enforceBiometric,
-      promptMessage,
-    );
+    return _api.createKeys(config, keyFormat, promptMessage);
   }
 
   @override
   Future<SignatureResult> createSignature(
     String payload,
-    AndroidCreateSignatureConfig? androidConfig,
-    IosCreateSignatureConfig? iosConfig,
-    MacosCreateSignatureConfig? macosConfig,
+    CreateSignatureConfig? config,
     SignatureFormat signatureFormat,
     KeyFormat keyFormat,
     String? promptMessage,
   ) {
     return _api.createSignature(
       payload,
-      androidConfig,
-      iosConfig,
-      macosConfig,
+      config,
       signatureFormat,
       keyFormat,
       promptMessage,
@@ -141,19 +111,10 @@ class _PigeonBiometricSignature extends BiometricSignaturePlatform {
   Future<DecryptResult> decrypt(
     String payload,
     PayloadFormat payloadFormat,
-    AndroidDecryptConfig? androidConfig,
-    IosDecryptConfig? iosConfig,
-    MacosDecryptConfig? macosConfig,
+    DecryptConfig? config,
     String? promptMessage,
   ) {
-    return _api.decrypt(
-      payload,
-      payloadFormat,
-      androidConfig,
-      iosConfig,
-      macosConfig,
-      promptMessage,
-    );
+    return _api.decrypt(payload, payloadFormat, config, promptMessage);
   }
 
   @override
