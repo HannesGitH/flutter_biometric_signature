@@ -27,21 +27,20 @@ class AuthService {
 
     // Generate biometric keys
     final keyResult = await _biometric.createKeys(
-      androidConfig: AndroidConfig(
+      keyFormat: KeyFormat.base64,
+      config: CreateKeysConfig(
         useDeviceCredentials: false,
-        signatureType: AndroidSignatureType.RSA,
-      ),
-      iosConfig: IosConfig(
-        useDeviceCredentials: false,
-        signatureType: IOSSignatureType.RSA,
+        signatureType: SignatureType.rsa,
+        enforceBiometric: true,
       ),
     );
 
-    if (keyResult == null) {
-      throw Exception('Failed to generate cryptographic keys');
+    final publicKey = keyResult.publicKey;
+    if (publicKey == null) {
+      throw Exception(
+        'Failed to generate cryptographic keys: ${keyResult.error}',
+      );
     }
-
-    final publicKey = keyResult.publicKey.toBase64();
 
     // Create user
     final user = User(
@@ -109,21 +108,21 @@ class AuthService {
 
     // Sign challenge with biometric
     final signatureResult = await _biometric.createSignature(
-      SignatureOptions(
-        payload: challenge.nonce,
-        promptMessage: 'Login as $username',
-        androidOptions: const AndroidSignatureOptions(
-          cancelButtonText: 'Cancel',
-          allowDeviceCredentials: false,
-        ),
-        iosOptions: const IosSignatureOptions(shouldMigrate: false),
+      payload: challenge.nonce,
+      promptMessage: 'Login as $username',
+      signatureFormat: SignatureFormat.base64,
+      keyFormat: KeyFormat.base64,
+      config: CreateSignatureConfig(
+        cancelButtonText: 'Cancel',
+        allowDeviceCredentials: false,
+        shouldMigrate: false,
       ),
     );
 
-    final signature = signatureResult?.signature.toBase64();
+    final signature = signatureResult.signature;
 
     if (signature == null) {
-      throw Exception('Authentication failed');
+      throw Exception('Authentication failed: ${signatureResult.error}');
     }
 
     // In production, send signature to server for verification

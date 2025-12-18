@@ -1,0 +1,61 @@
+#ifndef FLUTTER_PLUGIN_BIOMETRIC_SIGNATURE_PLUGIN_H_
+#define FLUTTER_PLUGIN_BIOMETRIC_SIGNATURE_PLUGIN_H_
+
+#include <flutter/plugin_registrar_windows.h>
+#include "messages.g.h"
+
+#include <memory>
+#include <string>
+
+namespace biometric_signature {
+
+class BiometricSignaturePlugin : public flutter::Plugin,
+                                  public BiometricSignatureApi {
+ public:
+  static void RegisterWithRegistrar(flutter::PluginRegistrarWindows *registrar);
+
+  BiometricSignaturePlugin();
+
+  virtual ~BiometricSignaturePlugin();
+
+  // Disallow copy and assign.
+  BiometricSignaturePlugin(const BiometricSignaturePlugin&) = delete;
+  BiometricSignaturePlugin& operator=(const BiometricSignaturePlugin&) = delete;
+
+  // BiometricSignatureApi implementation
+  void BiometricAuthAvailable(
+      std::function<void(ErrorOr<BiometricAvailability> reply)> result) override;
+
+  void CreateKeys(
+      const CreateKeysConfig* config,
+      const KeyFormat& key_format,
+      const std::string* prompt_message,
+      std::function<void(ErrorOr<KeyCreationResult> reply)> result) override;
+
+  void CreateSignature(
+      const std::string& payload,
+      const CreateSignatureConfig* config,
+      const SignatureFormat& signature_format,
+      const KeyFormat& key_format,
+      const std::string* prompt_message,
+      std::function<void(ErrorOr<SignatureResult> reply)> result) override;
+
+  void Decrypt(
+      const std::string& payload,
+      const PayloadFormat& payload_format,
+      const DecryptConfig* config,
+      const std::string* prompt_message,
+      std::function<void(ErrorOr<DecryptResult> reply)> result) override;
+
+  void DeleteKeys(
+      std::function<void(ErrorOr<bool> reply)> result) override;
+
+  void GetKeyInfo(
+      bool check_validity,
+      const KeyFormat& key_format,
+      std::function<void(ErrorOr<KeyInfo> reply)> result) override;
+};
+
+}  // namespace biometric_signature
+
+#endif  // FLUTTER_PLUGIN_BIOMETRIC_SIGNATURE_PLUGIN_H_

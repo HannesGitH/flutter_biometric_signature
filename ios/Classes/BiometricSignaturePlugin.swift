@@ -4,47 +4,14 @@ import LocalAuthentication
 import Security
 
 private enum Constants {
-    static let authFailed = "AUTH_FAILED"
-    static let invalidPayload = "INVALID_PAYLOAD"
-    static let invalidArguments = "INVALID_ARGUMENTS"
     static let biometricKeyAlias = "biometric_key"
     static let ecKeyAlias = "com.visionflutter.eckey".data(using: .utf8)!
     static let invalidationSettingKey = "com.visionflutter.biometric_signature.invalidation_setting"
 }
 
-private enum KeyFormat: String {
-    case base64 = "BASE64"
-    case pem = "PEM"
-    case raw = "RAW"
-    case hex = "HEX"
-
-    static func from(_ raw: Any?) -> KeyFormat {
-        guard let string = raw as? String,
-              let format = KeyFormat(rawValue: string.uppercased()) else {
-            return .base64
-        }
-        return format
-    }
-
-    var channelValue: String { rawValue }
-}
-
-private struct FormattedOutput {
-    let value: Any
-    let format: KeyFormat
-    let pemLabel: String?
-}
-
-private let iso8601Formatter: ISO8601DateFormatter = {
-    let formatter = ISO8601DateFormatter()
-    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    return formatter
-}()
-
 // MARK: - Domain State (biometry change detection)
 private enum DomainState {
     static let service = "com.visionflutter.biometric_signature.domain_state"
-
     private static func account() -> String { "biometric_domain_state_v1" }
 
     static func saveCurrent() {
@@ -96,7 +63,7 @@ private enum DomainState {
         let ctx = LAContext()
         var laErr: NSError?
         guard ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &laErr),
-              let current = ctx.evaluatedPolicyDomainState else {
+        let current = ctx.evaluatedPolicyDomainState else {
             // If we can't evaluate and we *had* a baseline, be conservative.
             return loadSaved() != nil
         }
@@ -153,796 +120,135 @@ private enum InvalidationSetting {
     }
 }
 
-public class BiometricSignaturePlugin: NSObject, FlutterPlugin {
+public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatureApi {
+    
     public static func register(with registrar: FlutterPluginRegistrar) {
-        let channel = FlutterMethodChannel(name: "biometric_signature", binaryMessenger: registrar.messenger())
         let instance = BiometricSignaturePlugin()
-        registrar.addMethodCallDelegate(instance, channel: channel)
+        BiometricSignatureApiSetup.setUp(binaryMessenger: registrar.messenger(), api: instance)
     }
 
-    public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
-        switch call.method {
-        case "createKeys":
-            if let arguments = call.arguments as? [String: Any] {
-                let useDeviceCredentials = arguments["useDeviceCredentials"] as? Bool ?? false
-                let useEc = arguments["useEc"] as? Bool ?? false
-                let keyFormat = KeyFormat.from(arguments["keyFormat"])
-                let biometryCurrentSet = arguments["biometryCurrentSet"] as! Bool
-                let enforceBiometric = arguments["enforceBiometric"] as? Bool ?? false
-                let promptMessage = arguments["promptMessage"] as? String ?? "Authenticate to create keys"
-                createKeys(
-                    useDeviceCredentials: useDeviceCredentials,
-                    useEc: useEc,
-                    keyFormat: keyFormat,
-                    biometryCurrentSet: biometryCurrentSet,
-                    enforceBiometric: enforceBiometric,
-                    promptMessage: promptMessage,
-                    result: result
-                )
-            } else {
-                result(FlutterError(code: Constants.invalidArguments, message: "Invalid arguments", details: nil))
-            }
-        case "createSignature":
-            createSignature(options: call.arguments as? [String: Any], result: result)
-        case "decrypt":
-            decrypt(options: call.arguments as? [String: Any], result: result)
-        case "testEncrypt":
-            testEncrypt(options: call.arguments as? [String: Any], result: result)
-        case "deleteKeys":
-            deleteKeys(result: result)
-        case "biometricAuthAvailable":
-            biometricAuthAvailable(result: result)
-        case "biometricKeyExists":
-            guard let checkValidity = call.arguments as? Bool else { return }
-            biometricKeyExists(checkValidity: checkValidity, result: result)
-        default:
-            result(FlutterMethodNotImplemented)
-        }
-    }
 
-    // MARK: - Public API
+    // MARK: - BiometricSignatureApi Implementation
 
-    private func biometricAuthAvailable(result: @escaping FlutterResult) {
+    func biometricAuthAvailable(completion: @escaping (Result<BiometricAvailability, Error>) -> Void) {
         let context = LAContext()
         var error: NSError?
-        let canEvaluatePolicy = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
-
-        if canEvaluatePolicy {
-            let biometricType = getBiometricType(context)
-            dispatchMainAsync { result(biometricType) }
-        } else {
-            let errorMessage = error?.localizedDescription ?? ""
-            dispatchMainAsync { result("none, \(errorMessage)") }
+        let canEvaluate = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
+        
+        var availableBiometrics: [BiometricType?] = []
+        if canEvaluate {
+             // Basic detection based on biometryType
+             if #available(iOS 11.0, *) {
+                 switch context.biometryType {
+                 case .faceID: availableBiometrics.append(.face)
+                 case .touchID: availableBiometrics.append(.fingerprint)
+                 default: break
+                 }
+             }
         }
+        
+        let hasEnrolled = error?.code != LAError.biometryNotEnrolled.rawValue
+        
+        completion(.success(BiometricAvailability(
+            canAuthenticate: canEvaluate,
+            hasEnrolledBiometrics: hasEnrolled,
+            availableBiometrics: availableBiometrics,
+            reason: error?.localizedDescription
+        )))
     }
 
-    private func biometricKeyExists(checkValidity: Bool, result: @escaping FlutterResult) {
-        let exists = self.doesBiometricKeyExist(checkValidity: checkValidity)
-        dispatchMainAsync { result(exists) }
-    }
-
-    private func deleteKeys(result: @escaping FlutterResult) {
-        // Delete EC key pair
-        let ecTag = Constants.ecKeyAlias
-        let ecKeyQuery: [String: Any] = [
-            kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: ecTag,
-            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-        ]
-        let ecStatus = SecItemDelete(ecKeyQuery as CFDictionary)
-
-        // Delete encrypted RSA private key from Keychain
-        let encryptedKeyTag = getBiometricKeyTag()
-        let encryptedKeyQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: encryptedKeyTag,
-            kSecAttrAccount as String: encryptedKeyTag
-        ]
-        let rsaStatus = SecItemDelete(encryptedKeyQuery as CFDictionary)
-
-        // Delete saved domain-state baseline
-        let dsOK = DomainState.deleteSaved()
-
-        // Delete invalidation setting
-        let isOK = InvalidationSetting.delete()
-
-        let success = (ecStatus == errSecSuccess || ecStatus == errSecItemNotFound)
-                   && (rsaStatus == errSecSuccess || rsaStatus == errSecItemNotFound)
-                   && dsOK && isOK
-        dispatchMainAsync {
-            if success {
-                result(true)
-            } else {
-                result(FlutterError(code: Constants.authFailed, message: "Error deleting the biometric key", details: nil))
-            }
-        }
-    }
-
-    private func deleteExistingKeys() {
-        // Delete EC key pair
-        let ecTag = Constants.ecKeyAlias
-        let ecKeyQuery: [String: Any] = [
-            kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: ecTag,
-            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-        ]
-        SecItemDelete(ecKeyQuery as CFDictionary)
-
-        // Delete encrypted RSA private key from Keychain
-        let encryptedKeyTag = getBiometricKeyTag()
-        let encryptedKeyQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: encryptedKeyTag,
-            kSecAttrAccount as String: encryptedKeyTag
-        ]
-        SecItemDelete(encryptedKeyQuery as CFDictionary)
-
-        // Also delete the baseline and invalidation setting to keep invariant: no baseline/setting without keys
-        _ = DomainState.deleteSaved()
-        _ = InvalidationSetting.delete()
-    }
-
-    private func createKeys(
-    useDeviceCredentials: Bool,
-    useEc: Bool,
-    keyFormat: KeyFormat,
-    biometryCurrentSet: Bool,
-    enforceBiometric: Bool,
-    promptMessage: String,
-    result: @escaping FlutterResult
+    func createKeys(
+        config: CreateKeysConfig?,
+        keyFormat: KeyFormat,
+        promptMessage: String?,
+        completion: @escaping (Result<KeyCreationResult, Error>) -> Void
     ) {
-        // Delete existing keys (and baseline)
+        // Extract config values with defaults
+        let useDeviceCredentials = config?.useDeviceCredentials ?? false
+        let biometryCurrentSet = config?.setInvalidatedByBiometricEnrollment ?? false
+        let signatureType = config?.signatureType ?? .rsa
+        let enforceBiometric = config?.enforceBiometric ?? false
+        let prompt = promptMessage ?? "Authenticate to create keys"
+        
+        // Always delete existing keys first
         deleteExistingKeys()
 
-        // Define the actual generation logic as a closure we can call later
-        let generateKeysBlock = {
-            // Generate EC key pair in Secure Enclave
-            let ecAccessControl = SecAccessControlCreateWithFlags(
-                kCFAllocatorDefault,
-                kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
-                [.privateKeyUsage, useDeviceCredentials ? .userPresence : biometryCurrentSet ? .biometryCurrentSet : .biometryAny],
-                nil
-            )
-
-            guard let ecAccessControl = ecAccessControl else {
-                self.dispatchMainAsync {
-                    result(FlutterError(code: Constants.authFailed,
-                        message: "Failed to create access control for EC key",
-                        details: nil))
-                }
-                return
+        let generateBlock = {
+            self.performKeyGeneration(
+                useDeviceCredentials: useDeviceCredentials,
+                biometryCurrentSet: biometryCurrentSet,
+                signatureType: signatureType,
+                keyFormat: keyFormat
+            ) { result in
+                completion(result)
             }
-
-            let ecTag = Constants.ecKeyAlias
-            let ecKeyAttributes: [String: Any] = [
-                kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-                kSecAttrKeySizeInBits as String: 256,
-                kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
-                kSecAttrAccessControl as String: ecAccessControl,
-                kSecPrivateKeyAttrs as String: [
-                    kSecAttrIsPermanent as String: true,
-                    kSecAttrApplicationTag as String: ecTag
-                ]
-            ]
-
-            var error: Unmanaged<CFError>?
-            guard let ecPrivateKey = SecKeyCreateRandomKey(ecKeyAttributes as CFDictionary, &error) else {
-                self.dispatchMainAsync {
-                    let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-                    result(FlutterError(code: Constants.authFailed, message: "Error generating EC key: \(msg)", details: nil))
-                }
-                return
-            }
-
-            guard let ecPublicKey = SecKeyCopyPublicKey(ecPrivateKey) else {
-                self.dispatchMainAsync {
-                    result(FlutterError(code: Constants.authFailed, message: "Error getting EC public key", details: nil))
-                }
-                return
-            }
-
-            // Persist domain-state baseline right after successful EC creation (only if biometry-invalidation is enabled)
-            if biometryCurrentSet {
-                DomainState.saveCurrent()
-            }
-            InvalidationSetting.save(biometryCurrentSet)
-
-            if useEc {
-                // EC-only: return EC public key
-                guard let response = self.buildKeyResponse(publicKey: ecPublicKey, format: keyFormat, algorithm: "EC") else {
-                    self.dispatchMainAsync {
-                        result(FlutterError(code: Constants.authFailed, message: "Failed to encode EC public key", details: nil))
-                    }
-                    return
-                }
-                self.dispatchMainAsync { result(response) }
-                return
-            }
-
-            // --- Hybrid path: generate RSA and wrap its private key with ECIES(X9.63/SHA-256/AES-GCM)
-            let rsaKeyAttributes: [String: Any] = [
-                kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
-                kSecAttrKeySizeInBits as String: 2048,
-                kSecPrivateKeyAttrs as String: [kSecAttrIsPermanent as String: false]
-            ]
-
-            guard let rsaPrivate = SecKeyCreateRandomKey(rsaKeyAttributes as CFDictionary, &error),
-            let rsaPublicKey = SecKeyCopyPublicKey(rsaPrivate) else {
-                self.dispatchMainAsync {
-                    result(FlutterError(code: Constants.authFailed, message: "Error generating RSA key pair", details: nil))
-                }
-                return
-            }
-
-            // Extract RSA private key data
-            guard let rsaPrivateKeyData = SecKeyCopyExternalRepresentation(rsaPrivate, &error) as Data? else {
-                self.dispatchMainAsync {
-                    result(FlutterError(code: Constants.authFailed, message: "Error extracting RSA private key data", details: nil))
-                }
-                return
-            }
-
-            let algorithm: SecKeyAlgorithm = .eciesEncryptionStandardX963SHA256AESGCM
-            guard SecKeyIsAlgorithmSupported(ecPublicKey, .encrypt, algorithm) else {
-                self.dispatchMainAsync {
-                    result(FlutterError(code: Constants.authFailed, message: "EC encryption algorithm not supported", details: nil))
-                }
-                return
-            }
-
-            guard let encryptedRSAKeyData = SecKeyCreateEncryptedData(ecPublicKey, algorithm, rsaPrivateKeyData as CFData, &error) as Data? else {
-                let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-                self.dispatchMainAsync {
-                    result(FlutterError(code: Constants.authFailed, message: "Error encrypting RSA private key: \(msg)", details: nil))
-                }
-                return
-            }
-
-            // Store encrypted RSA private key data in Keychain
-            let encryptedKeyTag = self.getBiometricKeyTag()
-            let encryptedKeyAttributes: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: encryptedKeyTag,
-                kSecAttrAccount as String: encryptedKeyTag,
-                kSecValueData as String: encryptedRSAKeyData,
-                kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-            ]
-            SecItemDelete(encryptedKeyAttributes as CFDictionary) // Delete existing item
-            let status = SecItemAdd(encryptedKeyAttributes as CFDictionary, nil)
-            guard status == errSecSuccess else {
-                self.dispatchMainAsync {
-                    result(FlutterError(code: Constants.authFailed, message: "Error storing encrypted RSA private key in Keychain", details: nil))
-                }
-                return
-            }
-
-            guard let response = self.buildKeyResponse(publicKey: rsaPublicKey, format: keyFormat, algorithm: "RSA") else {
-                self.dispatchMainAsync {
-                    result(FlutterError(code: Constants.authFailed, message: "Failed to encode RSA public key", details: nil))
-                }
-                return
-            }
-            self.dispatchMainAsync { result(response) }
         }
 
         if enforceBiometric {
             let context = LAContext()
             context.localizedFallbackTitle = ""
-            context.localizedReason = promptMessage
-
-            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: promptMessage) { success, error in
+            context.localizedReason = prompt
+            
+            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: prompt) { success, _ in
                 if success {
-                    // Continue to generation on background thread (already on bg thread from evaluatePolicy)
-                    generateKeysBlock()
+                    generateBlock()
                 } else {
-                    let errorMessage = error?.localizedDescription ?? "Authentication failed"
-                    self.dispatchMainAsync {
-                        result(FlutterError(code: Constants.authFailed, message: errorMessage, details: nil))
-                    }
+                completion(.success(KeyCreationResult(publicKey: nil, error: "Authentication failed", code: .userCanceled)))
                 }
             }
         } else {
-            // Run immediately on a background queue to avoid blocking UI
-            DispatchQueue.global(qos: .userInitiated).async {
-                generateKeysBlock()
+             DispatchQueue.global(qos: .userInitiated).async {
+                generateBlock()
             }
         }
     }
 
-    private func createSignature(options: [String: Any]?, result: @escaping FlutterResult) {
-        let promptMessage = (options?["promptMessage"] as? String) ?? "Authenticate"
-        let keyFormat = KeyFormat.from(options?["keyFormat"])
-        guard let payload = options?["payload"] as? String,
-              let dataToSign = payload.data(using: .utf8) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.invalidPayload, message: "Payload is required and must be valid UTF-8", details: nil))
-            }
-            return
+    func createSignature(
+        payload: String,
+        config: CreateSignatureConfig?,
+        signatureFormat: SignatureFormat,
+        keyFormat: KeyFormat,
+        promptMessage: String?,
+        completion: @escaping (Result<SignatureResult, Error>) -> Void
+    ) {
+        guard let dataToSign = payload.data(using: .utf8) else {
+             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Invalid payload", code: .invalidInput)))
+             return
         }
+        
+        let prompt = promptMessage ?? "Authenticate"
+        let shouldMigrate = config?.shouldMigrate ?? false
 
-        // Check if we should use EC-only mode by checking if RSA key exists
-        let encryptedKeyTag = getBiometricKeyTag()
-        let encryptedKeyQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: encryptedKeyTag,
-            kSecAttrAccount as String: encryptedKeyTag,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(encryptedKeyQuery as CFDictionary, &item)
-        if status != errSecSuccess {
-            let shouldMigrate = parseBool(options?["shouldMigrate"]) ?? false
-            if shouldMigrate {
-                self.migrateToSecureEnclave(options: options, keyFormat: keyFormat, result: result) { opts, res in
-                    self.createSignature(options: opts, result: res)
+        if hasRsaKey() {
+             performRsaSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
+        } else if shouldMigrate {
+             migrateToSecureEnclave(prompt: prompt) { result in
+                switch result {
+                case .success:
+                    self.performRsaSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
+                case .failure(let error):
+                    // If migration fails, returning error.
+                     let msg = (error as? PigeonError)?.message ?? (error as NSError).localizedDescription
+                     completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Migration Error: \(msg)", code: .unknown)))
                 }
-            } else {
-                // No RSA: EC-only signing
-                createECSignature(
-                    dataToSign: dataToSign,
-                    promptMessage: promptMessage,
-                    keyFormat: keyFormat,
-                    result: result
-                )
-            }
-            return
+             }
+        } else {
+             // Fallback to EC signing
+             performEcSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
         }
-
-        // 1. Retrieve encrypted RSA private key from Keychain
-        guard let encryptedRSAKeyData = item as? Data else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Failed to retrieve encrypted RSA key data", details: nil))
-            }
-            return
-        }
-
-        // 2. Retrieve EC private key from Secure Enclave
-        let ecTag = Constants.ecKeyAlias
-
-        let context = LAContext()
-        context.localizedFallbackTitle = ""
-        context.localizedReason = promptMessage
-
-        let ecKeyQuery: [String: Any] = [
-            kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: ecTag,
-            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-            kSecReturnRef as String: true,
-            kSecUseAuthenticationContext as String: context,
-            kSecUseOperationPrompt as String: promptMessage
-        ]
-
-        var ecPrivateKeyRef: CFTypeRef?
-        let ecStatus = SecItemCopyMatching(ecKeyQuery as CFDictionary, &ecPrivateKeyRef)
-        guard ecStatus == errSecSuccess, let ecPrivateKeyRef = ecPrivateKeyRef else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "EC private key not found", details: nil))
-            }
-            return
-        }
-        let ecPrivateKey = ecPrivateKeyRef as! SecKey
-
-        // 3. Decrypt RSA private key data using the EC private key
-        let algorithm: SecKeyAlgorithm = .eciesEncryptionStandardX963SHA256AESGCM
-        guard SecKeyIsAlgorithmSupported(ecPrivateKey, .decrypt, algorithm) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "EC decryption algorithm not supported", details: nil))
-            }
-            return
-        }
-
-        var error: Unmanaged<CFError>?
-        guard var rsaPrivateKeyData = SecKeyCreateDecryptedData(ecPrivateKey, algorithm, encryptedRSAKeyData as CFData, &error) as Data? else {
-            let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Error decrypting RSA private key: \(msg)", details: nil))
-            }
-            return
-        }
-
-        // 4. Reconstruct RSA private key from data
-        let rsaKeyAttributes: [String: Any] = [
-            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
-            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
-            kSecAttrKeySizeInBits as String: 2048
-        ]
-        guard let rsaPrivateKey = SecKeyCreateWithData(rsaPrivateKeyData as CFData, rsaKeyAttributes as CFDictionary, &error) else {
-            let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Error reconstructing RSA private key: \(msg)", details: nil))
-            }
-            return
-        }
-
-        // 5. Sign data with RSA private key
-        let signAlgorithm = SecKeyAlgorithm.rsaSignatureMessagePKCS1v15SHA256
-        guard SecKeyIsAlgorithmSupported(rsaPrivateKey, .sign, signAlgorithm) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "RSA signing algorithm not supported", details: nil))
-            }
-            return
-        }
-
-        guard let signature = SecKeyCreateSignature(rsaPrivateKey, signAlgorithm, dataToSign as CFData, &error) as Data? else {
-            let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Error signing data: \(msg)", details: nil))
-            }
-            return
-        }
-
-        // 6. Zero the decrypted RSA private key bytes in memory
-        rsaPrivateKeyData.resetBytes(in: 0..<rsaPrivateKeyData.count)
-        guard let rsaPublicKey = SecKeyCopyPublicKey(rsaPrivateKey) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "RSA public key not found", details: nil))
-            }
-            return
-        }
-
-        guard let response = buildSignatureResponse(
-            publicKey: rsaPublicKey,
-            signature: signature,
-            algorithm: "RSA",
-            format: keyFormat
-        ) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Failed to format RSA signature", details: nil))
-            }
-            return
-        }
-
-        dispatchMainAsync { result(response) }
     }
 
-    private func decrypt(options: [String: Any]?, result: @escaping FlutterResult) {
-        let promptMessage = (options?["promptMessage"] as? String) ?? "Authenticate"
-        guard let payload = options?["payload"] as? String,
-              let encryptedData = Data(base64Encoded: payload) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.invalidPayload, message: "Payload is required and must be valid Base64", details: nil))
-            }
-            return
-        }
-
-        // 1. Retrieve encrypted RSA private key from Keychain
-        let encryptedKeyTag = getBiometricKeyTag()
-        let encryptedKeyQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: encryptedKeyTag,
-            kSecAttrAccount as String: encryptedKeyTag,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(encryptedKeyQuery as CFDictionary, &item)
-        
-        // Check if we have a hybrid RSA key or EC-only key
-        if status == errSecSuccess, let encryptedRSAKeyData = item as? Data {
-            // Hybrid RSA decryption path (existing implementation)
-            decryptWithHybridRSA(
-                encryptedRSAKeyData: encryptedRSAKeyData,
-                encryptedPayload: encryptedData,
-                promptMessage: promptMessage,
-                result: result
-            )
-            return
-        }
-        
-        // No RSA key found - check if should migrate
-        let shouldMigrate = parseBool(options?["shouldMigrate"]) ?? false
-        if shouldMigrate {
-            self.migrateToSecureEnclave(options: options, keyFormat: .base64, result: result) { opts, res in
-                self.decrypt(options: opts, result: res)
-            }
-            return
-        }
-        
-        // Try EC-only decryption
-        decryptWithECKey(
-            encryptedData: encryptedData,
-            promptMessage: promptMessage,
-            result: result
-        )
-    }
-    
-    // MARK: - Decryption Helper Functions
-    
-    /// Decrypt using hybrid RSA approach (RSA key wrapped by EC key in Secure Enclave)
-    private func decryptWithHybridRSA(
-        encryptedRSAKeyData: Data,
-        encryptedPayload: Data,
-        promptMessage: String,
-        result: @escaping FlutterResult
-    ) {
-        // 1. Retrieve EC private key from Secure Enclave
-        let ecTag = Constants.ecKeyAlias
-        let context = LAContext()
-        context.localizedFallbackTitle = ""
-        context.localizedReason = promptMessage
-
-        let ecKeyQuery: [String: Any] = [
-            kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: ecTag,
-            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-            kSecReturnRef as String: true,
-            kSecUseAuthenticationContext as String: context,
-            kSecUseOperationPrompt as String: promptMessage
-        ]
-
-        var ecPrivateKeyRef: CFTypeRef?
-        let ecStatus = SecItemCopyMatching(ecKeyQuery as CFDictionary, &ecPrivateKeyRef)
-        guard ecStatus == errSecSuccess, let ecPrivateKeyRef = ecPrivateKeyRef else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "EC private key not found", details: nil))
-            }
-            return
-        }
-        let ecPrivateKey = ecPrivateKeyRef as! SecKey
-
-        // 2. Decrypt RSA private key data using the EC private key (ECIES)
-        let algorithm: SecKeyAlgorithm = .eciesEncryptionStandardX963SHA256AESGCM
-        guard SecKeyIsAlgorithmSupported(ecPrivateKey, .decrypt, algorithm) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "EC decryption algorithm not supported", details: nil))
-            }
-            return
-        }
-
-        var error: Unmanaged<CFError>?
-        guard var rsaPrivateKeyData = SecKeyCreateDecryptedData(ecPrivateKey, algorithm, encryptedRSAKeyData as CFData, &error) as Data? else {
-            let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Error decrypting RSA private key: \(msg)", details: nil))
-            }
-            return
-        }
-
-        // 3. Reconstruct RSA private key from data
-        let rsaKeyAttributes: [String: Any] = [
-            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
-            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
-            kSecAttrKeySizeInBits as String: 2048
-        ]
-        guard let rsaPrivateKey = SecKeyCreateWithData(rsaPrivateKeyData as CFData, rsaKeyAttributes as CFDictionary, &error) else {
-            let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Error reconstructing RSA private key: \(msg)", details: nil))
-            }
-            return
-        }
-
-        // 4. Decrypt payload with RSA private key
-        let decryptAlgorithm = SecKeyAlgorithm.rsaEncryptionPKCS1
-        guard SecKeyIsAlgorithmSupported(rsaPrivateKey, .decrypt, decryptAlgorithm) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "RSA decryption algorithm not supported", details: nil))
-            }
-            return
-        }
-
-        guard let decryptedData = SecKeyCreateDecryptedData(rsaPrivateKey, decryptAlgorithm, encryptedPayload as CFData, &error) as Data? else {
-            let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Error decrypting payload: \(msg)", details: nil))
-            }
-            return
-        }
-
-        // 5. Zero the decrypted RSA private key bytes in memory
-        rsaPrivateKeyData.resetBytes(in: 0..<rsaPrivateKeyData.count)
-
-        guard let decryptedString = String(data: decryptedData, encoding: .utf8) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Decrypted data is not valid UTF-8", details: nil))
-            }
-            return
-        }
-
-        dispatchMainAsync { result(["decryptedData": decryptedString]) }
-    }
-    
-    /// Decrypt using EC-only key (direct ECIES decryption)
-    private func decryptWithECKey(
-        encryptedData: Data,
-        promptMessage: String,
-        result: @escaping FlutterResult
-    ) {
-        // 1. Retrieve EC private key from Secure Enclave
-        let ecTag = Constants.ecKeyAlias
-        let ecKeyQuery: [String: Any] = [
-            kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: ecTag,
-            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-            kSecReturnRef as String: true,
-            kSecUseOperationPrompt as String: promptMessage
-        ]
-        
-        var ecPrivateKeyRef: CFTypeRef?
-        let ecStatus = SecItemCopyMatching(ecKeyQuery as CFDictionary, &ecPrivateKeyRef)
-        guard ecStatus == errSecSuccess, let ecPrivateKeyRef = ecPrivateKeyRef else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "EC private key not found. Please create keys first.", details: nil))
-            }
-            return
-        }
-        let ecPrivateKey = ecPrivateKeyRef as! SecKey
-
-        // 2. Decrypt payload directly using ECIES
-        let algorithm: SecKeyAlgorithm = .eciesEncryptionStandardX963SHA256AESGCM
-        guard SecKeyIsAlgorithmSupported(ecPrivateKey, .decrypt, algorithm) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "ECIES decryption algorithm not supported", details: nil))
-            }
-            return
-        }
-
-        var error: Unmanaged<CFError>?
-        guard let decryptedData = SecKeyCreateDecryptedData(ecPrivateKey, algorithm, encryptedData as CFData, &error) as Data? else {
-            let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Error decrypting payload with EC key: \(msg)", details: nil))
-            }
-            return
-        }
-
-        guard let decryptedString = String(data: decryptedData, encoding: .utf8) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Decrypted data is not valid UTF-8", details: nil))
-            }
-            return
-        }
-
-        dispatchMainAsync { result(["decryptedData": decryptedString]) }
-    }
-    
-    /// Helper method for testing EC encryption using native iOS ECIES
-    /// This is only for testing/example purposes
-    private func testEncrypt(options: [String: Any]?, result: @escaping FlutterResult) {
-        guard let payload = options?["payload"] as? String else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.invalidPayload, message: "Payload is required", details: nil))
-            }
-            return
-        }
-        
-        // Retrieve EC public key
-        let ecTag = Constants.ecKeyAlias
-        let ecKeyQuery: [String: Any] = [
-            kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: ecTag,
-            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-            kSecReturnRef as String: true
-        ]
-        
-        var ecPrivateKeyRef: CFTypeRef?
-        let ecStatus = SecItemCopyMatching(ecKeyQuery as CFDictionary, &ecPrivateKeyRef)
-        guard ecStatus == errSecSuccess, let ecPrivateKeyRef = ecPrivateKeyRef else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "EC key not found", details: nil))
-            }
-            return
-        }
-        let ecPrivateKey = ecPrivateKeyRef as! SecKey
-        guard let ecPublicKey = SecKeyCopyPublicKey(ecPrivateKey) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "EC public key not found", details: nil))
-            }
-            return
-        }
-        
-        // Encrypt using native ECIES
-        let algorithm: SecKeyAlgorithm = .eciesEncryptionStandardX963SHA256AESGCM
-        guard SecKeyIsAlgorithmSupported(ecPublicKey, .encrypt, algorithm) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "ECIES encryption algorithm not supported", details: nil))
-            }
-            return
-        }
-        
-        guard let payloadData = payload.data(using: .utf8) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.invalidPayload, message: "Payload must be valid UTF-8", details: nil))
-            }
-            return
-        }
-        
-        var error: Unmanaged<CFError>?
-        guard let encryptedData = SecKeyCreateEncryptedData(ecPublicKey, algorithm, payloadData as CFData, &error) as Data? else {
-            let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Error encrypting: \(msg)", details: nil))
-            }
-            return
-        }
-        
-        let base64Encrypted = encryptedData.base64EncodedString()
-        dispatchMainAsync { result(["encryptedPayload": base64Encrypted]) }
-    }
-
-    private func createECSignature(
-        dataToSign: Data,
-        promptMessage: String,
-        keyFormat: KeyFormat,
-        result: @escaping FlutterResult
-    ) {
-        // Retrieve EC private key from Secure Enclave
-        let ecTag = Constants.ecKeyAlias
-        let ecKeyQuery: [String: Any] = [
-            kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: ecTag,
-            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
-            kSecReturnRef as String: true,
-            kSecUseOperationPrompt as String: promptMessage
-        ]
-        var ecPrivateKeyRef: CFTypeRef?
-        let ecStatus = SecItemCopyMatching(ecKeyQuery as CFDictionary, &ecPrivateKeyRef)
-        guard ecStatus == errSecSuccess, let ecPrivateKeyRef = ecPrivateKeyRef else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "EC private key not found", details: nil))
-            }
-            return
-        }
-        let ecPrivateKey = ecPrivateKeyRef as! SecKey
-
-        guard let ecPublicKey = SecKeyCopyPublicKey(ecPrivateKey) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "EC public key not found", details: nil))
-            }
-            return
-        }
-
-        // Sign data with EC private key
-        let signAlgorithm = SecKeyAlgorithm.ecdsaSignatureMessageX962SHA256
-        guard SecKeyIsAlgorithmSupported(ecPrivateKey, .sign, signAlgorithm) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "EC signing algorithm not supported", details: nil))
-            }
-            return
-        }
-
-        var error: Unmanaged<CFError>?
-        guard let signature = SecKeyCreateSignature(ecPrivateKey, signAlgorithm, dataToSign as CFData, &error) as Data? else {
-            let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Error signing data with EC key: \(msg)", details: nil))
-            }
-            return
-        }
-        guard let response = buildSignatureResponse(
-            publicKey: ecPublicKey,
-            signature: signature,
-            algorithm: "EC",
-            format: keyFormat
-        ) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Failed to format EC signature", details: nil))
-            }
-            return
-        }
-
-        dispatchMainAsync { result(response) }
-    }
-
-    private func migrateToSecureEnclave(
-        options: [String: Any]?,
-        keyFormat: KeyFormat,
-        result: @escaping FlutterResult,
-        onSuccess: @escaping ([String: Any]?, @escaping FlutterResult) -> Void
-    ) {
+    private func migrateToSecureEnclave(prompt: String, completion: @escaping (Result<Void, Error>) -> Void) {
         // Generate EC key pair in Secure Enclave
         let ecAccessControl = SecAccessControlCreateWithFlags(
             kCFAllocatorDefault,
             kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly,
-            [.privateKeyUsage, .biometryAny],
+            [.privateKeyUsage, .biometryAny], // Defaulting to biometryAny for migration
             nil
         )
 
         guard let ecAccessControl = ecAccessControl else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Failed to create access control for EC key", details: nil))
-            }
+            completion(.failure(PigeonError(code: "authFailed", message: "Failed to create access control for EC key", details: nil)))
             return
         }
 
@@ -960,17 +266,13 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin {
 
         var error: Unmanaged<CFError>?
         guard let ecPrivateKey = SecKeyCreateRandomKey(ecKeyAttributes as CFDictionary, &error) else {
-            dispatchMainAsync {
-                let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-                result(FlutterError(code: Constants.authFailed, message: "Error generating EC key: \(msg)", details: nil))
-            }
+            let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
+            completion(.failure(PigeonError(code: "authFailed", message: "Error generating EC key: \(msg)", details: nil)))
             return
         }
 
         guard let ecPublicKey = SecKeyCopyPublicKey(ecPrivateKey) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Error getting EC public key", details: nil))
-            }
+            completion(.failure(PigeonError(code: "authFailed", message: "Error getting EC public key", details: nil)))
             return
         }
 
@@ -978,10 +280,12 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin {
         // But save the invalidation setting
         InvalidationSetting.save(false)
 
-        let unencryptedKeyTag = getBiometricKeyTag()
+        let unencryptedKeyTag = Constants.biometricKeyAlias
+        let unencryptedKeyTagData = unencryptedKeyTag.data(using: .utf8)!
+        // Note: The legacy key was stored as kSecClassKey. The new wrapped key is kSecClassGenericPassword.
         let unencryptedKeyQuery: [String: Any] = [
             kSecClass as String: kSecClassKey,
-            kSecAttrApplicationTag as String: unencryptedKeyTag,
+            kSecAttrApplicationTag as String: unencryptedKeyTagData,
             kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
             kSecReturnData as String: true
         ]
@@ -989,31 +293,23 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin {
         var rsaItem: CFTypeRef?
         let status = SecItemCopyMatching(unencryptedKeyQuery as CFDictionary, &rsaItem)
         guard status == errSecSuccess else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "RSA private key not found in Keychain", details: nil))
-            }
+            completion(.failure(PigeonError(code: "authFailed", message: "RSA private key not found in Keychain", details: nil)))
             return
         }
-        guard var rsaPrivateKeyData = rsaItem as? Data else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Failed to retrieve RSA private key data", details: nil))
-            }
+        guard let rsaPrivateKeyData = rsaItem as? Data else {
+             completion(.failure(PigeonError(code: "authFailed", message: "Failed to retrieve RSA private key data", details: nil)))
             return
         }
 
         let algorithm: SecKeyAlgorithm = .eciesEncryptionStandardX963SHA256AESGCM
         guard SecKeyIsAlgorithmSupported(ecPublicKey, .encrypt, algorithm) else {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "EC encryption algorithm not supported", details: nil))
-            }
+            completion(.failure(PigeonError(code: "authFailed", message: "EC encryption algorithm not supported", details: nil)))
             return
         }
 
         guard let encryptedRSAKeyData = SecKeyCreateEncryptedData(ecPublicKey, algorithm, rsaPrivateKeyData as CFData, &error) as Data? else {
             let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Error encrypting RSA private key: \(msg)", details: nil))
-            }
+            completion(.failure(PigeonError(code: "authFailed", message: "Error encrypting RSA private key: \(msg)", details: nil)))
             return
         }
 
@@ -1028,145 +324,49 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin {
         SecItemDelete(encryptedKeyAttributes as CFDictionary) // Delete any existing item
         let storeStatus = SecItemAdd(encryptedKeyAttributes as CFDictionary, nil)
         if storeStatus != errSecSuccess {
-            dispatchMainAsync {
-                result(FlutterError(code: Constants.authFailed, message: "Error storing encrypted RSA private key in Keychain", details: nil))
-            }
+            completion(.failure(PigeonError(code: "authFailed", message: "Error storing encrypted RSA private key in Keychain", details: nil)))
             return
         }
 
+        // Delete the legacy unencrypted key
         SecItemDelete(unencryptedKeyQuery as CFDictionary)
-        rsaPrivateKeyData.resetBytes(in: 0..<rsaPrivateKeyData.count)
-
-        var modOptions = options ?? [:]
-        modOptions["shouldMigrate"] = false
-        modOptions["keyFormat"] = keyFormat.channelValue
-        onSuccess(modOptions, result)
-        return
+        
+        completion(.success(()))
     }
 
-    private func buildKeyResponse(publicKey: SecKey, format: KeyFormat, algorithm: String) -> [String: Any]? {
-        guard let formatted = formatPublicKey(publicKey, format: format) else { return nil }
-        var response: [String: Any] = [
-            "publicKey": formatted.value,
-            "publicKeyFormat": formatted.format.channelValue,
-            "algorithm": algorithm,
-            "keySize": keySizeInBits(publicKey),
-            "keyFormat": format.channelValue
-        ]
-        if let label = formatted.pemLabel {
-            response["publicKeyPemLabel"] = label
-        }
-        return response
-    }
-
-    private func buildSignatureResponse(publicKey: SecKey, signature: Data, algorithm: String, format: KeyFormat) -> [String: Any]? {
-        guard let formattedKey = formatPublicKey(publicKey, format: format) else { return nil }
-        let formattedSignature = formatSignature(signature, format: format)
-        var response: [String: Any] = [
-            "publicKey": formattedKey.value,
-            "publicKeyFormat": formattedKey.format.channelValue,
-            "signature": formattedSignature.value,
-            "signatureFormat": formattedSignature.format.channelValue,
-            "algorithm": algorithm,
-            "keySize": keySizeInBits(publicKey),
-            "timestamp": isoTimestamp(),
-            "keyFormat": format.channelValue
-        ]
-        if let keyLabel = formattedKey.pemLabel {
-            response["publicKeyPemLabel"] = keyLabel
-        }
-        if let signatureLabel = formattedSignature.pemLabel {
-            response["signaturePemLabel"] = signatureLabel
-        }
-        return response
-    }
-
-    private func formatPublicKey(_ key: SecKey, format: KeyFormat) -> FormattedOutput? {
-        guard let data = subjectPublicKeyInfo(for: key) else { return nil }
-        return formatData(data, format: format, pemLabel: "PUBLIC KEY")
-    }
-
-    private func formatSignature(_ data: Data, format: KeyFormat) -> FormattedOutput {
-        return formatData(data, format: format, pemLabel: "SIGNATURE")
-    }
-
-    private func formatData(_ data: Data, format: KeyFormat, pemLabel: String) -> FormattedOutput {
-        switch format {
-        case .base64:
-            return FormattedOutput(value: data.base64EncodedString(), format: .base64, pemLabel: nil)
-        case .hex:
-            return FormattedOutput(value: hexString(from: data), format: .hex, pemLabel: nil)
-        case .raw:
-            return FormattedOutput(value: FlutterStandardTypedData(bytes: data), format: .raw, pemLabel: nil)
-        case .pem:
-            let body = chunkedBase64(data.base64EncodedString())
-            let pem = "-----BEGIN \(pemLabel)-----\n\(body)\n-----END \(pemLabel)-----"
-            return FormattedOutput(value: pem, format: .pem, pemLabel: pemLabel)
+    func decrypt(
+        payload: String,
+        payloadFormat: PayloadFormat,
+        config: DecryptConfig?,
+        promptMessage: String?,
+        completion: @escaping (Result<DecryptResult, Error>) -> Void
+    ) {
+        let prompt = promptMessage ?? "Authenticate"
+        let shouldMigrate = config?.shouldMigrate ?? false
+        
+        if hasRsaKey() {
+             performRsaDecryption(payload: payload, payloadFormat: payloadFormat, prompt: prompt, completion: completion)
+        } else if shouldMigrate {
+             migrateToSecureEnclave(prompt: prompt) { result in
+                switch result {
+                case .success:
+                     self.performRsaDecryption(payload: payload, payloadFormat: payloadFormat, prompt: prompt, completion: completion)
+                case .failure(let error):
+                     let msg = (error as? PigeonError)?.message ?? (error as NSError).localizedDescription
+                     completion(.success(DecryptResult(decryptedData: nil, error: "Migration Error: \(msg)", code: .unknown)))
+                }
+             }
+        } else {
+             performEcDecryption(payload: payload, payloadFormat: payloadFormat, prompt: prompt, completion: completion)
         }
     }
 
-    private func subjectPublicKeyInfo(for key: SecKey) -> Data? {
-        var error: Unmanaged<CFError>?
-        guard let publicKeyData = SecKeyCopyExternalRepresentation(key, &error) as Data? else {
-            return nil
-        }
-        let attributes = SecKeyCopyAttributes(key) as? [String: Any]
-        let keyType = attributes?[kSecAttrKeyType as String] as? String
-        let isEc = keyType == (kSecAttrKeyTypeECSECPrimeRandom as String) || publicKeyData.count == 65
-        return BiometricSignaturePlugin.addHeader(publicKeyData: publicKeyData, isEc: isEc)
+    func deleteKeys(completion: @escaping (Result<Bool, Error>) -> Void) {
+        deleteExistingKeys()
+        completion(.success(true))
     }
 
-    private func keySizeInBits(_ key: SecKey) -> Int {
-        guard let attributes = SecKeyCopyAttributes(key) as? [String: Any],
-              let bits = attributes[kSecAttrKeySizeInBits as String] as? Int else {
-            return 0
-        }
-        return bits
-    }
-
-    private func isoTimestamp() -> String {
-        return iso8601Formatter.string(from: Date())
-    }
-
-    private func chunkedBase64(_ string: String, chunkSize: Int = 64) -> String {
-        guard !string.isEmpty else { return string }
-        var chunks: [String] = []
-        var index = string.startIndex
-        while index < string.endIndex {
-            let end = string.index(index, offsetBy: chunkSize, limitedBy: string.endIndex) ?? string.endIndex
-            chunks.append(String(string[index..<end]))
-            index = end
-        }
-        return chunks.joined(separator: "\n")
-    }
-
-    private func hexString(from data: Data) -> String {
-        return data.map { String(format: "%02x", $0) }.joined()
-    }
-
-    private func parseBool(_ value: Any?) -> Bool? {
-        if let boolValue = value as? Bool {
-            return boolValue
-        }
-        if let numberValue = value as? NSNumber {
-            return numberValue.boolValue
-        }
-        if let stringValue = value as? String {
-            return Bool(stringValue)
-        }
-        return nil
-    }
-
-    private func dispatchMainAsync(_ block: @escaping () -> Void) {
-        DispatchQueue.main.async(execute: block)
-    }
-
-    private func getBiometricType(_ context: LAContext?) -> String {
-        return context?.biometryType == .faceID ? "FaceID" :
-               context?.biometryType == .touchID ? "TouchID" : "none, NO_BIOMETRICS"
-    }
-
-    private func doesBiometricKeyExist(checkValidity: Bool = false) -> Bool {
+    func getKeyInfo(checkValidity: Bool, keyFormat: KeyFormat, completion: @escaping (Result<KeyInfo, Error>) -> Void) {
         // Check EC key existence
         let ecTag = Constants.ecKeyAlias
         let ecKeyQuery: [String: Any] = [
@@ -1178,9 +378,10 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin {
         var ecItem: CFTypeRef?
         let ecStatus = SecItemCopyMatching(ecKeyQuery as CFDictionary, &ecItem)
         let ecKeyExists = (ecStatus == errSecSuccess)
+        let ecKey = ecItem as! SecKey?
 
-        // Check if encrypted RSA key exists
-        let encryptedKeyTag = getBiometricKeyTag()
+        // Check if encrypted RSA key exists (hybrid mode)
+        let encryptedKeyTag = Constants.biometricKeyAlias
         let encryptedKeyQuery: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: encryptedKeyTag,
@@ -1191,105 +392,479 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin {
         let rsaStatus = SecItemCopyMatching(encryptedKeyQuery as CFDictionary, &rsaItem)
         let rsaKeyExists = (rsaStatus == errSecSuccess)
 
-        // For EC-only mode, only EC key needs to exist
-        if ecKeyExists && !rsaKeyExists {
-            guard checkValidity else { return true }
+        // No keys exist
+        guard ecKeyExists else {
+            completion(.success(KeyInfo(exists: false)))
+            return
+        }
 
-            // Check if invalidation was enabled for this key
+        // Determine validity
+        var isValid: Bool? = nil
+        if checkValidity {
             let shouldInvalidateOnEnrollment = InvalidationSetting.load() ?? true
-
-            // Only check domain state if invalidation is enabled
             if shouldInvalidateOnEnrollment {
-                return !DomainState.biometryChangedOrUnknown()
+                isValid = !DomainState.biometryChangedOrUnknown()
+            } else {
+                isValid = true
             }
-
-            // If invalidation is disabled (biometryAny), key remains valid
-            return true
         }
 
-        // Hybrid: both must exist
-        guard ecKeyExists, rsaKeyExists else { return false }
-        guard checkValidity else { return true }
-
-        // Check if invalidation was enabled for this key
-        let shouldInvalidateOnEnrollment = InvalidationSetting.load() ?? true
-
-        // Only check domain state if invalidation is enabled
-        if shouldInvalidateOnEnrollment {
-            return !DomainState.biometryChangedOrUnknown()
+        // For EC-only mode
+        if ecKeyExists && !rsaKeyExists {
+            guard let ecPublicKey = ecKey.flatMap({ SecKeyCopyPublicKey($0) }) else {
+                completion(.success(KeyInfo(exists: true, isValid: isValid, algorithm: "EC", keySize: 256, isHybridMode: false)))
+                return
+            }
+            
+            let publicKeyStr = formatKey(ecPublicKey, format: keyFormat)
+            
+            completion(.success(KeyInfo(
+                exists: true,
+                isValid: isValid,
+                algorithm: "EC",
+                keySize: 256,
+                isHybridMode: false,
+                publicKey: publicKeyStr,
+                decryptingPublicKey: nil,
+                decryptingAlgorithm: nil,
+                decryptingKeySize: nil
+            )))
+            return
         }
 
-        // If invalidation is disabled (biometryAny), key remains valid
-        return true
+        // Hybrid RSA mode: Software RSA for BOTH signing and decryption
+        // RSA key is wrapped with EC; we cannot retrieve RSA public key without auth
+        // Note: publicKey is nil because RSA key requires biometric auth to unwrap
+        completion(.success(KeyInfo(
+            exists: true,
+            isValid: isValid,
+            algorithm: "RSA",
+            keySize: 2048,
+            isHybridMode: true,
+            publicKey: nil, // RSA public key requires authentication to unwrap
+            decryptingPublicKey: nil,
+            decryptingAlgorithm: nil,
+            decryptingKeySize: nil
+        )))
     }
 
-    private func getBiometricKeyTag() -> Data {
-        let BIOMETRIC_KEY_ALIAS = Constants.biometricKeyAlias
-        return BIOMETRIC_KEY_ALIAS.data(using: .utf8)!
+    // MARK: - Private Implementations
+
+    private func performKeyGeneration(
+        useDeviceCredentials: Bool,
+        biometryCurrentSet: Bool,
+        signatureType: SignatureType,
+        keyFormat: KeyFormat,
+        completion: @escaping (Result<KeyCreationResult, Error>) -> Void
+    ) {
+        // Access Control
+        let flags: SecAccessControlCreateFlags = [.privateKeyUsage, useDeviceCredentials ? .userPresence : (biometryCurrentSet ? .biometryCurrentSet : .biometryAny)]
+        guard let accessControl = SecAccessControlCreateWithFlags(kCFAllocatorDefault, kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly, flags, nil) else {
+            completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "Failed to create access control", code: .unknown)))
+            return
+        }
+        
+        // Create EC Key
+        let ecTag = Constants.ecKeyAlias
+        let ecAttributes: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecAttrKeySizeInBits as String: 256,
+            kSecAttrTokenID as String: kSecAttrTokenIDSecureEnclave,
+            kSecAttrAccessControl as String: accessControl,
+            kSecPrivateKeyAttrs as String: [
+                kSecAttrIsPermanent as String: true,
+                kSecAttrApplicationTag as String: ecTag
+            ]
+        ]
+        
+        var error: Unmanaged<CFError>?
+        guard let ecPrivateKey = SecKeyCreateRandomKey(ecAttributes as CFDictionary, &error) else {
+             let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
+             completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "EC Key Gen Error: \(msg)", code: .unknown)))
+             return
+        }
+        
+        // Save metadata
+        if biometryCurrentSet { DomainState.saveCurrent() }
+        InvalidationSetting.save(biometryCurrentSet)
+        
+        guard let ecPublicKey = SecKeyCopyPublicKey(ecPrivateKey) else {
+             completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "EC Pub Key Error", code: .unknown)))
+             return
+        }
+
+        if signatureType == .ecdsa {
+             let keyStr = formatKey(ecPublicKey, format: keyFormat)
+             let data = SecKeyCopyExternalRepresentation(ecPublicKey, &error) as Data?
+             let typedData = data != nil ? FlutterStandardTypedData(bytes: data!) : nil
+             completion(.success(KeyCreationResult(
+                 publicKey: keyStr,
+                 publicKeyBytes: typedData,
+                 error: nil,
+                 code: .success,
+                 algorithm: "EC",
+                 keySize: 256,
+                 decryptingPublicKey: nil,
+                 decryptingAlgorithm: nil,
+                 decryptingKeySize: nil,
+                 isHybridMode: false
+             )))
+             return
+        }
+        
+        // Check encryption support for Hybrid
+        guard SecKeyIsAlgorithmSupported(ecPublicKey, .encrypt, .eciesEncryptionStandardX963SHA256AESGCM) else {
+             completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "ECIES not supported", code: .unknown)))
+             return
+        }
+
+        // Generate RSA Key
+        let rsaAttributes: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+            kSecAttrKeySizeInBits as String: 2048,
+            kSecPrivateKeyAttrs as String: [kSecAttrIsPermanent as String: false]
+        ]
+        guard let rsaPrivateKey = SecKeyCreateRandomKey(rsaAttributes as CFDictionary, &error) else {
+             completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "RSA Gen Error", code: .unknown)))
+             return
+        }
+        
+        // Wrap RSA Private Key
+        guard let rsaPrivateData = SecKeyCopyExternalRepresentation(rsaPrivateKey, &error) as Data?,
+              let encryptedRsa = SecKeyCreateEncryptedData(ecPublicKey, .eciesEncryptionStandardX963SHA256AESGCM, rsaPrivateData as CFData, &error) as Data? else {
+             completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "RSA Wrapping Error", code: .unknown)))
+             return
+        }
+        
+        // Save Wrapped Key
+        let tag = Constants.biometricKeyAlias
+        let saveQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: tag,
+            kSecAttrAccount as String: tag,
+            kSecValueData as String: encryptedRsa,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+        SecItemAdd(saveQuery as CFDictionary, nil)
+        
+        guard let rsaPublicKey = SecKeyCopyPublicKey(rsaPrivateKey) else {
+             completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "RSA Pub Key Error", code: .unknown)))
+             return
+        }
+        
+        let rsaData = SecKeyCopyExternalRepresentation(rsaPublicKey, &error) as Data?
+        let rsaTypedData = rsaData != nil ? FlutterStandardTypedData(bytes: rsaData!) : nil
+        
+        let rsaKeyStr = formatKey(rsaPublicKey, format: keyFormat)
+        
+        completion(.success(KeyCreationResult(
+            publicKey: rsaKeyStr,
+            publicKeyBytes: rsaTypedData,
+            error: nil,
+            code: .success,
+            algorithm: "RSA",
+            keySize: 2048
+        )))
+    }
+    
+    private func performRsaSigning(dataToSign: Data, prompt: String, signatureFormat: SignatureFormat, keyFormat: KeyFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
+        guard let rsaPrivateKey = unwrapRsaKey(prompt: prompt) else {
+             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Failed to access/unwrap RSA key", code: .unknown)))
+             return
+        }
+        
+        var error: Unmanaged<CFError>?
+        guard let signature = SecKeyCreateSignature(rsaPrivateKey, .rsaSignatureMessagePKCS1v15SHA256, dataToSign as CFData, &error) as Data? else {
+             let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
+             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Signing Error: \(msg)", code: .unknown)))
+             return
+        }
+        
+        guard let pub = SecKeyCopyPublicKey(rsaPrivateKey) else {
+             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Pub Key Error", code: .unknown)))
+             return
+        }
+        
+        completion(.success(SignatureResult(
+            signature: formatSignature(signature, format: signatureFormat),
+            signatureBytes: FlutterStandardTypedData(bytes: signature),
+            publicKey: formatKey(pub, format: keyFormat),
+            error: nil,
+            code: .success,
+            algorithm: "RSA",
+            keySize: 2048
+        )))
+    }
+    
+    private func performEcSigning(dataToSign: Data, prompt: String, signatureFormat: SignatureFormat, keyFormat: KeyFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
+        guard let ecKey = getEcPrivateKey(prompt: prompt) else {
+             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "EC Key not found or auth failed", code: .unknown)))
+             return
+        }
+        
+        var error: Unmanaged<CFError>?
+        guard let signature = SecKeyCreateSignature(ecKey, .ecdsaSignatureMessageX962SHA256, dataToSign as CFData, &error) as Data? else {
+              let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
+               completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Signing Error: \(msg)", code: .unknown)))
+              return
+        }
+         guard let pub = SecKeyCopyPublicKey(ecKey) else {
+              completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Pub Key Error", code: .unknown)))
+             return
+        }
+        
+        completion(.success(SignatureResult(
+            signature: formatSignature(signature, format: signatureFormat),
+            signatureBytes: FlutterStandardTypedData(bytes: signature),
+            publicKey: formatKey(pub, format: keyFormat),
+            error: nil,
+            code: .success,
+            algorithm: "EC",
+            keySize: 256
+        )))
+    }
+    
+    private func performRsaDecryption(payload: String, payloadFormat: PayloadFormat, prompt: String, completion: @escaping (Result<DecryptResult, Error>) -> Void) {
+        guard let rsaPrivateKey = unwrapRsaKey(prompt: prompt) else {
+               completion(.success(DecryptResult(decryptedData: nil, error: "Failed to access/unwrap RSA key", code: .unknown)))
+               return
+        }
+        
+        var error: Unmanaged<CFError>?
+        guard let encryptedData = parsePayload(payload, format: payloadFormat) else {
+             completion(.success(DecryptResult(decryptedData: nil, error: "Invalid payload", code: .invalidInput)))
+             return
+        }
+        
+        guard let decrypted = SecKeyCreateDecryptedData(rsaPrivateKey, .rsaEncryptionPKCS1, encryptedData as CFData, &error) as Data?,
+              let str = String(data: decrypted, encoding: .utf8) else {
+             let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
+             completion(.success(DecryptResult(decryptedData: nil, error: "Decryption Error: \(msg)", code: .unknown)))
+             return
+        }
+        
+        completion(.success(DecryptResult(decryptedData: str, error: nil, code: .success)))
+    }
+    
+    private func performEcDecryption(payload: String, payloadFormat: PayloadFormat, prompt: String, completion: @escaping (Result<DecryptResult, Error>) -> Void) {
+         guard let ecKey = getEcPrivateKey(prompt: prompt) else {
+                completion(.success(DecryptResult(decryptedData: nil, error: "EC Key not found or auth failed", code: .unknown)))
+               return
+        }
+        
+        guard let encryptedData = parsePayload(payload, format: payloadFormat) else {
+             completion(.success(DecryptResult(decryptedData: nil, error: "Invalid payload", code: .invalidInput)))
+             return
+        }
+        
+        var error: Unmanaged<CFError>?
+        guard let decrypted = SecKeyCreateDecryptedData(ecKey, .eciesEncryptionStandardX963SHA256AESGCM, encryptedData as CFData, &error) as Data?,
+              let str = String(data: decrypted, encoding: .utf8) else {
+             let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
+             completion(.success(DecryptResult(decryptedData: nil, error: "Decryption Error: \(msg)", code: .unknown)))
+             return
+        }
+        completion(.success(DecryptResult(decryptedData: str, error: nil, code: .success)))
     }
 
-    private static let encodedRSAEncryptionOID: [UInt8] = [
-        0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00
-    ]
+    // MARK: - Helpers
 
-    private static let encodedECEncryptionOID: [UInt8] = [
-        0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08,
-        0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07
-    ]
-
-    private static func addHeader(publicKeyData: Data?, isEc: Bool = false) -> Data? {
-        guard let publicKeyData = publicKeyData else { return nil }
-        return isEc ? addECHeader(publicKeyData: publicKeyData) : addRSAHeader(publicKeyData: publicKeyData)
+    private func deleteExistingKeys() {
+        let ecQuery: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: Constants.ecKeyAlias,
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom
+        ]
+        SecItemDelete(ecQuery as CFDictionary)
+        
+        let rsaTag = Constants.biometricKeyAlias
+        let rsaQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: rsaTag,
+            kSecAttrAccount as String: rsaTag
+        ]
+        SecItemDelete(rsaQuery as CFDictionary)
+        
+        _ = DomainState.deleteSaved()
+        _ = InvalidationSetting.delete()
+    }
+    
+    private func hasRsaKey() -> Bool {
+        let tag = Constants.biometricKeyAlias
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: tag,
+            kSecAttrAccount as String: tag,
+            kSecReturnData as String: false,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        return SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess
+    }
+    
+    private func getEcPrivateKey(prompt: String) -> SecKey? {
+        let tag = Constants.ecKeyAlias
+        let context = LAContext()
+        context.localizedReason = prompt
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: tag,
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecReturnRef as String: true,
+            kSecUseAuthenticationContext as String: context
+        ]
+        
+        var item: CFTypeRef?
+        if SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess {
+            return (item as! SecKey)
+        }
+        return nil
+    }
+    
+    private func unwrapRsaKey(prompt: String) -> SecKey? {
+        // 1. Get Wrapped Data
+        let tag = Constants.biometricKeyAlias
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: tag,
+            kSecAttrAccount as String: tag,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+              let wrappedData = item as? Data else { return nil }
+              
+        // 2. Get EC Key (Auth logic handled by Secure Enclave)
+        guard let ecKey = getEcPrivateKey(prompt: prompt) else { return nil }
+        
+        // 3. Unwrap
+        var error: Unmanaged<CFError>?
+        guard let rsaData = SecKeyCreateDecryptedData(ecKey, .eciesEncryptionStandardX963SHA256AESGCM, wrappedData as CFData, &error) as Data? else {
+            return nil
+        }
+        
+        // 4. Restore Key
+        let attrs: [String: Any] = [
+            kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
+            kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
+            kSecAttrKeySizeInBits as String: 2048
+        ]
+        return SecKeyCreateWithData(rsaData as CFData, attrs as CFDictionary, nil)
     }
 
-    private static func addRSAHeader(publicKeyData: Data?) -> Data? {
-        guard let publicKeyData = publicKeyData else { return nil }
-        var builder = [UInt8](repeating: 0, count: 15)
-        var encKey = Data()
-        let bitLen: UInt = (publicKeyData.count + 1 < 128) ? 1 : UInt(((publicKeyData.count + 1) / 256) + 2)
-        builder[0] = 0x30
-        let i = encodedRSAEncryptionOID.count + 2 + Int(bitLen) + publicKeyData.count
-        var j = encodedLength(&builder[1], i)
-        encKey.append(&builder, count: Int(j + 1))
-        encKey.append(encodedRSAEncryptionOID, count: encodedRSAEncryptionOID.count)
-        builder[0] = 0x03
-        j = encodedLength(&builder[1], publicKeyData.count + 1)
-        builder[j + 1] = 0x00
-        encKey.append(&builder, count: Int(j + 2))
-        encKey.append(publicKeyData)
-        return encKey
+    private func formatKey(_ key: SecKey, format: KeyFormat) -> String {
+        guard let data = subjectPublicKeyInfo(for: key) else { return "" }
+        
+        switch format {
+        case .base64, .raw:
+            return data.base64EncodedString()
+        case .pem:
+            let base64 = data.base64EncodedString(options: [.lineLength64Characters, .endLineWithLineFeed])
+            return "-----BEGIN PUBLIC KEY-----\n\(base64)\n-----END PUBLIC KEY-----"
+        case .hex:
+             return data.map { String(format: "%02x", $0) }.joined()
+        }
     }
+    
+    private func subjectPublicKeyInfo(for key: SecKey) -> Data? {
+        var error: Unmanaged<CFError>?
+        guard let rawData = SecKeyCopyExternalRepresentation(key, &error) as Data? else { return nil }
+        
+        guard let attributes = SecKeyCopyAttributes(key) as? [String: Any],
+              let keyType = attributes[kSecAttrKeyType as String] as? String else { return rawData }
 
-    private static func addECHeader(publicKeyData: Data?) -> Data? {
-        guard let publicKeyData = publicKeyData else { return nil }
-        var builder = [UInt8](repeating: 0, count: 15)
-        var encKey = Data()
-        let bitLen: UInt = (publicKeyData.count + 1 < 128) ? 1 : UInt(((publicKeyData.count + 1) / 256) + 2)
-        builder[0] = 0x30
-        let i = encodedECEncryptionOID.count + 2 + Int(bitLen) + publicKeyData.count
-        var j = encodedLength(&builder[1], i)
-        encKey.append(&builder, count: Int(j + 1))
-        encKey.append(encodedECEncryptionOID, count: encodedECEncryptionOID.count)
-        builder[0] = 0x03
-        j = encodedLength(&builder[1], publicKeyData.count + 1)
-        builder[j + 1] = 0x00
-        encKey.append(&builder, count: Int(j + 2))
-        encKey.append(publicKeyData)
-        return encKey
+        if keyType == (kSecAttrKeyTypeRSA as String) {
+            // AlgorithmIdentifier: rsaEncryption, NULL
+            let algorithmHeader: [UInt8] = [
+                0x30, 0x0d, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x01, 0x01, 0x05, 0x00
+            ]
+            
+            var bitString = Data()
+            bitString.append(0x00) // unused bits
+            bitString.append(rawData)
+            let bitStringEncoded = encodeASN1Content(tag: 0x03, content: bitString)
+            
+            var sequenceContent = Data(algorithmHeader)
+            sequenceContent.append(bitStringEncoded)
+            
+            return encodeASN1Content(tag: 0x30, content: sequenceContent)
+            
+        } else if keyType == (kSecAttrKeyTypeECSECPrimeRandom as String) {
+            // AlgorithmIdentifier: id-ecPublicKey, prime256v1
+            let algorithmHeader: [UInt8] = [
+                0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03, 0x01, 0x07
+            ]
+            
+            var bitString = Data()
+            bitString.append(0x00) // unused bits
+            bitString.append(rawData)
+            let bitStringEncoded = encodeASN1Content(tag: 0x03, content: bitString)
+            
+            var sequenceContent = Data(algorithmHeader)
+            sequenceContent.append(bitStringEncoded)
+            return encodeASN1Content(tag: 0x30, content: sequenceContent)
+        }
+        
+        return rawData
     }
-
-    private static func encodedLength(_ buf: UnsafeMutablePointer<UInt8>?, _ length: size_t) -> size_t {
-        var length = length
+    
+    private func encodeASN1Content(tag: UInt8, content: Data) -> Data {
+        var data = Data()
+        data.append(tag)
+        let length = content.count
+        
         if length < 128 {
-            buf?[0] = UInt8(length)
-            return 1
+            data.append(UInt8(length))
+        } else if length < 256 {
+            data.append(0x81)
+            data.append(UInt8(length))
+        } else if length < 65536 {
+            data.append(0x82)
+            data.append(UInt8(length >> 8))
+            data.append(UInt8(length & 0xFF))
+        } else {
+             data.append(0x83)
+             data.append(UInt8(length >> 16))
+             data.append(UInt8((length >> 8) & 0xFF))
+             data.append(UInt8(length & 0xFF))
         }
-        let i: size_t = (length / 256) + 1
-        buf?[0] = UInt8(i + 0x80)
-        for j in 0..<i {
-            buf?[i - j] = UInt8(length & 0xff)
-            length >>= 8
+        
+        data.append(content)
+        return data
+    }
+    
+    private func formatSignature(_ data: Data, format: SignatureFormat) -> String {
+        switch format {
+        case .base64, .raw:
+            return data.base64EncodedString()
+        case .hex:
+             return data.map { String(format: "%02x", $0) }.joined()
         }
-        return i + 1
+    }
+    
+    private func parsePayload(_ payload: String, format: PayloadFormat) -> Data? {
+        switch format {
+        case .base64:
+            return Data(base64Encoded: payload, options: .ignoreUnknownCharacters)
+        case .hex:
+            return parseHex(payload)
+        case .raw:
+            return Data(base64Encoded: payload, options: .ignoreUnknownCharacters) // Raw assumes base64 input string for transport
+        }
+    }
+    
+    private func parseHex(_ hex: String) -> Data? {
+        var data = Data()
+        var hexStr = hex
+         if hexStr.count % 2 != 0 { hexStr = "0" + hexStr }
+         for i in stride(from: 0, to: hexStr.count, by: 2) {
+             let start = hexStr.index(hexStr.startIndex, offsetBy: i)
+             let end = hexStr.index(start, offsetBy: 2)
+             guard let byte = UInt8(hexStr[start..<end], radix: 16) else { return nil }
+             data.append(byte)
+         }
+         return data
     }
 }

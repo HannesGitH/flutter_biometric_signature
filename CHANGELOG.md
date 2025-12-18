@@ -1,3 +1,39 @@
+## [9.0.0] - 2025-12-18
+
+* **Breaking**: Method signature changes:
+  - `createKeys()` now takes `config`, `keyFormat`, `promptMessage` parameters
+  - `createSignature()` now takes `payload`, `config`, `signatureFormat`, `keyFormat`, `promptMessage` parameters
+  - `decrypt()` now takes `payload`, `payloadFormat`, `config`, `promptMessage` parameters
+
+* Moved cross-platform parameters into unified config objects:
+  - `signatureType`, `enforceBiometric`, `setInvalidatedByBiometricEnrollment`, `useDeviceCredentials` now in `CreateKeysConfig`
+  - Each field is documented with which platform(s) it applies to
+
+### Architecture - Type-safe Communication with Pigeon
+* **Breaking**: Migrated entire platform communication layer to [Pigeon](https://pub.dev/packages/pigeon).
+* **Breaking**: Replaced raw string/map returns with structured strongly-typed objects:
+  - `KeyCreationResult`: Contains `publicKey`, `error`, and `code`.
+  - `SignatureResult`: Contains `signature`, `publicKey`, `error`, and `code`.
+  - `DecryptResult`: Contains `decryptedData`, `error`, and `code`.
+  - `BiometricAvailability`: detailed availability status including enrolled biometric types and error reasons.
+* **Breaking**: Standardized `BiometricError` enum across all platforms.
+
+### API Improvements
+* **Breaking**: `biometricAuthAvailable()` now returns a `BiometricAvailability` object instead of a raw string.
+* Removed legacy `signature_options.dart`, `decryption_options.dart` and old config classes.
+* Enhanced error handling with specific error codes (e.g., `userCanceled`, `notEnrolled`, `lockedOut`) instead of generic strings.
+* **New `getKeyInfo()` method**: Retrieve detailed information about existing biometric keys without creating a signature.
+    - Returns `KeyInfo` object with: `exists`, `isValid`, `algorithm`, `keySize`, `isHybridMode`, `publicKey`, `decryptingPublicKey`.
+    - Accepts `checkValidity` parameter to verify key hasn't been invalidated by biometric changes.
+    - Accepts `keyFormat` parameter to specify output format (base64, pem, hex).
+* **New `KeyInfo` class**: Exported via Pigeon for type-safe key metadata.
+* `biometricKeyExists()` is now a convenience wrapper around `getKeyInfo()`.
+
+### Improved
+* Cleaner, simpler API with fewer method parameters
+* Better documentation of platform-specific options
+* Updated all example projects to use new API
+
 ## [8.5.0] - 2025-12-09
 
 ### Added - macOS Platform Support

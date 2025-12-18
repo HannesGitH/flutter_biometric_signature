@@ -168,53 +168,112 @@ All examples demonstrate:
 
 ### Initialize Biometric Service
 ```dart
-import 'package:biometric_signature/key_material.dart';
+import 'package:biometric_signature/biometric_signature.dart';
 
 final biometric = BiometricSignature();
 
 // Check availability
-final available = await biometric.biometricAuthAvailable();
+final availability = await biometric.biometricAuthAvailable();
+if (availability.canAuthenticate ?? false) {
+  print('Biometrics available: ${availability.availableBiometrics}');
+}
 
-// Create keys
+// Create keys (RSA by default)
 final keyResult = await biometric.createKeys(
   keyFormat: KeyFormat.pem,
-  androidConfig: AndroidConfig(
-    useDeviceCredentials: false,
-    signatureType: AndroidSignatureType.RSA,
-  ),
-  iosConfig: IosConfig(
-    useDeviceCredentials: false,
-    signatureType: IOSSignatureType.RSA,
+  promptMessage: 'Authenticate to create keys',
+  config: CreateKeysConfig(
+    signatureType: SignatureType.rsa,
+    useDeviceCredentials: true,
+    setInvalidatedByBiometricEnrollment: true,
+    enforceBiometric: true,
+    enableDecryption: false, // Android only
   ),
 );
 
-final pemPublicKey = keyResult?.publicKey.asString();
+if (keyResult.code == BiometricError.success) {
+  print('Public Key: ${keyResult.publicKey}');
+}
+```
+
+### Get Key Info
+```dart
+// Check key existence with metadata
+final info = await biometric.getKeyInfo(
+  checkValidity: true,
+  keyFormat: KeyFormat.pem,
+);
+
+if (info.exists && (info.isValid ?? true)) {
+  print('Algorithm: ${info.algorithm}, Size: ${info.keySize} bits');
+  print('Hybrid Mode: ${info.isHybridMode}');
+  print('Public Key: ${info.publicKey}');
+}
 ```
 
 ### Sign Data
 ```dart
-final signatureResult = await biometric.createSignature(
-  SignatureOptions(
-    payload: 'data_to_sign',
-    promptMessage: 'Authenticate to continue',
-    keyFormat: KeyFormat.raw,
+final result = await biometric.createSignature(
+  payload: 'data_to_sign',
+  promptMessage: 'Authenticate to sign',
+  signatureFormat: SignatureFormat.base64,
+  keyFormat: KeyFormat.pem,
+  config: CreateSignatureConfig(
+    allowDeviceCredentials: true,
   ),
 );
 
-final signatureBase64 = signatureResult?.signature.toBase64();
+if (result.code == BiometricError.success) {
+  print('Signature: ${result.signature}');
+}
+```
+
+### Decrypt Data
+```dart
+final decryptResult = await biometric.decrypt(
+  payload: encryptedBase64,
+  payloadFormat: PayloadFormat.base64,
+  promptMessage: 'Authenticate to decrypt',
+  config: DecryptConfig(
+    allowDeviceCredentials: false,
+  ),
+);
+
+if (decryptResult.code == BiometricError.success) {
+  print('Decrypted: ${decryptResult.decryptedData}');
+}
 ```
 
 ### Error Handling
 ```dart
-try {
-  final signatureResult = await biometric.createSignature(options);
-  final signatureHex = signatureResult?.signature.toHex();
-} on PlatformException catch (e) {
-  if (e.code == 'AUTH_FAILED') {
-    // Handle authentication failure
-  } else if (e.code == 'CANCELLED') {
-    // Handle user cancellation
-  }
+final result = await biometric.createSignature(
+  payload: 'data_to_sign',
+  promptMessage: 'Authenticate',
+);
+
+switch (result.code) {
+  case BiometricError.success:
+    print('Signed: ${result.signature}');
+    break;
+  case BiometricError.userCanceled:
+    print('User cancelled authentication');
+    break;
+  case BiometricError.keyInvalidated:
+    print('Key invalidated - re-enrollment required');
+    break;
+  case BiometricError.lockedOut:
+    print('Too many attempts - locked out');
+    break;
+  default:
+    print('Error: ${result.code} - ${result.error}');
+}
+```
+
+### Delete Keys
+```dart
+final deleted = await biometric.deleteKeys();
+if (deleted) {
+  print('All biometric keys removed');
 }
 ```
 
@@ -232,7 +291,7 @@ Found an issue or want to improve an example? Contributions are welcome!
 
 1. Fork the repository
 2. Create your feature branch
-3. Test your changes on both platforms
+3. Test your changes on all platforms
 4. Submit a pull request
 
 ## 📄 License

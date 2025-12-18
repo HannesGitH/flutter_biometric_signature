@@ -1,12 +1,8 @@
-import 'package:biometric_signature/android_config.dart';
-import 'package:biometric_signature/ios_config.dart';
-import 'package:biometric_signature/macos_config.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
-import 'biometric_signature_method_channel.dart';
-import 'decryption_options.dart';
-import 'key_material.dart';
-import 'signature_options.dart';
+import 'biometric_signature_platform_interface.pigeon.dart';
+
+export 'biometric_signature_platform_interface.pigeon.dart';
 
 /// Platform interface that defines the methods exposed to plugin
 /// implementations.
@@ -16,12 +12,9 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
 
   static final Object _token = Object();
 
-  static BiometricSignaturePlatform _instance =
-      MethodChannelBiometricSignature();
+  static BiometricSignaturePlatform _instance = _PigeonBiometricSignature();
 
   /// The default instance of [BiometricSignaturePlatform] to use.
-  ///
-  /// Defaults to [MethodChannelBiometricSignature].
   static BiometricSignaturePlatform get instance => _instance;
 
   /// Platform-specific implementations should set this with their own
@@ -32,50 +25,105 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
     _instance = instance;
   }
 
-  /// Creates a key pair using the supplied platform-specific configuration.
-  Future<Map<String, dynamic>?> createKeys(
-    AndroidConfig androidConfig,
-    IosConfig iosConfig,
-    MacosConfig macosConfig, {
-    required KeyFormat keyFormat,
-    bool enforceBiometric = false,
-    String? promptMessage,
-  }) {
-    throw UnimplementedError(
-      'createKeys(AndroidConfig androidConfig, IosConfig iosConfig, MacosConfig macosConfig, {required KeyFormat keyFormat, bool enforceBiometric, String? promptMessage}) has not been implemented.',
-    );
-  }
-
-  /// Deletes the stored biometric key if present.
-  Future<bool?> deleteKeys() {
-    throw UnimplementedError('deleteKeys() has not been implemented.');
-  }
-
-  /// Returns information about the biometric availability on the device.
-  Future<String?> biometricAuthAvailable() {
+  /// Checks if biometric authentication is available.
+  Future<BiometricAvailability> biometricAuthAvailable() {
     throw UnimplementedError(
       'biometricAuthAvailable() has not been implemented.',
     );
   }
 
-  /// Creates a signature for the given payload using biometrics.
-  Future<Map<String, dynamic>?> createSignature(SignatureOptions options) {
-    throw UnimplementedError(
-      'createSignature(SignatureOptions options) has not been implemented.',
+  /// Creates a new key pair.
+  Future<KeyCreationResult> createKeys(
+    CreateKeysConfig? config,
+    KeyFormat keyFormat,
+    String? promptMessage,
+  ) {
+    throw UnimplementedError('createKeys() has not been implemented.');
+  }
+
+  /// Creates a signature.
+  Future<SignatureResult> createSignature(
+    String payload,
+    CreateSignatureConfig? config,
+    SignatureFormat signatureFormat,
+    KeyFormat keyFormat,
+    String? promptMessage,
+  ) {
+    throw UnimplementedError('createSignature() has not been implemented.');
+  }
+
+  /// Decrypts data.
+  Future<DecryptResult> decrypt(
+    String payload,
+    PayloadFormat payloadFormat,
+    DecryptConfig? config,
+    String? promptMessage,
+  ) {
+    throw UnimplementedError('decrypt() has not been implemented.');
+  }
+
+  /// Deletes keys.
+  Future<bool> deleteKeys() {
+    throw UnimplementedError('deleteKeys() has not been implemented.');
+  }
+
+  /// Gets detailed information about existing biometric keys.
+  Future<KeyInfo> getKeyInfo(bool checkValidity, KeyFormat keyFormat) {
+    throw UnimplementedError('getKeyInfo() has not been implemented.');
+  }
+}
+
+class _PigeonBiometricSignature extends BiometricSignaturePlatform {
+  final BiometricSignatureApi _api = BiometricSignatureApi();
+
+  @override
+  Future<BiometricAvailability> biometricAuthAvailable() {
+    return _api.biometricAuthAvailable();
+  }
+
+  @override
+  Future<KeyCreationResult> createKeys(
+    CreateKeysConfig? config,
+    KeyFormat keyFormat,
+    String? promptMessage,
+  ) {
+    return _api.createKeys(config, keyFormat, promptMessage);
+  }
+
+  @override
+  Future<SignatureResult> createSignature(
+    String payload,
+    CreateSignatureConfig? config,
+    SignatureFormat signatureFormat,
+    KeyFormat keyFormat,
+    String? promptMessage,
+  ) {
+    return _api.createSignature(
+      payload,
+      config,
+      signatureFormat,
+      keyFormat,
+      promptMessage,
     );
   }
 
-  /// Decrypts the given payload using the private key and biometrics.
-  Future<Map<String, dynamic>?> decrypt(DecryptionOptions options) {
-    throw UnimplementedError(
-      'decrypt(DecryptionOptions options) has not been implemented.',
-    );
+  @override
+  Future<DecryptResult> decrypt(
+    String payload,
+    PayloadFormat payloadFormat,
+    DecryptConfig? config,
+    String? promptMessage,
+  ) {
+    return _api.decrypt(payload, payloadFormat, config, promptMessage);
   }
 
-  /// Checks whether the biometric key exists, optionally validating the key.
-  Future<bool?> biometricKeyExists(bool checkValidity) {
-    throw UnimplementedError(
-      'biometricKeyExists(bool checkValidity) has not been implemented.',
-    );
+  @override
+  Future<bool> deleteKeys() {
+    return _api.deleteKeys();
+  }
+
+  @override
+  Future<KeyInfo> getKeyInfo(bool checkValidity, KeyFormat keyFormat) {
+    return _api.getKeyInfo(checkValidity, keyFormat);
   }
 }

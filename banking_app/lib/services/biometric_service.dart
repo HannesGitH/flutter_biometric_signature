@@ -1,4 +1,7 @@
-import 'package:biometric_signature/biometric_signature.dart';
+import 'package:biometric_signature/biometric_signature.dart'
+    hide BiometricAvailability;
+import 'package:biometric_signature/biometric_signature.dart' as plugin
+    show BiometricAvailability;
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -11,14 +14,21 @@ class BiometricService {
     try {
       final result = await _biometric.biometricAuthAvailable();
       print('result: $result');
-      if (result == null || result.contains('none,')) {
+      if (!(result.canAuthenticate ?? false)) {
         return BiometricAvailability(
           isAvailable: false,
           biometricType: 'none',
-          errorMessage: result,
+          errorMessage: result.reason,
         );
       }
-      return BiometricAvailability(isAvailable: true, biometricType: result);
+      final biometricTypes = (result.availableBiometrics ?? [])
+          .map((b) => b?.name ?? '')
+          .where((s) => s.isNotEmpty)
+          .join(',');
+      return BiometricAvailability(
+        isAvailable: true,
+        biometricType: biometricTypes.isNotEmpty ? biometricTypes : 'biometric',
+      );
     } catch (e) {
       return BiometricAvailability(
         isAvailable: false,
@@ -32,24 +42,22 @@ class BiometricService {
   Future<String> initializeKeys() async {
     try {
       final keyResult = await _biometric.createKeys(
-        androidConfig: AndroidConfig(
+        keyFormat: KeyFormat.base64,
+        config: CreateKeysConfig(
           useDeviceCredentials: false,
-          signatureType: AndroidSignatureType.RSA,
-        ),
-        iosConfig: IosConfig(
-          useDeviceCredentials: false,
-          signatureType: IOSSignatureType.RSA,
+          signatureType: SignatureType.rsa,
+          enforceBiometric: true,
         ),
       );
 
-      if (keyResult != null) {
-        final publicKey = keyResult.publicKey.toBase64();
+      final publicKey = keyResult.publicKey;
+      if (publicKey != null) {
         // Store public key for future reference
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_publicKeyKey, publicKey);
         return publicKey;
       }
-      throw Exception('Failed to generate keys');
+      throw Exception('Failed to generate keys: ${keyResult.error}');
     } on PlatformException catch (e) {
       throw Exception('Biometric key creation failed: ${e.message}');
     }
@@ -59,7 +67,7 @@ class BiometricService {
   Future<bool> hasKeys() async {
     try {
       final exists = await _biometric.biometricKeyExists(checkValidity: true);
-      return exists ?? false;
+      return exists;
     } catch (e) {
       return false;
     }
@@ -75,21 +83,22 @@ class BiometricService {
   Future<String> signData(String payload, String promptMessage) async {
     try {
       final signatureResult = await _biometric.createSignature(
-        SignatureOptions(
-          payload: payload,
-          promptMessage: promptMessage,
-          androidOptions: const AndroidSignatureOptions(
-            cancelButtonText: 'Cancel',
-            allowDeviceCredentials: false,
-          ),
-          iosOptions: const IosSignatureOptions(shouldMigrate: false),
+        payload: payload,
+        promptMessage: promptMessage,
+        signatureFormat: SignatureFormat.base64,
+        keyFormat: KeyFormat.base64,
+        config: CreateSignatureConfig(
+          cancelButtonText: 'Cancel',
+          allowDeviceCredentials: false,
+          shouldMigrate: false,
         ),
       );
 
-      if (signatureResult != null) {
-        return signatureResult.signature.toBase64();
+      final signature = signatureResult.signature;
+      if (signature != null) {
+        return signature;
       }
-      throw Exception('Failed to create signature');
+      throw Exception('Failed to create signature: ${signatureResult.error}');
     } on PlatformException catch (e) {
       if (e.code == 'AUTH_FAILED') {
         throw Exception('Authentication failed: ${e.message}');
@@ -108,7 +117,7 @@ class BiometricService {
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove(_publicKeyKey);
       }
-      return result ?? false;
+      return result;
     } catch (e) {
       return false;
     }

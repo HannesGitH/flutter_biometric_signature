@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:biometric_signature/biometric_signature.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:pointycastle/asn1/asn1_parser.dart';
 import 'package:pointycastle/asn1/primitives/asn1_bit_string.dart';
 import 'package:pointycastle/asn1/primitives/asn1_sequence.dart';
@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
       home: Scaffold(
-        appBar: AppBar(title: const Text('Biometric Signature Test')),
+        appBar: AppBar(title: const Text('Biometric Signature v9.0.0')),
         body: const ExampleAppBody(),
       ),
     );
@@ -40,212 +40,131 @@ class ExampleAppBody extends StatefulWidget {
 class _ExampleAppBodyState extends State<ExampleAppBody> {
   final _biometricSignature = BiometricSignature();
 
-  // Mode selection
+  // Settings
   bool useEc = false;
   bool enableDecryption = false;
+  KeyFormat _publicKeyFormat = KeyFormat.pem;
+  KeyFormat _signatureKeyFormat = KeyFormat.base64;
+  SignatureFormat _signatureFormat = SignatureFormat.base64;
+  KeyInfo? _keyInfo;
+  bool _checkKeyValidity = false;
 
-  // State
-  KeyCreationResult? keyMaterial;
+  // Results
+  KeyCreationResult? keyResult;
   SignatureResult? signatureResult;
-  String? decryptResult;
+  DecryptResult? decryptResult;
   String? payload;
   String? errorMessage;
   bool isLoading = false;
+  BiometricAvailability? availability;
 
-  /// Returns current mode description
-  String get currentMode {
-    if (!useEc) return 'RSA';
-    if (!enableDecryption) return 'EC (Sign Only)';
-    return 'Hybrid EC (Sign + ECIES)';
+  @override
+  void initState() {
+    super.initState();
+    _checkAvailability();
   }
 
-  /// Check if hybrid mode
-  /// Option 1: Use KeyCreationResult.isHybridMode if your class supports it
-  /// Option 2: Infer from configuration (Android + EC + decryption enabled)
-  bool get isHybridMode {
-    if (keyMaterial == null) return false;
-    // If KeyCreationResult has isHybridMode field, use it:
-    // return keyMaterial!.isHybridMode;
-    // Otherwise, infer from configuration:
-    return Platform.isAndroid && useEc && enableDecryption;
+  Future<void> _checkAvailability() async {
+    final result = await _biometricSignature.biometricAuthAvailable();
+    setState(() {
+      availability = result;
+    });
   }
-
-  /// Whether we're running on an Apple platform (iOS or macOS)
-  bool get isApplePlatform => Platform.isIOS || Platform.isMacOS;
 
   Future<void> _createKeys() async {
-    // Hide keyboard and clear errors first.
     FocusScope.of(context).unfocus();
-    setState(() {
-      errorMessage = null;
-    });
+    setState(() => errorMessage = null);
 
     try {
-      // Do not set isLoading before prompting biometrics — avoid overlay-related flicker.
       final result = await _biometricSignature.createKeys(
-        androidConfig: AndroidConfig(
+        keyFormat: _publicKeyFormat,
+        promptMessage: 'Authenticate to create keys',
+        config: CreateKeysConfig(
           useDeviceCredentials: false,
-          signatureType: useEc
-              ? AndroidSignatureType.ECDSA
-              : AndroidSignatureType.RSA,
+          signatureType: useEc ? SignatureType.ecdsa : SignatureType.rsa,
           setInvalidatedByBiometricEnrollment: true,
+          enforceBiometric: true,
           enableDecryption: enableDecryption,
         ),
-        iosConfig: IosConfig(
-          useDeviceCredentials: false,
-          signatureType: useEc ? IOSSignatureType.ECDSA : IOSSignatureType.RSA,
-          biometryCurrentSet: true,
-        ),
-        macosConfig: MacosConfig(
-          useDeviceCredentials: false,
-          signatureType: useEc
-              ? MacosSignatureType.ECDSA
-              : MacosSignatureType.RSA,
-          biometryCurrentSet: true,
-        ),
-        enforceBiometric: true,
       );
 
-      // Optionally show overlay while doing post-key-creation processing.
-      setState(() {
-        isLoading = true;
-      });
-
-      setState(() => keyMaterial = result);
-
-      if (result != null) {
-        debugPrint('✅ Keys created ($currentMode)');
-        debugPrint('   Algorithm: ${result.algorithm}');
-        debugPrint('   Key Size: ${result.keySize}');
-        if (Platform.isAndroid && useEc && enableDecryption) {
-          debugPrint('   Hybrid Mode: EC signing + ECIES encryption');
-        }
+      if (result.code == BiometricError.success) {
+        setState(() => keyResult = result);
+      } else {
+        setState(
+          () => errorMessage = 'Error: ${result.code} - ${result.error}',
+        );
       }
     } catch (e) {
       setState(() => errorMessage = e.toString());
-      debugPrint('❌ Error creating keys: $e');
-    } finally {
-      setState(() => isLoading = false);
     }
-  }
-
-  void _onModeChanged() {
-    // Clear keys when mode changes
-    _biometricSignature.deleteKeys().then((success) {
-      if (success == true) {
-        setState(() {
-          keyMaterial = null;
-          signatureResult = null;
-          decryptResult = null;
-          errorMessage = null;
-        });
-      }
-    });
-  }
-
-  void _payloadChanged(String value) {
-    if (value == payload) return;
-    setState(() {
-      payload = value;
-      signatureResult = null;
-      decryptResult = null;
-      errorMessage = null;
-    });
   }
 
   Future<void> _createSignature() async {
     if (payload == null || payload!.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please enter a payload')));
+      _showSnack('Enter payload first');
       return;
     }
-
-    // Hide keyboard — avoids layout changes while FaceID prompt animates.
     FocusScope.of(context).unfocus();
-
-    // We don't set isLoading = true before the biometric prompt to avoid
-    // drawing a semi-opaque overlay while iOS presents FaceID (causes flicker).
     setState(() {
       errorMessage = null;
+      signatureResult = null;
     });
 
     try {
-      // Call createSignature directly — the plugin will show native biometric UI.
       final result = await _biometricSignature.createSignature(
-        SignatureOptions(
-          payload: payload!,
-          promptMessage: 'Sign Payload',
-          androidOptions: const AndroidSignatureOptions(
-            allowDeviceCredentials: false,
-            subtitle: 'Approve to sign data',
-          ),
-          iosOptions: const IosSignatureOptions(shouldMigrate: false),
-        ),
+        payload: payload!,
+        signatureFormat: _signatureFormat,
+        keyFormat: _signatureKeyFormat,
+        promptMessage: 'Sign Data',
+        config: CreateSignatureConfig(allowDeviceCredentials: false),
       );
 
-      // Only show the app loading overlay for any post-auth processing.
-      setState(() {
-        isLoading = true;
-      });
-
-      // Apply result and update state (this will repaint after prompt dismisses).
-      setState(() {
-        signatureResult = result;
-      });
-
-      if (result != null) {
-        debugPrint('✅ Signature created (${result.algorithm})');
+      if (result.code == BiometricError.success) {
+        setState(() => signatureResult = result);
+      } else {
+        setState(
+          () => errorMessage = 'Error: ${result.code} - ${result.error}',
+        );
       }
     } catch (e) {
       setState(() => errorMessage = e.toString());
-      debugPrint('❌ Error signing: $e');
-    } finally {
-      // Ensure overlay is removed after all work
-      setState(() => isLoading = false);
     }
   }
 
   Future<void> _decrypt() async {
+    if (Platform.isWindows) {
+      setState(() {
+        errorMessage =
+            'Decryption is not supported on Windows. '
+            'Windows Hello is designed for authentication and signing only.';
+      });
+      return;
+    }
+
     if (payload == null || payload!.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please enter a payload')));
+      _showSnack('Enter payload first');
       return;
     }
-
-    if (keyMaterial == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please create keys first')));
-      return;
-    }
-
-    // Hide keyboard before presenting the biometric prompt.
     FocusScope.of(context).unfocus();
-
-    // Clear previous error and do not show the global overlay while FaceID animates.
     setState(() {
       errorMessage = null;
+      decryptResult = null;
     });
 
     try {
-      // 1) Do any non-auth expensive work first if needed (none here).
-      // 2) Call encrypt helper to produce encryptedBase64 (no overlay).
+      // 1) Encrypt payload first (Roundtrip verification)
       final encryptedBase64 = await _encryptPayload(payload!);
-      debugPrint('📦 Encrypted: ${encryptedBase64.substring(0, 40)}...');
+      debugPrint(
+        '📦 Encrypted: ${encryptedBase64.substring(0, min(40, encryptedBase64.length))}...',
+      );
 
-      // 3) Present biometric prompt via plugin (native UI). Avoid overlay while prompt is visible.
+      // 2) Present biometric prompt via plugin (native UI).
       final result = await _biometricSignature.decrypt(
-        DecryptionOptions(
-          payload: encryptedBase64,
-          promptMessage: 'Decrypt Payload',
-          androidOptions: const AndroidDecryptionOptions(
-            allowDeviceCredentials: false,
-            subtitle: 'Approve to decrypt data',
-          ),
-          iosOptions: const IosDecryptionOptions(shouldMigrate: false),
-        ),
+        payload: encryptedBase64,
+        payloadFormat: PayloadFormat.base64,
+        promptMessage: 'Decrypt Payload',
+        config: DecryptConfig(allowDeviceCredentials: false),
       );
 
       // Only show overlay if we need to do extra processing after auth.
@@ -253,8 +172,15 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
         isLoading = true;
       });
 
-      setState(() => decryptResult = result?.decryptedData);
-      debugPrint('✅ Decrypted: ${result?.decryptedData}');
+      setState(() => decryptResult = result);
+      if (result.decryptedData != null) {
+        debugPrint('✅ Decrypted: ${result.decryptedData}');
+      } else {
+        debugPrint(
+          '❌ Decryption Failed: Code=${result.code}, Error=${result.error}',
+        );
+        setState(() => errorMessage = 'Decryption Failed: ${result.code}');
+      }
     } catch (e, stack) {
       setState(() => errorMessage = e.toString());
       debugPrint('❌ Error: $e\n$stack');
@@ -263,29 +189,41 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     }
   }
 
+  Future<void> _checkKeyExists() async {
+    try {
+      final info = await _biometricSignature.getKeyInfo(
+        checkValidity: _checkKeyValidity,
+        keyFormat: _publicKeyFormat,
+      );
+      setState(() => _keyInfo = info);
+      _showSnack(
+        'Key exists: ${info.exists}${info.isValid != null ? ', valid: ${info.isValid}' : ''}',
+      );
+    } catch (e) {
+      setState(() => errorMessage = e.toString());
+    }
+  }
+
   /// Encrypts payload based on current key type
   Future<String> _encryptPayload(String plaintext) async {
-    final algorithm = keyMaterial!.algorithm;
-
-    if (algorithm == 'RSA') {
+    // useEc is the source of truth for what we requested.
+    if (!useEc) {
       return _encryptRsa(plaintext);
     } else {
       // EC - use ECIES
-      if (isApplePlatform) {
-        // iOS and macOS use native ECIES via method channel
-        return _encryptEciesIos(plaintext);
-      } else {
-        // Android uses Dart-based ECIES
-        return _encryptEciesDart(plaintext);
-      }
+      return _encryptEcies(plaintext);
     }
   }
 
   /// RSA encryption
   String _encryptRsa(String plaintext) {
-    final publicKeyPem = keyMaterial!.publicKey.pemLabel != null
-        ? keyMaterial!.publicKey.asString()!
-        : '-----BEGIN PUBLIC KEY-----\n${keyMaterial!.publicKey.toBase64()}\n-----END PUBLIC KEY-----';
+    // All platforms now return SPKI (Standard X.509)
+    // In Hybrid mode, RSA key is in decryptingPublicKey
+    final publicKeyStr =
+        keyResult!.decryptingPublicKey ?? keyResult!.publicKey!;
+    final publicKeyPem = publicKeyStr.contains('BEGIN PUBLIC KEY')
+        ? publicKeyStr
+        : '-----BEGIN PUBLIC KEY-----\n$publicKeyStr\n-----END PUBLIC KEY-----';
 
     final parser = enc.RSAKeyParser();
     final rsaPublicKey = parser.parse(publicKeyPem) as RSAPublicKey;
@@ -293,20 +231,13 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     return encrypter.encrypt(plaintext).base64;
   }
 
-  /// ECIES encryption using iOS native
-  Future<String> _encryptEciesIos(String plaintext) async {
-    const platform = MethodChannel('biometric_signature');
-    final result = await platform.invokeMethod('testEncrypt', {
-      'payload': plaintext,
-    });
-    return result['encryptedPayload'] as String;
-  }
-
-  /// ECIES encryption using Dart (PointyCastle)
-  String _encryptEciesDart(String plaintext) {
-    // Parse recipient's public key
-    final pem = keyMaterial!.publicKey.toPem();
-    final ecPublicKey = _parseEcPublicKeyFromPem(pem);
+  /// ECIES encryption
+  String _encryptEcies(String plaintext) {
+    // Parse recipient's public key (handling both PEM and raw Base64 if needed)
+    final publicKeyStr =
+        keyResult!.decryptingPublicKey ?? keyResult!.publicKey!;
+    // Note: _parseEcPublicKeyFromPem handles stripping headers
+    final ecPublicKey = _parseEcPublicKeyFromPem(publicKeyStr);
 
     // Generate ephemeral keypair
     final ephemeralKeyPair = _generateEphemeralKeyPair(ecPublicKey.parameters!);
@@ -317,43 +248,83 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     final agreement = ECDHBasicAgreement()..init(ephemeralPrivate);
     final sharedSecret = agreement.calculateAgreement(ecPublicKey);
 
-    // X9.63 KDF -> AES key (16) + IV (12)
-    final derived = _kdfX963(sharedSecret, 28, Uint8List(0));
-    final aesKey = derived.sublist(0, 16);
-    final gcmIv = derived.sublist(16, 28);
+    // Output: [EphemeralPubKey (Uncompressed 65)] || [Ciphertext + Tag]
+    final isApple = Platform.isIOS || Platform.isMacOS;
+    final ephemeralPubBytes = ephemeralPublic.Q!.getEncoded(
+      false,
+    ); // Uncompressed required
 
-    // AES-128-GCM encryption
+    // ECIES Parameters
+    // Hypothesis: Apple Standard Mode uses Static Zero IV and binds EphemKey in SharedInfo.
+    final sharedInfo = isApple ? ephemeralPubBytes : Uint8List(0);
+
+    Uint8List gcmIv;
+    Uint8List aesKey;
+    final Uint8List aad;
+
+    if (isApple) {
+      // iOS Standard Mode Hypothesis
+      // 1. IV is Static Zeros (16 bytes).
+      // 2. KDF derives ONLY Key (16 bytes).
+      final keySize = 16;
+      aesKey = _kdfX963(sharedSecret, keySize, sharedInfo);
+      gcmIv = Uint8List(16); // Zero IV
+    } else {
+      // Android Standard Mode (Derived IV)
+      final keySize = 16;
+      final ivSize = 12;
+      final derived = _kdfX963(sharedSecret, keySize + ivSize, sharedInfo);
+      aesKey = derived.sublist(0, keySize);
+      gcmIv = derived.sublist(keySize, keySize + ivSize);
+    }
+
+    aad = Uint8List(0);
+
+    // AES-GCM encryption
     final cipher = GCMBlockCipher(AESEngine());
-    cipher.init(
-      true,
-      AEADParameters(KeyParameter(aesKey), 128, gcmIv, Uint8List(0)),
-    );
+    cipher.init(true, AEADParameters(KeyParameter(aesKey), 128, gcmIv, aad));
     final ciphertext = cipher.process(
       Uint8List.fromList(utf8.encode(plaintext)),
     );
 
-    // Output: [EphemeralPubKey(65)] || [Ciphertext + Tag]
-    final ephemeralPubBytes = ephemeralPublic.Q!.getEncoded(false);
+    // Construct Payload: [EphemKey] [Ciphertext]
+    // Note: Android uses same payload structure
+    final payloadParts = [ephemeralPubBytes, ciphertext];
+
     return base64Encode(
-      Uint8List.fromList([...ephemeralPubBytes, ...ciphertext]),
+      Uint8List.fromList(payloadParts.expand((x) => x).toList()),
     );
   }
 
   // ==================== ECIES Helpers ====================
 
   ECPublicKey _parseEcPublicKeyFromPem(String pem) {
+    // Strip headers if present
     final rows = pem
         .split('\n')
         .where((l) => !l.startsWith('-----') && l.trim().isNotEmpty)
         .join('');
     final bytes = base64Decode(rows);
-
-    final parser = ASN1Parser(bytes);
-    final topLevel = parser.nextObject() as ASN1Sequence;
-    final bitString = topLevel.elements![1] as ASN1BitString;
-    final pubBytes = bitString.stringValues!;
-
     final params = ECDomainParameters('secp256r1');
+    Uint8List pubBytes;
+
+    try {
+      final parser = ASN1Parser(bytes);
+      final topLevel = parser.nextObject();
+
+      if (topLevel is ASN1Sequence) {
+        // SPKI format (Android)
+        final bitString = topLevel.elements![1] as ASN1BitString;
+        pubBytes = Uint8List.fromList(bitString.stringValues!);
+      } else {
+        // iOS returns raw bytes (often parses as OctetString due to 0x04 tag)
+        pubBytes = bytes;
+      }
+    } catch (_) {
+      // Fallback to raw bytes just in case
+      pubBytes = bytes;
+    }
+
     final q = params.curve.decodePoint(pubBytes)!;
     return ECPublicKey(q, params);
   }
@@ -423,269 +394,381 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
   }
 
   Future<void> _deleteKeys() async {
-    final success = await _biometricSignature.deleteKeys();
-    debugPrint('🗑️ Delete keys: $success');
-    if (success == true) {
-      setState(() {
-        keyMaterial = null;
-        signatureResult = null;
-        decryptResult = null;
-        errorMessage = null;
-      });
+    try {
+      final success = await _biometricSignature.deleteKeys();
+      if (success) {
+        setState(() {
+          keyResult = null;
+          signatureResult = null;
+          decryptResult = null;
+          errorMessage = null;
+        });
+        _showSnack('Keys deleted');
+      } else {
+        setState(() => errorMessage = 'Failed to delete keys');
+      }
+    } catch (e) {
+      setState(() => errorMessage = e.toString());
     }
+  }
+
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
-    // On Apple platforms (iOS/macOS), decryption is always available
-    // On Android, it requires explicit enableDecryption flag
-    final canDecrypt = enableDecryption || isApplePlatform;
-
-    return SafeArea(
-      child: Stack(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Mode Selection Card
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Mode: $currentMode',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            FilterChip(
-                              label: const Text('EC'),
-                              selected: useEc,
-                              onSelected: (v) {
-                                setState(() => useEc = v);
-                                _onModeChanged();
-                              },
-                            ),
-                            const SizedBox(width: 8),
-                            FilterChip(
-                              label: const Text('Decryption'),
-                              selected: enableDecryption,
-                              onSelected: (v) {
-                                setState(() => enableDecryption = v);
-                                _onModeChanged();
-                              },
-                            ),
-                          ],
+          // Availability Info
+          if (availability != null)
+            Card(
+              child: ListTile(
+                leading: Icon(
+                  (availability!.canAuthenticate ?? false)
+                      ? Icons.check_circle
+                      : Icons.warning,
+                  color: (availability!.canAuthenticate ?? false)
+                      ? Colors.green
+                      : Colors.orange,
+                ),
+                title: Text(
+                  (availability!.canAuthenticate ?? false)
+                      ? 'Biometrics Available'
+                      : 'Biometrics Unavailable',
+                ),
+                subtitle: Text(availability!.availableBiometrics.toString()),
+              ),
+            ),
+
+          const SizedBox(height: 10),
+
+          // Config
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      // Hide EC toggle on Windows - Windows Hello only supports RSA
+                      if (!Platform.isWindows) ...[
+                        const Text('Use EC'),
+                        Switch(
+                          value: useEc,
+                          onChanged: (v) => setState(() => useEc = v),
                         ),
                       ],
-                    ),
+                      if (Platform.isAndroid) ...[
+                        const SizedBox(width: 20),
+                        const Text('Decrypt Support'),
+                        Switch(
+                          value: enableDecryption,
+                          onChanged: (v) =>
+                              setState(() => enableDecryption = v),
+                        ),
+                      ],
+                    ],
                   ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Key Status Card
-                Card(
-                  color: keyMaterial != null
-                      ? Colors.green.shade50
-                      : Colors.grey.shade100,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              keyMaterial != null
-                                  ? Icons.check_circle
-                                  : Icons.cancel,
-                              color: keyMaterial != null
-                                  ? Colors.green
-                                  : Colors.grey,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                keyMaterial != null
-                                    ? 'Keys: ${keyMaterial!.algorithm} (${keyMaterial!.keySize} bits)'
-                                    : 'No Keys',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text('Pub Key: '),
+                      DropdownButton<KeyFormat>(
+                        value: _publicKeyFormat,
+                        onChanged: (v) {
+                          if (v != null) setState(() => _publicKeyFormat = v);
+                        },
+                        items: KeyFormat.values
+                            .map(
+                              (f) => DropdownMenuItem(
+                                value: f,
+                                child: Text(f.name),
                               ),
-                            ),
-                          ],
-                        ),
-                        if (keyMaterial != null && isHybridMode) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            '🔀 Hybrid: EC signing + EC encryption (ECIES)',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.blue.shade700,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Action Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: isLoading ? null : _createKeys,
-                        icon: const Icon(Icons.key),
-                        label: const Text('Create Keys'),
+                            )
+                            .toList(),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    OutlinedButton.icon(
-                      onPressed: !isLoading ? _deleteKeys : null,
-                      icon: const Icon(Icons.delete),
-                      label: const Text('Delete'),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-
-                // Payload Input
-                TextField(
-                  decoration: const InputDecoration(
-                    labelText: 'Payload',
-                    hintText: 'Enter text to sign/encrypt',
-                    border: OutlineInputBorder(),
+                    ],
                   ),
-                  onChanged: _payloadChanged,
-                ),
-
-                const SizedBox(height: 12),
-
-                // Sign & Decrypt Buttons
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.tonalIcon(
-                        onPressed: !isLoading ? _createSignature : null,
-                        icon: const Icon(Icons.draw),
-                        label: const Text('Sign'),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed:
-                            keyMaterial != null && canDecrypt && !isLoading
-                            ? _decrypt
-                            : null,
-                        icon: const Icon(Icons.lock_open),
-                        label: const Text('Decrypt'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: Colors.teal,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                // Results
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (errorMessage != null)
-                          _buildResultCard(
-                            icon: Icons.error,
-                            color: Colors.red,
-                            title: 'Error',
-                            content: errorMessage!,
-                          ),
-
-                        if (signatureResult != null)
-                          _buildResultCard(
-                            icon: Icons.verified,
-                            color: Colors.blue,
-                            title: 'Signature (${signatureResult!.algorithm})',
-                            content: signatureResult!.signature.toBase64(),
-                            isMonospace: true,
-                          ),
-
-                        if (decryptResult != null)
-                          _buildResultCard(
-                            icon: Icons.check_circle,
-                            color: Colors.green.shade900,
-                            title: 'Decrypted',
-                            content: decryptResult!,
-                          ),
-                      ],
-                    ),
+                  ElevatedButton(
+                    onPressed: _createKeys,
+                    child: const Text('Create Keys'),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
 
-          // Loading overlay
-          if (isLoading)
-            Container(
-              color: Colors.black26,
-              child: const Center(child: CircularProgressIndicator()),
+          if (keyResult != null)
+            Card(
+              color: Colors.green.shade50,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Public Key Created:',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      keyResult!.publicKey ?? '',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                    if (keyResult!.publicKeyBytes != null)
+                      Text(
+                        'Bytes: ${keyResult!.publicKeyBytes!.length} (Hex: ${keyResult!.publicKeyBytes!.map((e) => e.toRadixString(16).padLeft(2, '0')).join()})',
+                        style: const TextStyle(fontSize: 8, color: Colors.grey),
+                      ),
+                    if (keyResult!.decryptingPublicKey != null) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Decrypting Key (Hybrid):',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        keyResult!.decryptingPublicKey!,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                      if (keyResult!.decryptingAlgorithm != null)
+                        Text(
+                          'Alg: ${keyResult!.decryptingAlgorithm}, Size: ${keyResult!.decryptingKeySize}',
+                          style: const TextStyle(fontSize: 10),
+                        ),
+                    ],
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      icon: const Icon(Icons.delete, size: 16),
+                      label: const Text('Delete Keys'),
+                      onPressed: _deleteKeys,
+                    ),
+                  ],
+                ),
+              ),
             ),
+
+          const SizedBox(height: 10),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Key Info (getKeyInfo)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Check Validity'),
+                      Switch(
+                        value: _checkKeyValidity,
+                        onChanged: (v) => setState(() => _checkKeyValidity = v),
+                      ),
+                    ],
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _checkKeyExists,
+                    icon: const Icon(Icons.vpn_key),
+                    label: const Text('Get Key Info'),
+                  ),
+                  if (_keyInfo != null) ...[
+                    const Divider(),
+                    _buildKeyInfoRow(
+                      'Exists',
+                      (_keyInfo!.exists ?? false) ? 'Yes ✓' : 'No',
+                    ),
+                    if (_keyInfo!.isValid != null)
+                      _buildKeyInfoRow(
+                        'Valid',
+                        _keyInfo!.isValid! ? 'Yes ✓' : 'No ✗',
+                      ),
+                    if (_keyInfo!.algorithm != null)
+                      _buildKeyInfoRow('Algorithm', _keyInfo!.algorithm!),
+                    if (_keyInfo!.keySize != null)
+                      _buildKeyInfoRow('Key Size', '${_keyInfo!.keySize} bits'),
+                    if (_keyInfo!.isHybridMode != null)
+                      _buildKeyInfoRow(
+                        'Hybrid Mode',
+                        _keyInfo!.isHybridMode! ? 'Yes' : 'No',
+                      ),
+                    if (_keyInfo!.publicKey != null) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Public Key:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      SelectableText(
+                        _keyInfo!.publicKey!,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                    if (_keyInfo!.decryptingPublicKey != null) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Decrypting Key:',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                        ),
+                      ),
+                      Text(
+                        '${_keyInfo!.decryptingAlgorithm} / ${_keyInfo!.decryptingKeySize} bits',
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      SelectableText(
+                        _keyInfo!.decryptingPublicKey!,
+                        style: const TextStyle(
+                          fontSize: 9,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          TextField(
+            decoration: const InputDecoration(
+              labelText: 'Payload (Text or Base64)',
+            ),
+            onChanged: (v) => payload = v,
+          ),
+
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Text('Sig Format: '),
+              DropdownButton<SignatureFormat>(
+                value: _signatureFormat,
+                onChanged: (v) {
+                  if (v != null) setState(() => _signatureFormat = v);
+                },
+                items: SignatureFormat.values
+                    .map((f) => DropdownMenuItem(value: f, child: Text(f.name)))
+                    .toList(),
+              ),
+              const SizedBox(width: 10),
+              const Text('Key Format: '),
+              DropdownButton<KeyFormat>(
+                value: _signatureKeyFormat,
+                onChanged: (v) {
+                  if (v != null) setState(() => _signatureKeyFormat = v);
+                },
+                items: KeyFormat.values
+                    .map((f) => DropdownMenuItem(value: f, child: Text(f.name)))
+                    .toList(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton(
+                  onPressed: _createSignature,
+                  child: const Text('Sign'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.tonal(
+                  onPressed: _decrypt,
+                  child: const Text('Decrypt'),
+                ),
+              ),
+            ],
+          ),
+
+          if (errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Text(
+                errorMessage!,
+                style: const TextStyle(color: Colors.red),
+              ),
+            ),
+
+          if (signatureResult != null) ...[
+            _buildResult(
+              'Signature',
+              signatureResult!.signature,
+              bytes: signatureResult!.signatureBytes,
+            ),
+            if (signatureResult!.publicKey != null)
+              _buildResult('Signer Public Key', signatureResult!.publicKey),
+          ],
+
+          if (decryptResult != null)
+            _buildResult('Decrypted', decryptResult!.decryptedData),
         ],
       ),
     );
   }
 
-  Widget _buildResultCard({
-    required IconData icon,
-    required Color color,
-    required String title,
-    required String content,
-    bool isMonospace = false,
-  }) {
+  Widget _buildResult(String title, String? data, {Uint8List? bytes}) {
     return Card(
-      color: color.withOpacity(0.1),
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(top: 10),
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(icon, color: color, size: 20),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: TextStyle(fontWeight: FontWeight.bold, color: color),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
             SelectableText(
-              content,
-              style: TextStyle(
-                fontSize: 12,
-                fontFamily: isMonospace ? 'monospace' : null,
-                color: color.withOpacity(0.8),
-              ),
+              data ?? 'null',
+              style: const TextStyle(fontFamily: 'monospace'),
             ),
+            if (bytes != null)
+              Text(
+                'Bytes: ${bytes.length} (Hex: ${bytes.map((e) => e.toRadixString(16).padLeft(2, '0')).join()})',
+                style: const TextStyle(fontSize: 8, color: Colors.grey),
+              ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildKeyInfoRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+          ),
+        ],
       ),
     );
   }

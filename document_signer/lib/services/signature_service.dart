@@ -16,23 +16,21 @@ class SignatureService {
   Future<String> initializeKeys() async {
     try {
       final keyResult = await _biometric.createKeys(
-        androidConfig: AndroidConfig(
+        keyFormat: KeyFormat.base64,
+        config: CreateKeysConfig(
           useDeviceCredentials: false,
-          signatureType: AndroidSignatureType.RSA,
-        ),
-        iosConfig: IosConfig(
-          useDeviceCredentials: false,
-          signatureType: IOSSignatureType.RSA,
+          signatureType: SignatureType.rsa,
+          enforceBiometric: true,
         ),
       );
 
-      if (keyResult != null) {
-        final publicKey = keyResult.publicKey.toBase64();
+      final publicKey = keyResult.publicKey;
+      if (publicKey != null) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString(_publicKeyKey, publicKey);
         return publicKey;
       }
-      throw Exception('Failed to generate keys');
+      throw Exception('Failed to generate keys: ${keyResult.error}');
     } catch (e) {
       throw Exception('Key initialization failed: $e');
     }
@@ -42,7 +40,7 @@ class SignatureService {
   Future<bool> hasKeys() async {
     try {
       final exists = await _biometric.biometricKeyExists(checkValidity: true);
-      return exists ?? false;
+      return exists;
     } catch (e) {
       return false;
     }
@@ -76,9 +74,9 @@ class SignatureService {
   /// Sign a document
   Future<SignatureInfo> signDocument(Document document) async {
     try {
-      // Get biometric type
-      final biometricType = await _biometric.biometricAuthAvailable();
-      if (biometricType == null || biometricType.contains('none,')) {
+      // Get biometric availability
+      final availability = await _biometric.biometricAuthAvailable();
+      if (!(availability.canAuthenticate ?? false)) {
         throw Exception('Biometric authentication not available');
       }
 
@@ -99,22 +97,21 @@ class SignatureService {
 
       // Sign with biometric
       final signatureResult = await _biometric.createSignature(
-        SignatureOptions(
-          payload: payload,
-          promptMessage: 'Sign "${document.title}"',
-          androidOptions: const AndroidSignatureOptions(
-            cancelButtonText: 'Cancel',
-            allowDeviceCredentials: false,
-          ),
-          iosOptions: const IosSignatureOptions(shouldMigrate: false),
+        payload: payload,
+        promptMessage: 'Sign "${document.title}"',
+        signatureFormat: SignatureFormat.base64,
+        keyFormat: KeyFormat.base64,
+        config: CreateSignatureConfig(
+          cancelButtonText: 'Cancel',
+          allowDeviceCredentials: false,
+          shouldMigrate: false,
         ),
       );
 
-      if (signatureResult == null) {
-        throw Exception('Failed to create signature');
+      final signatureValue = signatureResult.signature;
+      if (signatureValue == null) {
+        throw Exception('Failed to create signature: ${signatureResult.error}');
       }
-
-      final signatureValue = signatureResult.signature.toBase64();
 
       // Get signer info
       final publicKey = await getPublicKey();
@@ -124,12 +121,18 @@ class SignatureService {
         throw Exception('Public key not found');
       }
 
+      // Format biometric type string
+      final biometricType = (availability.availableBiometrics ?? [])
+          .map((b) => b?.name ?? '')
+          .where((s) => s.isNotEmpty)
+          .join(',');
+
       return SignatureInfo(
         signatureValue: signatureValue,
         timestamp: DateTime.now(),
         signerPublicKey: publicKey,
         documentHash: documentHash,
-        biometricType: biometricType,
+        biometricType: biometricType.isNotEmpty ? biometricType : 'biometric',
         signerName: signerName,
       );
     } on PlatformException catch (e) {
@@ -169,7 +172,7 @@ class SignatureService {
   Future<bool> isBiometricAvailable() async {
     try {
       final result = await _biometric.biometricAuthAvailable();
-      return result != null && !result.contains('none,');
+      return result.canAuthenticate ?? false;
     } catch (e) {
       return false;
     }
@@ -183,7 +186,7 @@ class SignatureService {
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove(_publicKeyKey);
       }
-      return result ?? false;
+      return result;
     } catch (e) {
       return false;
     }

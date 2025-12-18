@@ -215,16 +215,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openDocument(Document doc) async {
-    final result = await Navigator.push<bool>(
+    await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (context) => DocumentDetailScreen(document: doc),
       ),
     );
 
-    if (result == true) {
-      await _loadDocuments();
-    }
+    // Refresh list on return to update signed status
+    await _loadDocuments();
   }
 
   void _createDocument() async {
