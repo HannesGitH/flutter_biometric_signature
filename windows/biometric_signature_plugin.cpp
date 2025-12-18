@@ -15,6 +15,7 @@
 
 #include <memory>
 #include <sstream>
+#include <iomanip>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,41 @@ std::string Base64Encode(const std::vector<uint8_t>& data) {
   return result;
 }
 
+// Hex encode bytes
+std::string HexEncode(const std::vector<uint8_t>& data) {
+  if (data.empty()) return "";
+  std::ostringstream oss;
+  for (uint8_t byte : data) {
+    oss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(byte);
+  }
+  return oss.str();
+}
+
+// KeyFormat enum values: 0=base64, 1=pem, 2=hex, 3=raw
+// Format public key according to the requested format
+std::string FormatPublicKey(const std::vector<uint8_t>& key_bytes, int key_format) {
+  std::string base64_key = Base64Encode(key_bytes);
+  
+  switch (key_format) {
+    case 0:  // base64
+    case 3:  // raw - returns base64 string, but publicKeyBytes has actual bytes
+      return base64_key;
+    case 1: {  // pem
+      std::string pem = "-----BEGIN PUBLIC KEY-----\n";
+      // Split base64 into lines of 64 characters
+      for (size_t i = 0; i < base64_key.length(); i += 64) {
+        pem += base64_key.substr(i, 64) + "\n";
+      }
+      pem += "-----END PUBLIC KEY-----";
+      return pem;
+    }
+    case 2:  // hex
+      return HexEncode(key_bytes);
+    default:
+      return base64_key;
+  }
+}
+
 // Convert IBuffer to vector
 std::vector<uint8_t> IBufferToVector(
     const winrt::Windows::Storage::Streams::IBuffer& buffer) {
@@ -66,6 +102,20 @@ winrt::Windows::Storage::Streams::IBuffer VectorToIBuffer(
 // Static channel to keep it alive
 static std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> g_channel;
 
+// Static window handle to bring window to foreground before Windows Hello dialogs
+static HWND g_window_handle = nullptr;
+
+// Helper function to bring the Flutter window to the foreground
+// This helps ensure Windows Hello dialogs appear in front of the app
+static void BringWindowToForeground() {
+  if (g_window_handle != nullptr) {
+    // Bring window to foreground to ensure Windows Hello dialog appears properly
+    SetForegroundWindow(g_window_handle);
+    // Also try to set focus
+    SetFocus(g_window_handle);
+  }
+}
+
 // static
 void BiometricSignaturePlugin::RegisterWithRegistrar(
     flutter::PluginRegistrarWindows *registrar) {
@@ -73,6 +123,12 @@ void BiometricSignaturePlugin::RegisterWithRegistrar(
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           registrar->messenger(), "com.visionflutter.biometric_signature",
           &flutter::StandardMethodCodec::GetInstance());
+
+  // Get the Flutter window handle for bringing it to foreground before Windows Hello dialogs
+  flutter::FlutterView* view = registrar->GetView();
+  if (view != nullptr) {
+    g_window_handle = view->GetNativeWindow();
+  }
 
   auto plugin = std::make_unique<BiometricSignaturePlugin>();
 
@@ -105,7 +161,7 @@ void BiometricSignaturePlugin::HandleMethodCall(
     HandleDeleteKeys(std::move(result));
     
   } else if (method_call.method_name().compare("getKeyInfo") == 0) {
-    HandleGetKeyInfo(std::move(result));
+    HandleGetKeyInfo(method_call, std::move(result));
     
   } else if (method_call.method_name().compare("decrypt") == 0) {
     HandleDecrypt(std::move(result));
@@ -167,12 +223,28 @@ void BiometricSignaturePlugin::HandleCreateKeys(
   auto result_ptr = std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>>(
       std::move(result));
 
+  // Extract keyFormat from arguments (default to 0 = base64)
+  int key_format = 0;
+  const auto* args = std::get_if<flutter::EncodableMap>(method_call.arguments());
+  if (args) {
+    auto it = args->find(flutter::EncodableValue("keyFormat"));
+    if (it != args->end()) {
+      const auto* format_val = std::get_if<int>(&it->second);
+      if (format_val) {
+        key_format = *format_val;
+      }
+    }
+  }
+
+  // Bring Flutter window to foreground so Windows Hello dialog appears properly
+  BringWindowToForeground();
+
   auto async_op = winrt::Windows::Security::Credentials::KeyCredentialManager::
       RequestCreateAsync(kKeyName, 
           winrt::Windows::Security::Credentials::KeyCredentialCreationOption::
               ReplaceExisting);
   
-  async_op.Completed([result_ptr](auto const& op, auto status) {
+  async_op.Completed([result_ptr, key_format](auto const& op, auto status) {
     flutter::EncodableMap response;
     
     if (status == winrt::Windows::Foundation::AsyncStatus::Completed) {
@@ -184,10 +256,10 @@ void BiometricSignaturePlugin::HandleCreateKeys(
         auto credential = create_result.Credential();
         auto public_key_buffer = credential.RetrievePublicKey();
         auto public_key_bytes = IBufferToVector(public_key_buffer);
-        auto public_key_base64 = Base64Encode(public_key_bytes);
+        auto public_key_formatted = FormatPublicKey(public_key_bytes, key_format);
 
         response[flutter::EncodableValue("publicKey")] = 
-            flutter::EncodableValue(public_key_base64);
+            flutter::EncodableValue(public_key_formatted);
         response[flutter::EncodableValue("publicKeyBytes")] = 
             flutter::EncodableValue(public_key_bytes);
         response[flutter::EncodableValue("algorithm")] = 
@@ -239,6 +311,9 @@ void BiometricSignaturePlugin::HandleCreateSignature(
     const flutter::MethodCall<flutter::EncodableValue>& method_call,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
   std::string payload;
+  int key_format = 0;  // default to base64
+  int signature_format = 0;  // default to base64
+  
   const auto* args = std::get_if<flutter::EncodableMap>(method_call.arguments());
   if (args) {
     auto it = args->find(flutter::EncodableValue("payload"));
@@ -246,6 +321,22 @@ void BiometricSignaturePlugin::HandleCreateSignature(
       const auto* payload_val = std::get_if<std::string>(&it->second);
       if (payload_val) {
         payload = *payload_val;
+      }
+    }
+    
+    auto kf_it = args->find(flutter::EncodableValue("keyFormat"));
+    if (kf_it != args->end()) {
+      const auto* format_val = std::get_if<int>(&kf_it->second);
+      if (format_val) {
+        key_format = *format_val;
+      }
+    }
+    
+    auto sf_it = args->find(flutter::EncodableValue("signatureFormat"));
+    if (sf_it != args->end()) {
+      const auto* format_val = std::get_if<int>(&sf_it->second);
+      if (format_val) {
+        signature_format = *format_val;
       }
     }
   }
@@ -264,10 +355,13 @@ void BiometricSignaturePlugin::HandleCreateSignature(
       std::move(result));
   auto payload_copy = payload;  // Copy for capture
 
+  // Bring Flutter window to foreground so Windows Hello dialog appears properly
+  BringWindowToForeground();
+
   auto async_op = winrt::Windows::Security::Credentials::KeyCredentialManager::
       OpenAsync(kKeyName);
   
-  async_op.Completed([result_ptr, payload_copy](auto const& op, auto status) {
+  async_op.Completed([result_ptr, payload_copy, key_format, signature_format](auto const& op, auto status) {
     flutter::EncodableMap response;
     
     if (status == winrt::Windows::Foundation::AsyncStatus::Completed) {
@@ -281,7 +375,7 @@ void BiometricSignaturePlugin::HandleCreateSignature(
         auto data_buffer = VectorToIBuffer(payload_bytes);
         
         auto sign_op = credential.RequestSignAsync(data_buffer);
-        sign_op.Completed([result_ptr, credential](auto const& sign_async, auto sign_status) {
+        sign_op.Completed([result_ptr, credential, key_format, signature_format](auto const& sign_async, auto sign_status) {
           flutter::EncodableMap resp;
           
           if (sign_status == winrt::Windows::Foundation::AsyncStatus::Completed) {
@@ -292,18 +386,30 @@ void BiometricSignaturePlugin::HandleCreateSignature(
               
               auto signature_buffer = sign_result.Result();
               auto signature_bytes = IBufferToVector(signature_buffer);
-              auto signature_base64 = Base64Encode(signature_bytes);
+              
+              // Format signature based on signatureFormat: 0=base64, 1=hex, 2=raw
+              std::string signature_formatted;
+              switch (signature_format) {
+                case 1:  // hex
+                  signature_formatted = HexEncode(signature_bytes);
+                  break;
+                case 0:  // base64
+                case 2:  // raw - returns base64 string, but signatureBytes has actual bytes
+                default:
+                  signature_formatted = Base64Encode(signature_bytes);
+                  break;
+              }
               
               auto public_key_buffer = credential.RetrievePublicKey();
               auto public_key_bytes = IBufferToVector(public_key_buffer);
-              auto public_key_base64 = Base64Encode(public_key_bytes);
+              auto public_key_formatted = FormatPublicKey(public_key_bytes, key_format);
 
               resp[flutter::EncodableValue("signature")] = 
-                  flutter::EncodableValue(signature_base64);
+                  flutter::EncodableValue(signature_formatted);
               resp[flutter::EncodableValue("signatureBytes")] = 
                   flutter::EncodableValue(signature_bytes);
               resp[flutter::EncodableValue("publicKey")] = 
-                  flutter::EncodableValue(public_key_base64);
+                  flutter::EncodableValue(public_key_formatted);
               resp[flutter::EncodableValue("algorithm")] = 
                   flutter::EncodableValue("RSA");
               resp[flutter::EncodableValue("keySize")] = 
@@ -373,14 +479,37 @@ void BiometricSignaturePlugin::HandleDeleteKeys(
 }
 
 void BiometricSignaturePlugin::HandleGetKeyInfo(
+    const flutter::MethodCall<flutter::EncodableValue>& method_call,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
   auto result_ptr = std::shared_ptr<flutter::MethodResult<flutter::EncodableValue>>(
       std::move(result));
 
+  // Extract arguments
+  int key_format = 0;  // default to base64
+  bool check_validity = false;
+  const auto* args = std::get_if<flutter::EncodableMap>(method_call.arguments());
+  if (args) {
+    auto kf_it = args->find(flutter::EncodableValue("keyFormat"));
+    if (kf_it != args->end()) {
+      const auto* format_val = std::get_if<int>(&kf_it->second);
+      if (format_val) {
+        key_format = *format_val;
+      }
+    }
+    
+    auto cv_it = args->find(flutter::EncodableValue("checkValidity"));
+    if (cv_it != args->end()) {
+      const auto* validity_val = std::get_if<bool>(&cv_it->second);
+      if (validity_val) {
+        check_validity = *validity_val;
+      }
+    }
+  }
+
   auto async_op = winrt::Windows::Security::Credentials::KeyCredentialManager::
       OpenAsync(kKeyName);
   
-  async_op.Completed([result_ptr](auto const& op, auto status) {
+  async_op.Completed([result_ptr, key_format, check_validity](auto const& op, auto status) {
     flutter::EncodableMap response;
     
     if (status == winrt::Windows::Foundation::AsyncStatus::Completed) {
@@ -392,12 +521,15 @@ void BiometricSignaturePlugin::HandleGetKeyInfo(
         auto credential = open_result.Credential();
         auto public_key_buffer = credential.RetrievePublicKey();
         auto public_key_bytes = IBufferToVector(public_key_buffer);
-        auto public_key_base64 = Base64Encode(public_key_bytes);
+        auto public_key_formatted = FormatPublicKey(public_key_bytes, key_format);
 
         response[flutter::EncodableValue("exists")] = 
             flutter::EncodableValue(true);
-        response[flutter::EncodableValue("isValid")] = 
-            flutter::EncodableValue(true);
+        // Only include isValid when checkValidity is true (matching iOS/macOS behavior)
+        if (check_validity) {
+          response[flutter::EncodableValue("isValid")] = 
+              flutter::EncodableValue(true);
+        }
         response[flutter::EncodableValue("algorithm")] = 
             flutter::EncodableValue("RSA");
         response[flutter::EncodableValue("keySize")] = 
@@ -405,7 +537,7 @@ void BiometricSignaturePlugin::HandleGetKeyInfo(
         response[flutter::EncodableValue("isHybridMode")] = 
             flutter::EncodableValue(false);
         response[flutter::EncodableValue("publicKey")] = 
-            flutter::EncodableValue(public_key_base64);
+            flutter::EncodableValue(public_key_formatted);
       } else {
         response[flutter::EncodableValue("exists")] = 
             flutter::EncodableValue(false);

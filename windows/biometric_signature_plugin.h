@@ -39,6 +39,7 @@ class BiometricSignaturePlugin : public flutter::Plugin {
   void HandleDeleteKeys(
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
   void HandleGetKeyInfo(
+      const flutter::MethodCall<flutter::EncodableValue>& method_call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
   void HandleDecrypt(
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
