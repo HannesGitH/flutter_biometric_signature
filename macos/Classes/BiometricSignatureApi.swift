@@ -208,17 +208,17 @@ enum PayloadFormat: Int {
 
 /// Generated class from Pigeon that represents data sent in messages.
 struct BiometricAvailability: Hashable {
-  var canAuthenticate: Bool
-  var hasEnrolledBiometrics: Bool
-  var availableBiometrics: [BiometricType?]
+  var canAuthenticate: Bool? = nil
+  var hasEnrolledBiometrics: Bool? = nil
+  var availableBiometrics: [BiometricType?]? = nil
   var reason: String? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> BiometricAvailability? {
-    let canAuthenticate = pigeonVar_list[0] as! Bool
-    let hasEnrolledBiometrics = pigeonVar_list[1] as! Bool
-    let availableBiometrics = pigeonVar_list[2] as! [BiometricType?]
+    let canAuthenticate: Bool? = nilOrValue(pigeonVar_list[0])
+    let hasEnrolledBiometrics: Bool? = nilOrValue(pigeonVar_list[1])
+    let availableBiometrics: [BiometricType?]? = nilOrValue(pigeonVar_list[2])
     let reason: String? = nilOrValue(pigeonVar_list[3])
 
     return BiometricAvailability(
@@ -391,7 +391,7 @@ struct DecryptResult: Hashable {
 /// Generated class from Pigeon that represents data sent in messages.
 struct KeyInfo: Hashable {
   /// Whether any biometric key exists on the device.
-  var exists: Bool
+  var exists: Bool? = nil
   /// Whether the key is still valid (not invalidated by biometric changes).
   /// Only populated when `checkValidity: true` is passed.
   var isValid: Bool? = nil
@@ -413,7 +413,7 @@ struct KeyInfo: Hashable {
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
   static func fromList(_ pigeonVar_list: [Any?]) -> KeyInfo? {
-    let exists = pigeonVar_list[0] as! Bool
+    let exists: Bool? = nilOrValue(pigeonVar_list[0])
     let isValid: Bool? = nilOrValue(pigeonVar_list[1])
     let algorithm: String? = nilOrValue(pigeonVar_list[2])
     let keySize: Int64? = nilOrValue(pigeonVar_list[3])

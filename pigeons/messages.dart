@@ -11,8 +11,6 @@ import 'package:pigeon/pigeon.dart';
     ),
     swiftOut: 'ios/Classes/BiometricSignatureApi.swift',
     swiftOptions: SwiftOptions(),
-    macosOut: 'macos/Classes/BiometricSignatureApi.swift',
-    macosOptions: MacosOptions(),
   ),
 )
 /// Types of biometric authentication supported by the device.
@@ -67,9 +65,9 @@ enum BiometricError {
 }
 
 class BiometricAvailability {
-  bool canAuthenticate;
-  bool hasEnrolledBiometrics;
-  List<BiometricType?> availableBiometrics;
+  bool? canAuthenticate;
+  bool? hasEnrolledBiometrics;
+  List<BiometricType?>? availableBiometrics;
   String? reason;
 }
 
@@ -105,7 +103,7 @@ class DecryptResult {
 /// Detailed information about existing biometric keys.
 class KeyInfo {
   /// Whether any biometric key exists on the device.
-  bool exists;
+  bool? exists;
 
   /// Whether the key is still valid (not invalidated by biometric changes).
   /// Only populated when `checkValidity: true` is passed.

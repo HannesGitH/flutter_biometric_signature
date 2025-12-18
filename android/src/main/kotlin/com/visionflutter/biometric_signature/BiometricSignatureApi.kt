@@ -194,17 +194,17 @@ enum class PayloadFormat(val raw: Int) {
 
 /** Generated class from Pigeon that represents data sent in messages. */
 data class BiometricAvailability (
-  val canAuthenticate: Boolean,
-  val hasEnrolledBiometrics: Boolean,
-  val availableBiometrics: List<BiometricType?>,
+  val canAuthenticate: Boolean? = null,
+  val hasEnrolledBiometrics: Boolean? = null,
+  val availableBiometrics: List<BiometricType?>? = null,
   val reason: String? = null
 )
  {
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): BiometricAvailability {
-      val canAuthenticate = pigeonVar_list[0] as Boolean
-      val hasEnrolledBiometrics = pigeonVar_list[1] as Boolean
-      val availableBiometrics = pigeonVar_list[2] as List<BiometricType?>
+      val canAuthenticate = pigeonVar_list[0] as Boolean?
+      val hasEnrolledBiometrics = pigeonVar_list[1] as Boolean?
+      val availableBiometrics = pigeonVar_list[2] as List<BiometricType?>?
       val reason = pigeonVar_list[3] as String?
       return BiometricAvailability(canAuthenticate, hasEnrolledBiometrics, availableBiometrics, reason)
     }
@@ -371,7 +371,7 @@ data class DecryptResult (
  */
 data class KeyInfo (
   /** Whether any biometric key exists on the device. */
-  val exists: Boolean,
+  val exists: Boolean? = null,
   /**
    * Whether the key is still valid (not invalidated by biometric changes).
    * Only populated when `checkValidity: true` is passed.
@@ -395,7 +395,7 @@ data class KeyInfo (
  {
   companion object {
     fun fromList(pigeonVar_list: List<Any?>): KeyInfo {
-      val exists = pigeonVar_list[0] as Boolean
+      val exists = pigeonVar_list[0] as Boolean?
       val isValid = pigeonVar_list[1] as Boolean?
       val algorithm = pigeonVar_list[2] as String?
       val keySize = pigeonVar_list[3] as Long?

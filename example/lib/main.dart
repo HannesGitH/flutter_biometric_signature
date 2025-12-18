@@ -428,15 +428,15 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
             Card(
               child: ListTile(
                 leading: Icon(
-                  availability!.canAuthenticate
+                  (availability!.canAuthenticate ?? false)
                       ? Icons.check_circle
                       : Icons.warning,
-                  color: availability!.canAuthenticate
+                  color: (availability!.canAuthenticate ?? false)
                       ? Colors.green
                       : Colors.orange,
                 ),
                 title: Text(
-                  availability!.canAuthenticate
+                  (availability!.canAuthenticate ?? false)
                       ? 'Biometrics Available'
                       : 'Biometrics Unavailable',
                 ),
@@ -585,7 +585,7 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                     const Divider(),
                     _buildKeyInfoRow(
                       'Exists',
-                      _keyInfo!.exists ? 'Yes ✓' : 'No',
+                      (_keyInfo!.exists ?? false) ? 'Yes ✓' : 'No',
                     ),
                     if (_keyInfo!.isValid != null)
                       _buildKeyInfoRow(

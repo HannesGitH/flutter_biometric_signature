@@ -116,6 +116,6 @@ class BiometricSignature {
   /// This is a convenience wrapper around [getKeyInfo].
   Future<bool> biometricKeyExists({bool checkValidity = false}) async {
     final info = await getKeyInfo(checkValidity: checkValidity);
-    return info.exists && (info.isValid ?? true);
+    return (info.exists ?? false) && (info.isValid ?? true);
   }
 }

@@ -134,17 +134,17 @@ enum PayloadFormat {
 
 class BiometricAvailability {
   BiometricAvailability({
-    required this.canAuthenticate,
-    required this.hasEnrolledBiometrics,
-    required this.availableBiometrics,
+    this.canAuthenticate,
+    this.hasEnrolledBiometrics,
+    this.availableBiometrics,
     this.reason,
   });
 
-  bool canAuthenticate;
+  bool? canAuthenticate;
 
-  bool hasEnrolledBiometrics;
+  bool? hasEnrolledBiometrics;
 
-  List<BiometricType?> availableBiometrics;
+  List<BiometricType?>? availableBiometrics;
 
   String? reason;
 
@@ -164,10 +164,10 @@ class BiometricAvailability {
   static BiometricAvailability decode(Object result) {
     result as List<Object?>;
     return BiometricAvailability(
-      canAuthenticate: result[0]! as bool,
-      hasEnrolledBiometrics: result[1]! as bool,
-      availableBiometrics: (result[2] as List<Object?>?)!
-          .cast<BiometricType?>(),
+      canAuthenticate: result[0] as bool?,
+      hasEnrolledBiometrics: result[1] as bool?,
+      availableBiometrics: (result[2] as List<Object?>?)
+          ?.cast<BiometricType?>(),
       reason: result[3] as String?,
     );
   }
@@ -392,7 +392,7 @@ class DecryptResult {
 /// Detailed information about existing biometric keys.
 class KeyInfo {
   KeyInfo({
-    required this.exists,
+    this.exists,
     this.isValid,
     this.algorithm,
     this.keySize,
@@ -404,7 +404,7 @@ class KeyInfo {
   });
 
   /// Whether any biometric key exists on the device.
-  bool exists;
+  bool? exists;
 
   /// Whether the key is still valid (not invalidated by biometric changes).
   /// Only populated when `checkValidity: true` is passed.
@@ -452,7 +452,7 @@ class KeyInfo {
   static KeyInfo decode(Object result) {
     result as List<Object?>;
     return KeyInfo(
-      exists: result[0]! as bool,
+      exists: result[0] as bool?,
       isValid: result[1] as bool?,
       algorithm: result[2] as String?,
       keySize: result[3] as int?,
