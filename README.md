@@ -167,9 +167,9 @@ dependencies:
   biometric_signature: ^9.0.0
 ```
 
-|             | Android | iOS   | macOS    |
-|-------------|---------|-------|----------|
-| **Support** | SDK 24+ | 13.0+ | 10.15+   |
+|             | Android | iOS   | macOS  | Windows |
+|-------------|---------|-------|--------|--------|
+| **Support** | SDK 24+ | 13.0+ | 10.15+ | 10+    |
 
 ### iOS Integration
 
@@ -238,14 +238,27 @@ Replace `com.yourdomain.yourapp` with your actual bundle identifier.
 platform :osx, '10.15'
 ```
 
+### Windows Integration
 
-2. Import the package in your Dart code:
+This plugin uses **Windows Hello** for biometric authentication on Windows 10 and later.
+
+**Platform Limitations:**
+- Windows only supports **RSA keys** (ECDSA is ignored)
+- Windows Hello **always authenticates** during key creation (`enforceBiometric` is effectively always `true`)
+- `setInvalidatedByBiometricEnrollment` and `useDeviceCredentials` are ignored
+- **Decryption is not supported** on Windows
+
+No additional configuration is required. The plugin will automatically use Windows Hello when available.
+
+### Common Setup
+
+1. Import the package in your Dart code:
 
 ```dart
 import 'package:biometric_signature/biometric_signature.dart';
 ```
 
-3. Initialize the Biometric Signature instance:
+2. Initialize the Biometric Signature instance:
 
 ```dart
 
@@ -264,23 +277,44 @@ When a user enrolls in biometrics, a key pair is generated. The private key is s
 
 This class provides methods to manage and utilize biometric authentication for secure server interactions. It supports both Android and iOS platforms.
 
-### `createKeys({ androidConfig, iosConfig, macosConfig, useDeviceCredentials, signatureType, setInvalidatedByBiometricEnrollment, keyFormat, enforceBiometric, promptMessage })`
+### `createKeys({ config, keyFormat, promptMessage })`
 
 Generates a new key pair (RSA 2048 or EC) for biometric authentication. The private key is securely stored on the device.
+
+- **Parameters**:
+  - `config`: `CreateKeysConfig` with platform options (see below)
+  - `keyFormat`: Output format (`KeyFormat.base64`, `pem`, `hex`)
+  - `promptMessage`: Custom authentication prompt message
 
 - **Returns**: `Future<KeyCreationResult>`.
   - `publicKey`: The formatted public key string (Base64 or PEM).
   - `code`: `BiometricError` code (e.g., `success`, `userCanceled`).
   - `error`: Descriptive error message.
 
+#### CreateKeysConfig Options
+
+| Option | Platforms | Description |
+|--------|-----------|-------------|
+| `signatureType` | Android/iOS/macOS | `SignatureType.rsa` or `SignatureType.ecdsa` |
+| `enforceBiometric` | Android/iOS/macOS | Require biometric during key creation |
+| `setInvalidatedByBiometricEnrollment` | Android/iOS/macOS | Invalidate key on biometric changes |
+| `useDeviceCredentials` | Android/iOS/macOS | Allow PIN/passcode fallback |
+| `enableDecryption` | Android | Enable decryption capability |
+| `promptSubtitle` | Android | Subtitle for biometric prompt |
+| `promptDescription` | Android | Description for biometric prompt |
+| `cancelButtonText` | Android | Cancel button text |
+
 ```dart
-final result = await _biometricSignature.createKeys(
-    keyFormat: KeyFormat.pem,
-    useDeviceCredentials: false,
+final result = await biometricSignature.createKeys(
+  keyFormat: KeyFormat.pem,
+  promptMessage: 'Authenticate to create keys',
+  config: CreateKeysConfig(
     signatureType: SignatureType.rsa,
-    setInvalidatedByBiometricEnrollment: true,
     enforceBiometric: true,
-    promptMessage: 'Authenticate to create keys',
+    setInvalidatedByBiometricEnrollment: true,
+    useDeviceCredentials: false,
+    enableDecryption: true, // Android only
+  ),
 );
 
 if (result.code == BiometricError.success) {
@@ -288,9 +322,26 @@ if (result.code == BiometricError.success) {
 }
 ```
 
-### `createSignature({ payload, androidConfig, iosConfig, macosConfig, signatureFormat, keyFormat, promptMessage })`
+### `createSignature({ payload, config, signatureFormat, keyFormat, promptMessage })`
 
 Prompts the user for biometric authentication and generates a cryptographic signature.
+
+- **Parameters**:
+  - `payload`: The data to sign
+  - `config`: `CreateSignatureConfig` with platform options
+  - `signatureFormat`: Output format for signature
+  - `keyFormat`: Output format for public key
+  - `promptMessage`: Custom authentication prompt
+
+#### CreateSignatureConfig Options
+
+| Option | Platforms | Description |
+|--------|-----------|-------------|
+| `allowDeviceCredentials` | Android | Allow PIN/pattern fallback |
+| `promptSubtitle` | Android | Subtitle for biometric prompt |
+| `promptDescription` | Android | Description for biometric prompt |
+| `cancelButtonText` | Android | Cancel button text |
+| `shouldMigrate` | iOS | Migrate from legacy keychain storage |
 
 - **Returns**: `Future<SignatureResult>`.
   - `signature`: The signed payload.
@@ -301,16 +352,50 @@ Prompts the user for biometric authentication and generates a cryptographic sign
 final result = await biometricSignature.createSignature(
   payload: 'Data to sign',
   promptMessage: 'Please authenticate',
+  signatureFormat: SignatureFormat.base64,
+  keyFormat: KeyFormat.base64,
+  config: CreateSignatureConfig(
+    allowDeviceCredentials: false,
+  ),
 );
 ```
 
-### `decrypt({ payload, payloadFormat, androidConfig, iosConfig, macosConfig, promptMessage })`
+### `decrypt({ payload, payloadFormat, config, promptMessage })`
 
 Decrypts the given payload using the private key and biometrics.
+
+- **Parameters**:
+  - `payload`: The encrypted data
+  - `payloadFormat`: Format of encrypted data (`PayloadFormat.base64`, `hex`)
+  - `config`: `DecryptConfig` with platform options
+  - `promptMessage`: Custom authentication prompt
+
+#### DecryptConfig Options
+
+| Option | Platforms | Description |
+|--------|-----------|-------------|
+| `allowDeviceCredentials` | Android | Allow PIN/pattern fallback |
+| `promptSubtitle` | Android | Subtitle for biometric prompt |
+| `promptDescription` | Android | Description for biometric prompt |
+| `cancelButtonText` | Android | Cancel button text |
+| `shouldMigrate` | iOS | Migrate from legacy keychain storage |
+
+> **Note**: Decryption is not supported on Windows.
 
 - **Returns**: `Future<DecryptResult>`.
   - `decryptedData`: The plaintext string.
   - `code`: `BiometricError` code.
+
+```dart
+final result = await biometricSignature.decrypt(
+  payload: encryptedBase64,
+  payloadFormat: PayloadFormat.base64,
+  promptMessage: 'Authenticate to decrypt',
+  config: DecryptConfig(
+    allowDeviceCredentials: false,
+  ),
+);
+```
 
 ### `deleteKeys()`
 

@@ -174,23 +174,21 @@ final biometric = BiometricSignature();
 
 // Check availability
 final availability = await biometric.biometricAuthAvailable();
-if (availability.canAuthenticate) {
+if (availability.canAuthenticate ?? false) {
   print('Biometrics available: ${availability.availableBiometrics}');
 }
 
 // Create keys (RSA by default)
 final keyResult = await biometric.createKeys(
   keyFormat: KeyFormat.pem,
-  signatureType: SignatureType.rsa,
-  useDeviceCredentials: true,
-  setInvalidatedByBiometricEnrollment: true,
-  enforceBiometric: true,
   promptMessage: 'Authenticate to create keys',
-  androidConfig: AndroidCreateKeysConfig(
-    enableDecryption: false,
+  config: CreateKeysConfig(
+    signatureType: SignatureType.rsa,
+    useDeviceCredentials: true,
+    setInvalidatedByBiometricEnrollment: true,
+    enforceBiometric: true,
+    enableDecryption: false, // Android only
   ),
-  iosConfig: IosCreateKeysConfig(),
-  macosConfig: MacosCreateKeysConfig(),
 );
 
 if (keyResult.code == BiometricError.success) {
@@ -220,11 +218,9 @@ final result = await biometric.createSignature(
   promptMessage: 'Authenticate to sign',
   signatureFormat: SignatureFormat.base64,
   keyFormat: KeyFormat.pem,
-  androidConfig: AndroidCreateSignatureConfig(
+  config: CreateSignatureConfig(
     allowDeviceCredentials: true,
   ),
-  iosConfig: IosCreateSignatureConfig(),
-  macosConfig: MacosCreateSignatureConfig(),
 );
 
 if (result.code == BiometricError.success) {
@@ -238,9 +234,9 @@ final decryptResult = await biometric.decrypt(
   payload: encryptedBase64,
   payloadFormat: PayloadFormat.base64,
   promptMessage: 'Authenticate to decrypt',
-  androidConfig: AndroidDecryptConfig(),
-  iosConfig: IosDecryptConfig(),
-  macosConfig: MacosDecryptConfig(),
+  config: DecryptConfig(
+    allowDeviceCredentials: false,
+  ),
 );
 
 if (decryptResult.code == BiometricError.success) {
