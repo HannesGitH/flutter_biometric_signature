@@ -95,15 +95,16 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
 
     // ==================== BiometricSignatureApi Implementation ====================
 
-    override fun biometricAuthAvailable(): BiometricAvailability {
+    override fun biometricAuthAvailable(callback: (Result<BiometricAvailability>) -> Unit) {
         val act = activity
         if (act == null) {
-            return BiometricAvailability(
+            callback(Result.success(BiometricAvailability(
                 canAuthenticate = false,
                 hasEnrolledBiometrics = false,
                 availableBiometrics = emptyList(),
                 reason = "NO_ACTIVITY"
-            )
+            )))
+            return
         }
 
         val manager = BiometricManager.from(act)
@@ -118,12 +119,12 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
 
         val reason = if (!canAuthenticate) biometricErrorName(canAuth) else null
 
-        return BiometricAvailability(
+        callback(Result.success(BiometricAvailability(
             canAuthenticate = canAuthenticate,
             hasEnrolledBiometrics = hasEnrolledBiometrics,
             availableBiometrics = types,
             reason = reason
-        )
+        )))
     }
 
     override fun createKeys(
@@ -440,9 +441,9 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         }
     }
 
-    override fun deleteKeys(): Boolean {
+    override fun deleteKeys(callback: (Result<Boolean>) -> Unit) {
         deleteAllKeys()
-        return true
+        callback(Result.success(true))
     }
 
     override fun getKeyInfo(checkValidity: Boolean, keyFormat: KeyFormat, callback: (Result<KeyInfo>) -> Unit) {

@@ -130,7 +130,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
 
     // MARK: - BiometricSignatureApi Implementation
 
-    func biometricAuthAvailable() throws -> BiometricAvailability {
+    func biometricAuthAvailable(completion: @escaping (Result<BiometricAvailability, Error>) -> Void) {
         let context = LAContext()
         var error: NSError?
         let canEvaluate = context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
@@ -149,12 +149,12 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         
         let hasEnrolled = error?.code != LAError.biometryNotEnrolled.rawValue
         
-        return BiometricAvailability(
+        completion(.success(BiometricAvailability(
             canAuthenticate: canEvaluate,
             hasEnrolledBiometrics: hasEnrolled,
             availableBiometrics: availableBiometrics,
             reason: error?.localizedDescription
-        )
+        )))
     }
 
     func createKeys(
@@ -361,9 +361,9 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         }
     }
 
-    func deleteKeys() throws -> Bool {
+    func deleteKeys(completion: @escaping (Result<Bool, Error>) -> Void) {
         deleteExistingKeys()
-        return true
+        completion(.success(true))
     }
 
     func getKeyInfo(checkValidity: Bool, keyFormat: KeyFormat, completion: @escaping (Result<KeyInfo, Error>) -> Void) {
