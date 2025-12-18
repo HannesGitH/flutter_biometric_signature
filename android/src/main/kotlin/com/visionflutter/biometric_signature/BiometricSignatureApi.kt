@@ -761,7 +761,7 @@ private open class BiometricSignatureApiPigeonCodec : StandardMessageCodec() {
 /** Generated interface from Pigeon that represents a handler of messages from Flutter. */
 interface BiometricSignatureApi {
   /** Checks if biometric authentication is available. */
-  fun biometricAuthAvailable(): BiometricAvailability
+  fun biometricAuthAvailable(callback: (Result<BiometricAvailability>) -> Unit)
   /**
    * Creates a new key pair.
    *
@@ -791,7 +791,7 @@ interface BiometricSignatureApi {
    */
   fun decrypt(payload: String, payloadFormat: PayloadFormat, config: DecryptConfig?, promptMessage: String?, callback: (Result<DecryptResult>) -> Unit)
   /** Deletes keys. */
-  fun deleteKeys(): Boolean
+  fun deleteKeys(callback: (Result<Boolean>) -> Unit)
   /**
    * Gets detailed information about existing biometric keys.
    *
@@ -812,12 +812,15 @@ interface BiometricSignatureApi {
         val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.biometricAuthAvailable$separatedMessageChannelSuffix", codec)
         if (api != null) {
           channel.setMessageHandler { _, reply ->
-            val wrapped: List<Any?> = try {
-              listOf(api.biometricAuthAvailable())
-            } catch (exception: Throwable) {
-              BiometricSignatureApiPigeonUtils.wrapError(exception)
+            api.biometricAuthAvailable{ result: Result<BiometricAvailability> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(BiometricSignatureApiPigeonUtils.wrapResult(data))
+              }
             }
-            reply.reply(wrapped)
           }
         } else {
           channel.setMessageHandler(null)
@@ -896,12 +899,15 @@ interface BiometricSignatureApi {
         val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.deleteKeys$separatedMessageChannelSuffix", codec)
         if (api != null) {
           channel.setMessageHandler { _, reply ->
-            val wrapped: List<Any?> = try {
-              listOf(api.deleteKeys())
-            } catch (exception: Throwable) {
-              BiometricSignatureApiPigeonUtils.wrapError(exception)
+            api.deleteKeys{ result: Result<Boolean> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(BiometricSignatureApiPigeonUtils.wrapResult(data))
+              }
             }
-            reply.reply(wrapped)
           }
         } else {
           channel.setMessageHandler(null)

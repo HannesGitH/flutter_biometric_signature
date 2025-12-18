@@ -1,6 +1,5 @@
 import 'biometric_signature_platform_interface.dart';
 
-export 'biometric_signature_windows.dart';
 export 'biometric_signature_platform_interface.dart'
     show
         CreateKeysConfig,

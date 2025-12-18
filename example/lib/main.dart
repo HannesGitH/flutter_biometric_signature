@@ -133,6 +133,15 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
   }
 
   Future<void> _decrypt() async {
+    if (Platform.isWindows) {
+      setState(() {
+        errorMessage =
+            'Decryption is not supported on Windows. '
+            'Windows Hello is designed for authentication and signing only.';
+      });
+      return;
+    }
+
     if (payload == null || payload!.isEmpty) {
       _showSnack('Enter payload first');
       return;
@@ -445,11 +454,14 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                 children: [
                   Row(
                     children: [
-                      const Text('Use EC'),
-                      Switch(
-                        value: useEc,
-                        onChanged: (v) => setState(() => useEc = v),
-                      ),
+                      // Hide EC toggle on Windows - Windows Hello only supports RSA
+                      if (!Platform.isWindows) ...[
+                        const Text('Use EC'),
+                        Switch(
+                          value: useEc,
+                          onChanged: (v) => setState(() => useEc = v),
+                        ),
+                      ],
                       if (Platform.isAndroid) ...[
                         const SizedBox(width: 20),
                         const Text('Decrypt Support'),

@@ -20,6 +20,8 @@ set(PLUGIN_NAME "biometric_signature_plugin")
 list(APPEND PLUGIN_SOURCES
   "biometric_signature_plugin.cpp"
   "biometric_signature_plugin.h"
+  "messages.g.cpp"
+  "messages.g.h"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment

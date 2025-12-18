@@ -278,6 +278,7 @@ enum PayloadFormat {
 @HostApi()
 abstract class BiometricSignatureApi {
   /// Checks if biometric authentication is available.
+  @async
   BiometricAvailability biometricAuthAvailable();
 
   /// Creates a new key pair.
@@ -324,6 +325,7 @@ abstract class BiometricSignatureApi {
   );
 
   /// Deletes keys.
+  @async
   bool deleteKeys();
 
   /// Gets detailed information about existing biometric keys.

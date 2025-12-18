@@ -761,7 +761,7 @@ class BiometricSignatureApiPigeonCodec: FlutterStandardMessageCodec, @unchecked 
 /// Generated protocol from Pigeon that represents a handler of messages from Flutter.
 protocol BiometricSignatureApi {
   /// Checks if biometric authentication is available.
-  func biometricAuthAvailable() throws -> BiometricAvailability
+  func biometricAuthAvailable(completion: @escaping (Result<BiometricAvailability, Error>) -> Void)
   /// Creates a new key pair.
   ///
   /// [config] contains platform-specific options. See [CreateKeysConfig].
@@ -785,7 +785,7 @@ protocol BiometricSignatureApi {
   /// [promptMessage] is the message shown to the user during authentication.
   func decrypt(payload: String, payloadFormat: PayloadFormat, config: DecryptConfig?, promptMessage: String?, completion: @escaping (Result<DecryptResult, Error>) -> Void)
   /// Deletes keys.
-  func deleteKeys() throws -> Bool
+  func deleteKeys(completion: @escaping (Result<Bool, Error>) -> Void)
   /// Gets detailed information about existing biometric keys.
   ///
   /// Returns key metadata including algorithm, size, validity, and public keys.
@@ -802,11 +802,13 @@ class BiometricSignatureApiSetup {
     let biometricAuthAvailableChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.biometricAuthAvailable\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       biometricAuthAvailableChannel.setMessageHandler { _, reply in
-        do {
-          let result = try api.biometricAuthAvailable()
-          reply(wrapResult(result))
-        } catch {
-          reply(wrapError(error))
+        api.biometricAuthAvailable { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
         }
       }
     } else {
@@ -895,11 +897,13 @@ class BiometricSignatureApiSetup {
     let deleteKeysChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.deleteKeys\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       deleteKeysChannel.setMessageHandler { _, reply in
-        do {
-          let result = try api.deleteKeys()
-          reply(wrapResult(result))
-        } catch {
-          reply(wrapError(error))
+        api.deleteKeys { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
         }
       }
     } else {
