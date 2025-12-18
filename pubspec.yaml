@@ -32,3 +32,6 @@ flutter:
         pluginClass: BiometricSignaturePlugin
       macos:
         pluginClass: BiometricSignaturePlugin
+      windows:
+        pluginClass: BiometricSignaturePlugin
+        dartPluginClass: BiometricSignatureWindows

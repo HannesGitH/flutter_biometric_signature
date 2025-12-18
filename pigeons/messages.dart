@@ -11,6 +11,9 @@ import 'package:pigeon/pigeon.dart';
     ),
     swiftOut: 'ios/Classes/BiometricSignatureApi.swift',
     swiftOptions: SwiftOptions(),
+    cppOut: 'windows/messages.g.cpp',
+    cppHeaderOut: 'windows/messages.g.h',
+    cppOptions: CppOptions(namespace: 'biometric_signature'),
   ),
 )
 /// Types of biometric authentication supported by the device.
