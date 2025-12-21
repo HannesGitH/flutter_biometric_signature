@@ -271,7 +271,7 @@ final biometricSignature = BiometricSignature();
 
 This package simplifies server authentication using biometrics. The following image from Android Developers Blog illustrates the basic use case:
 
-![biometric_signature](https://raw.githubusercontent.com/chamodanethra/biometric_signature/version-upgrade/assets/usecase.png)
+![biometric_signature](https://raw.githubusercontent.com/chamodanethra/biometric_signature/main/assets/usecase.png)
 
 When a user enrolls in biometrics, a key pair is generated. The private key is securely stored on the device, while the public key is sent to a server for registration. To authenticate, the user is prompted to use their biometrics, unlocking the private key. A cryptographic signature is then generated and sent to the server for verification. If the server successfully verifies the signature, it returns an appropriate response, authorizing the user.
 
