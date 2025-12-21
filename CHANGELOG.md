@@ -1,3 +1,10 @@
+## [9.0.1] - 2025-12-21
+
+* **Feature:** Added "Biometric Decryption" section to `README.md` with a detailed lifecycle diagram (`usecase-2.png`) and process description.
+* **Improved:** Enhanced Windows platform documentation to clarify `KeyCredentialManager` usage, TPM backing, RSA-2048 constraints, and lack of decryption support.
+* **Metadata:** Updated `pubspec.yaml` description to explicitly include supported platforms and Windows Hello.
+* **Maintenance:** Updated Android native dependency.
+
 ## [9.0.0] - 2025-12-18
 
 * **Breaking**: Method signature changes:

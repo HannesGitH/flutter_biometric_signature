@@ -164,7 +164,7 @@ To get started with Biometric Signature, follow these steps:
 
 ```yaml
 dependencies:
-  biometric_signature: ^9.0.0
+  biometric_signature: ^9.0.1
 ```
 
 |             | Android | iOS   | macOS  | Windows |
@@ -240,13 +240,15 @@ platform :osx, '10.15'
 
 ### Windows Integration
 
-This plugin uses **Windows Hello** for biometric authentication on Windows 10 and later.
+### Windows Integration
+
+This plugin uses **Windows Hello** (`Windows.Security.Credentials.KeyCredentialManager`) for biometric authentication on Windows 10 and later. Keys are typically backed by the device's **TPM (Trusted Platform Module)** for hardware-grade security.
 
 **Platform Limitations:**
-- Windows only supports **RSA keys** (ECDSA is ignored)
-- Windows Hello **always authenticates** during key creation (`enforceBiometric` is effectively always `true`)
-- `setInvalidatedByBiometricEnrollment` and `useDeviceCredentials` are ignored
-- **Decryption is not supported** on Windows
+- **Key Type**: Windows Hello only supports **RSA-2048** keys (ECDSA requests are automatically promoted to RSA).
+- **Authentication**: Windows Hello **always authenticates** during key creation (`enforceBiometric` is effectively always `true`).
+- **Configuration**: `setInvalidatedByBiometricEnrollment` and `useDeviceCredentials` arguments are ignored on this platform.
+- **Decryption**: **Not supported**. The Windows Hello API is designed primarily for authentication (signing) and does not expose general decryption capabilities for these keys.
 
 No additional configuration is required. The plugin will automatically use Windows Hello when available.
 
@@ -272,6 +274,18 @@ This package simplifies server authentication using biometrics. The following im
 ![biometric_signature](https://raw.githubusercontent.com/chamodanethra/biometric_signature/version-upgrade/assets/usecase.png)
 
 When a user enrolls in biometrics, a key pair is generated. The private key is securely stored on the device, while the public key is sent to a server for registration. To authenticate, the user is prompted to use their biometrics, unlocking the private key. A cryptographic signature is then generated and sent to the server for verification. If the server successfully verifies the signature, it returns an appropriate response, authorizing the user.
+
+### Biometric Decryption
+
+The plugin also supports secure decryption, ensuring that sensitive data transmitted from the server can only be accessed by the authenticated user on their specific device.
+
+![Biometric Decryption Lifecycle](https://raw.githubusercontent.com/chamodanethra/biometric_signature/main/assets/usecase-2.png)
+
+1.  **Key Creation**: The device generates a key pair (EC or RSA) in secure hardware.
+2.  **Registration**: The public key is sent to the backend server.
+3.  **Encryption**: The server encrypts the sensitive payload using the public key.
+4.  **Authentication**: The encrypted payload is sent to the device. The user must authenticate biometrically to proceed.
+5.  **Decryption**: Once authenticated, the secure hardware uses the private key to decrypt the payload, revealing the plaintext data to the app.
 
 ## Class: BiometricSignaturePlugin
 

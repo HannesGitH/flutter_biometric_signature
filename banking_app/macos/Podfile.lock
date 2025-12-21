@@ -1,5 +1,5 @@
 PODS:
-  - biometric_signature (9.0.0):
+  - biometric_signature (9.0.1):
     - FlutterMacOS
   - FlutterMacOS (1.0.0)
   - shared_preferences_foundation (0.0.1):
@@ -20,7 +20,7 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/shared_preferences_foundation/darwin
 
 SPEC CHECKSUMS:
-  biometric_signature: fcc23fe926798544af948f78621af1e85b35d372
+  biometric_signature: 4e16dbaa951c17a54a809d81c5f46c4c8878a1c2
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
   shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
 
