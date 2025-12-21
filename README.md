@@ -279,7 +279,7 @@ When a user enrolls in biometrics, a key pair is generated. The private key is s
 
 The plugin also supports secure decryption, ensuring that sensitive data transmitted from the server can only be accessed by the authenticated user on their specific device.
 
-![Biometric Decryption Lifecycle](https://raw.githubusercontent.com/chamodanethra/biometric_signature/main/assets/usecase-2.png)
+![Biometric Decryption Lifecycle](https://raw.githubusercontent.com/chamodanethra/biometric_signature/add-new-usecase/assets/usecase-2.png)
 
 1.  **Key Creation**: The device generates a key pair (EC or RSA) in secure hardware.
 2.  **Registration**: The public key is sent to the backend server.
