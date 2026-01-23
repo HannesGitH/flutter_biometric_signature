@@ -488,3 +488,321 @@ Convenience method that wraps `getKeyInfo()` and returns a simple boolean.
 final exists = await biometricSignature.biometricKeyExists(checkValidity: true);
 ```
 
+---
+
+## Migration Guide
+
+This section covers breaking changes and migration steps for upgrading between major versions. It assumes familiarity with the plugin’s core concepts (key creation, signing, biometric availability).
+
+### Migrating from v5/v6 to v7
+
+**v7.0.0** replaced the legacy map-based `createSignature()` API with typed `SignatureOptions`.
+
+#### `createSignature()` API Change
+
+**Before (v5/v6):**
+```dart
+final signature = await biometricSignature.createSignature(
+  options: {
+    'payload': 'data to sign',
+    'promptMessage': 'Authenticate',
+    'cancelButtonText': 'Cancel',          // Android
+    'allowDeviceCredentials': 'false',     // Android
+    'shouldMigrate': 'true',               // iOS
+  },
+);
+```
+
+**After (v7):**
+```dart
+final signature = await biometricSignature.createSignature(
+  SignatureOptions(
+    payload: 'data to sign',
+    promptMessage: 'Authenticate',
+    androidOptions: AndroidSignatureOptions(
+      cancelButtonText: 'Cancel',
+      allowDeviceCredentials: false,
+    ),
+    iosOptions: IosSignatureOptions(
+      shouldMigrate: true,
+    ),
+  ),
+);
+```
+
+> [!NOTE]
+> v7 provided a temporary helper `createSignatureFromLegacyOptions()` for migration, but this was removed in v8.
+
+---
+
+### Migrating from v7 to v8
+
+**v8.0.0** introduced structured return types and configurable key/signature formats.
+
+#### Return Types Changed
+
+**Before (v7):** Methods returned `String?` or `bool?`.
+
+**After (v8):** Methods return structured result objects with metadata.
+
+| Method | v7 Return Type | v8 Return Type |
+|--------|---------------|----------------|
+| `createKeys()` | `String?` | `KeyCreationResult?` |
+| `createSignature()` | `String?` | `SignatureResult?` |
+
+#### `createKeys()` Changes
+
+**Before (v7):**
+```dart
+final publicKey = await biometricSignature.createKeys(
+  androidConfig: AndroidConfig(useDeviceCredentials: false),
+  iosConfig: IosConfig(useDeviceCredentials: false),
+);
+// publicKey is a String?
+```
+
+**After (v8):**
+```dart
+final result = await biometricSignature.createKeys(
+  androidConfig: AndroidConfig(useDeviceCredentials: false),
+  iosConfig: IosConfig(useDeviceCredentials: false),
+  keyFormat: KeyFormat.pem,  // NEW: choose output format
+);
+// result.publicKey, result.algorithm, result.keySize available
+```
+
+#### `createSignature()` Changes
+
+**Before (v7):**
+```dart
+final signature = await biometricSignature.createSignature(options);
+// signature is a String?
+```
+
+**After (v8):**
+```dart
+final result = await biometricSignature.createSignature(
+  SignatureOptions(
+    payload: 'data',
+    promptMessage: 'Sign',
+    keyFormat: KeyFormat.base64,  // NEW: output format
+  ),
+);
+// result.signature, result.publicKey available
+```
+
+#### New Features in v8
+
+- **Key Formats:** `KeyFormat.base64`, `KeyFormat.pem`, `KeyFormat.hex`, `KeyFormat.raw`
+- **enforceBiometric:** Require biometric authentication during key creation
+- **setInvalidatedByBiometricEnrollment:** Bind keys to biometric enrollment state
+- **Decryption support (v8.4+):** RSA and ECIES decryption via `decrypt()`
+- **macOS support (v8.5):** Touch ID support on Mac via `MacosConfig`
+
+---
+
+### Migrating from v8 to v9
+
+**v9.0.0** is a major refactoring that unifies platform configurations and migrates to Pigeon for type-safe platform communication.
+
+#### Key Architecture Changes
+
+1. **Pigeon Migration:** All platform communication now uses strongly-typed Pigeon interfaces
+2. **Unified Config Objects:** Platform-specific configs (`AndroidConfig`, `IosConfig`, `MacosConfig`) consolidated into single config classes
+3. **Standardized Error Handling:** All methods return result objects with `BiometricError` enum codes
+4. **New Methods:** `getKeyInfo()` for detailed key inspection, `deleteKeys()` returns `Future<bool>`
+
+#### `createKeys()` Changes
+
+**Before (v8):**
+```dart
+final result = await biometricSignature.createKeys(
+  androidConfig: AndroidConfig(
+    useDeviceCredentials: false,
+    signatureType: AndroidSignatureType.RSA,
+    enforceBiometric: true,
+    setInvalidatedByBiometricEnrollment: true,
+    enableDecryption: true,
+  ),
+  iosConfig: IosConfig(
+    useDeviceCredentials: false,
+    signatureType: IOSSignatureType.RSA,
+    enforceBiometric: true,
+    setInvalidatedByBiometricEnrollment: true,
+  ),
+  macosConfig: MacosConfig(
+    useDeviceCredentials: false,
+    signatureType: MacosSignatureType.RSA,
+  ),
+  keyFormat: KeyFormat.pem,
+);
+```
+
+**After (v9):**
+```dart
+final result = await biometricSignature.createKeys(
+  keyFormat: KeyFormat.pem,
+  promptMessage: 'Authenticate to create keys',  // NEW: top-level
+  config: CreateKeysConfig(
+    signatureType: SignatureType.rsa,            // Unified enum
+    enforceBiometric: true,
+    setInvalidatedByBiometricEnrollment: true,
+    useDeviceCredentials: false,
+    enableDecryption: true,                      // Android only
+    promptSubtitle: 'Subtitle',                  // Android only
+    promptDescription: 'Description',            // Android only
+    cancelButtonText: 'Cancel',                  // Android only
+  ),
+);
+
+if (result.code == BiometricError.success) {
+  print('Public Key: ${result.publicKey}');
+} else {
+  print('Error: ${result.code} - ${result.error}');
+}
+```
+
+#### `createSignature()` Changes
+
+**Before (v8):**
+```dart
+final result = await biometricSignature.createSignature(
+  SignatureOptions(
+    payload: 'data to sign',
+    promptMessage: 'Authenticate',
+    keyFormat: KeyFormat.base64,
+    androidOptions: AndroidSignatureOptions(
+      cancelButtonText: 'Cancel',
+      allowDeviceCredentials: false,
+    ),
+    iosOptions: IosSignatureOptions(
+      shouldMigrate: true,
+    ),
+  ),
+);
+```
+
+**After (v9):**
+```dart
+final result = await biometricSignature.createSignature(
+  payload: 'data to sign',                        // Top-level parameter
+  promptMessage: 'Authenticate',                  // Top-level parameter
+  signatureFormat: SignatureFormat.base64,        // NEW: separate format
+  keyFormat: KeyFormat.base64,                    // Public key format
+  config: CreateSignatureConfig(
+    allowDeviceCredentials: false,                // Android
+    promptSubtitle: 'Subtitle',                   // Android
+    promptDescription: 'Description',             // Android
+    cancelButtonText: 'Cancel',                   // Android
+    shouldMigrate: true,                          // iOS
+  ),
+);
+
+if (result.code == BiometricError.success) {
+  print('Signature: ${result.signature}');
+}
+```
+
+#### `biometricAuthAvailable()` Changes
+
+**Before (v8):**
+```dart
+final availability = await biometricSignature.biometricAuthAvailable();
+// Returns String? like "fingerprint", "face", "none", etc.
+```
+
+**After (v9):**
+```dart
+final availability = await biometricSignature.biometricAuthAvailable();
+// Returns BiometricAvailability object
+
+if (availability.canAuthenticate ?? false) {
+  print('Biometrics available: ${availability.availableBiometrics}');
+  // availableBiometrics is List<BiometricType>
+} else {
+  print('Not available: ${availability.reason}');
+}
+```
+
+#### `decrypt()` Changes (v8.4+ → v9)
+
+**Before (v8):**
+```dart
+final result = await biometricSignature.decrypt(
+  DecryptionOptions(
+    payload: encryptedBase64,
+    promptMessage: 'Decrypt',
+    androidOptions: AndroidDecryptionOptions(
+      allowDeviceCredentials: false,
+    ),
+    iosOptions: IosDecryptionOptions(
+      shouldMigrate: true,
+    ),
+  ),
+);
+```
+
+**After (v9):**
+```dart
+final result = await biometricSignature.decrypt(
+  payload: encryptedBase64,
+  payloadFormat: PayloadFormat.base64,    // NEW: explicit format
+  promptMessage: 'Decrypt',
+  config: DecryptConfig(
+    allowDeviceCredentials: false,        // Android
+    shouldMigrate: true,                  // iOS
+  ),
+);
+
+if (result.code == BiometricError.success) {
+  print('Decrypted: ${result.decryptedData}');
+}
+```
+
+#### New `getKeyInfo()` Method
+
+v9 introduces `getKeyInfo()` for inspecting existing keys without authentication:
+
+```dart
+final info = await biometricSignature.getKeyInfo(
+  checkValidity: true,      // Check if key was invalidated
+  keyFormat: KeyFormat.pem,
+);
+
+if (info.exists ?? false) {
+  print('Algorithm: ${info.algorithm}');      // "RSA" or "EC"
+  print('Key Size: ${info.keySize}');         // 2048, 256, etc.
+  print('Hybrid Mode: ${info.isHybridMode}'); // Separate decrypt key?
+  print('Valid: ${info.isValid}');            // Not invalidated?
+}
+```
+
+> [!TIP]
+> `biometricKeyExists()` is now a convenience wrapper around `getKeyInfo()`.
+
+#### Summary of v9 Breaking Changes
+
+| Change | v8 | v9 |
+|--------|----|----|
+| Platform configs | `AndroidConfig`, `IosConfig`, `MacosConfig` | `CreateKeysConfig`, `CreateSignatureConfig`, `DecryptConfig` |
+| Signature type enum | `AndroidSignatureType.RSA` | `SignatureType.rsa` |
+| Error handling | Check for `null` | Check `result.code == BiometricError.success` |
+| biometricAuthAvailable | Returns `String?` | Returns `BiometricAvailability` |
+| Platform communication | MethodChannel with maps | Pigeon with typed classes |
+| Windows support | ❌ | ✅ (v9.0.0+) |
+
+#### Import Changes
+
+**Before (v8):**
+```dart
+import 'package:biometric_signature/biometric_signature.dart';
+import 'package:biometric_signature/android_config.dart';
+import 'package:biometric_signature/ios_config.dart';
+import 'package:biometric_signature/signature_options.dart';
+```
+
+**After (v9):**
+```dart
+import 'package:biometric_signature/biometric_signature.dart';
+// All types exported from single import
+```
