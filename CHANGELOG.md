@@ -3,7 +3,7 @@
 * **Package Optimization:** Reduced published package size significantly:
   - Converted `assets/logo.png` (1.0 MB) to `assets/logo.jpeg` (120 KB), reducing image size by ~90%
   - Added `.pubignore` to exclude example applications (`banking_app`, `document_signer`, `passwordless_login`) from published package
-  - Total package size reduced from ~2 MB to ~230 KB
+  - Total package size reduced from ~2 MB to ~535 KB
 * **Maintenance:** Updated version references across all platform files and documentation.
 * Minor bug fix.
 * Enhanced the passwordless login example.
