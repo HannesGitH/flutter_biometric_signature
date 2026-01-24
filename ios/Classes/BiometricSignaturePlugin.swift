@@ -189,7 +189,8 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
             context.localizedFallbackTitle = ""
             context.localizedReason = prompt
             
-            context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: prompt) { success, _ in
+            let policy: LAPolicy = useDeviceCredentials ? .deviceOwnerAuthentication : .deviceOwnerAuthenticationWithBiometrics
+            context.evaluatePolicy(policy, localizedReason: prompt) { success, _ in
                 if success {
                     generateBlock()
                 } else {
