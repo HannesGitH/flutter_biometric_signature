@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:passwordless_login_example/models/user.dart';
 import 'package:passwordless_login_example/screens/login_screen.dart';
+import 'package:passwordless_login_example/screens/settings_screen.dart';
 import 'package:passwordless_login_example/services/auth_service.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -66,6 +67,17 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         title: const Text('Home'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const SettingsScreen(),
+                ),
+              );
+            },
+          ),
           IconButton(icon: const Icon(Icons.logout), onPressed: _logout),
         ],
       ),
@@ -175,16 +187,34 @@ class _HomeScreenState extends State<HomeScreen> {
                                 Colors.green,
                               ),
                               _buildStatusRow(
-                                'Password Protection',
-                                'Not Required',
-                                Icons.check,
-                                Colors.green,
+                                'Device Credentials',
+                                _currentUser!.allowDeviceCredentials
+                                    ? 'Enabled'
+                                    : 'Not Enabled',
+                                _currentUser!.allowDeviceCredentials
+                                    ? Icons.check
+                                    : Icons.info_outline,
+                                _currentUser!.allowDeviceCredentials
+                                    ? Colors.green
+                                    : Colors.grey,
                               ),
                               _buildStatusRow(
                                 'Hardware Security',
                                 'Active',
                                 Icons.check,
                                 Colors.green,
+                              ),
+                              _buildStatusRow(
+                                'Key Invalidation',
+                                _currentUser!.keyInvalidatedOnEnrollmentChange
+                                    ? 'On Changes'
+                                    : 'Disabled',
+                                _currentUser!.keyInvalidatedOnEnrollmentChange
+                                    ? Icons.check
+                                    : Icons.info_outline,
+                                _currentUser!.keyInvalidatedOnEnrollmentChange
+                                    ? Colors.green
+                                    : Colors.grey,
                               ),
                               const SizedBox(height: 12),
                               Text(

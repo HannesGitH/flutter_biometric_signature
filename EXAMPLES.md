@@ -87,9 +87,9 @@ flutter run
 
 ### 4. Passwordless Login (`passwordless_login/`)
 **Difficulty**: Advanced  
-**Purpose**: Complete passwordless authentication system
+**Purpose**: Complete passwordless authentication system with full lifecycle management
 
-A full-featured passwordless authentication system using biometric signatures instead of passwords.
+A full-featured passwordless authentication system demonstrating the complete lifecycle of biometric authentication, including error handling, recovery flows, and account management.
 
 **Features**:
 - 🔐 Passwordless registration and login
@@ -97,6 +97,12 @@ A full-featured passwordless authentication system using biometric signatures in
 - ✅ Challenge-response authentication
 - 🔄 Session management
 - 🎯 Secure token handling
+- ⚠️ Comprehensive error handling (locked out, key invalidated, etc.)
+- 🔄 Biometric re-enrollment flow
+- 🔑 Device credential fallback option
+- ⚙️ Account settings and configuration
+- 🔍 Key status monitoring
+- 🧪 Test authentication feature
 
 **Key Concepts**:
 - FIDO2/WebAuthn-style authentication
@@ -104,6 +110,9 @@ A full-featured passwordless authentication system using biometric signatures in
 - Server-side signature verification
 - Public key infrastructure
 - Phishing-resistant authentication
+- Error recovery and re-enrollment
+- Biometric lifecycle management
+- Hardware-backed key storage
 
 **Run**:
 ```bash
@@ -255,17 +264,66 @@ switch (result.code) {
   case BiometricError.success:
     print('Signed: ${result.signature}');
     break;
+    
   case BiometricError.userCanceled:
     print('User cancelled authentication');
     break;
+    
   case BiometricError.keyInvalidated:
-    print('Key invalidated - re-enrollment required');
+    print('Key invalidated - biometrics changed, re-enrollment required');
+    // Show re-enrollment dialog to user
     break;
+    
   case BiometricError.lockedOut:
-    print('Too many attempts - locked out');
+    print('Temporarily locked out - too many attempts');
+    // Show retry message or device credential option
     break;
+    
+  case BiometricError.lockedOutPermanent:
+    print('Permanently locked out - must use device credential');
+    // Require device passcode/PIN to unlock
+    break;
+    
+  case BiometricError.notEnrolled:
+    print('No biometrics enrolled - user must enroll in settings');
+    break;
+    
+  case BiometricError.notAvailable:
+    print('Biometric hardware not available on this device');
+    break;
+    
+  case BiometricError.keyNotFound:
+    print('Key not found - may need re-enrollment');
+    break;
+    
   default:
     print('Error: ${result.code} - ${result.error}');
+}
+```
+
+### Re-enrollment (Key Invalidation Recovery)
+```dart
+// After detecting BiometricError.keyInvalidated
+Future<void> reEnrollUser(User user) async {
+  // 1. Delete old invalidated keys
+  await biometric.deleteKeys();
+  
+  // 2. Create new keys with same configuration
+  final keyResult = await biometric.createKeys(
+    keyFormat: KeyFormat.base64,
+    promptMessage: 'Re-enroll biometrics',
+    config: CreateKeysConfig(
+      signatureType: SignatureType.rsa,
+      useDeviceCredentials: user.allowDeviceCredentials,
+      setInvalidatedByBiometricEnrollment: true,
+    ),
+  );
+  
+  if (keyResult.code == BiometricError.success) {
+    // 3. Update user's public key in database
+    await updateUserPublicKey(user.id, keyResult.publicKey!);
+    print('Re-enrollment successful!');
+  }
 }
 ```
 

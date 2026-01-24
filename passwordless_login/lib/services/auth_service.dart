@@ -18,6 +18,8 @@ class AuthService {
   Future<User> register({
     required String username,
     required String email,
+    bool allowDeviceCredentials = false,
+    bool keyInvalidatedOnEnrollmentChange = true,
   }) async {
     // Check if username already exists
     final users = await _getAllUsers();
@@ -28,18 +30,24 @@ class AuthService {
     // Generate biometric keys
     final keyResult = await _biometric.createKeys(
       keyFormat: KeyFormat.base64,
+      promptMessage: 'Set up biometric authentication',
       config: CreateKeysConfig(
-        useDeviceCredentials: false,
+        useDeviceCredentials: allowDeviceCredentials,
         signatureType: SignatureType.rsa,
         enforceBiometric: true,
+        setInvalidatedByBiometricEnrollment: keyInvalidatedOnEnrollmentChange,
       ),
     );
 
+    if (keyResult.code != BiometricError.success) {
+      throw Exception(
+        'Failed to generate cryptographic keys: ${keyResult.error ?? keyResult.code}',
+      );
+    }
+
     final publicKey = keyResult.publicKey;
     if (publicKey == null) {
-      throw Exception(
-        'Failed to generate cryptographic keys: ${keyResult.error}',
-      );
+      throw Exception('Public key is null after successful key creation');
     }
 
     // Create user
@@ -49,6 +57,8 @@ class AuthService {
       email: email,
       publicKey: publicKey,
       createdAt: DateTime.now(),
+      allowDeviceCredentials: allowDeviceCredentials,
+      keyInvalidatedOnEnrollmentChange: keyInvalidatedOnEnrollmentChange,
     );
 
     // Save to "database"
@@ -87,23 +97,43 @@ class AuthService {
   }
 
   /// Complete authentication with signed challenge
-  Future<AuthSession> authenticate({
+  /// Returns SignatureResult to allow UI to handle specific error codes
+  Future<SignatureResult> authenticateWithChallenge({
     required String username,
     required String challengeId,
   }) async {
     // Get stored challenge
     final challenge = await _getChallenge(challengeId);
     if (challenge == null) {
-      throw Exception('Challenge not found or expired');
+      return SignatureResult(
+        code: BiometricError.unknown,
+        error: 'Challenge not found or expired',
+      );
     }
 
     if (challenge.isExpired) {
       await _removeChallenge(challengeId);
-      throw Exception('Challenge expired');
+      return SignatureResult(
+        code: BiometricError.unknown,
+        error: 'Challenge expired',
+      );
     }
 
     if (challenge.username != username) {
-      throw Exception('Challenge username mismatch');
+      return SignatureResult(
+        code: BiometricError.unknown,
+        error: 'Challenge username mismatch',
+      );
+    }
+
+    // Get user to check device credential settings
+    final users = await _getAllUsers();
+    final user = users.where((u) => u.username == username).firstOrNull;
+    if (user == null) {
+      return SignatureResult(
+        code: BiometricError.unknown,
+        error: 'User not found',
+      );
     }
 
     // Sign challenge with biometric
@@ -114,15 +144,22 @@ class AuthService {
       keyFormat: KeyFormat.base64,
       config: CreateSignatureConfig(
         cancelButtonText: 'Cancel',
-        allowDeviceCredentials: false,
+        allowDeviceCredentials: user.allowDeviceCredentials,
         shouldMigrate: false,
       ),
     );
 
-    final signature = signatureResult.signature;
+    // Return the result directly - let UI handle errors
+    if (signatureResult.code != BiometricError.success) {
+      return signatureResult;
+    }
 
+    final signature = signatureResult.signature;
     if (signature == null) {
-      throw Exception('Authentication failed: ${signatureResult.error}');
+      return SignatureResult(
+        code: BiometricError.unknown,
+        error: 'Signature is null despite success code',
+      );
     }
 
     // In production, send signature to server for verification
@@ -134,19 +171,46 @@ class AuthService {
     );
 
     if (!isValid) {
-      throw Exception('Signature verification failed');
+      return SignatureResult(
+        code: BiometricError.unknown,
+        error: 'Signature verification failed',
+      );
     }
 
     // Remove used challenge
     await _removeChallenge(challengeId);
 
-    // Get user
-    final users = await _getAllUsers();
-    final user = users.firstWhere((u) => u.username == username);
-
     // Update last login
     final updatedUser = user.copyWith(lastLogin: DateTime.now());
     await _updateUser(updatedUser);
+
+    return signatureResult;
+  }
+
+  /// Complete authentication - convenience wrapper that creates session
+  Future<AuthSession> authenticate({
+    required String username,
+    required String challengeId,
+  }) async {
+    final result = await authenticateWithChallenge(
+      username: username,
+      challengeId: challengeId,
+    );
+
+    if (result.code != BiometricError.success) {
+      throw Exception('Authentication failed: ${result.error ?? result.code}');
+    }
+
+    // Create session
+    return await createSession(username);
+  }
+
+  /// Create a new session for the user
+  /// Should only be called after successful authentication
+  Future<AuthSession> createSession(String username) async {
+    // Get user
+    final users = await _getAllUsers();
+    final user = users.firstWhere((u) => u.username == username);
 
     // Create session
     final session = AuthSession(
@@ -212,6 +276,72 @@ class AuthService {
 
     final users = await _getAllUsers();
     return users.where((u) => u.id == session.userId).firstOrNull;
+  }
+
+  /// Re-enroll biometrics after key invalidation
+  /// Deletes old keys and creates new ones
+  Future<User> reEnrollBiometrics(String username) async {
+    final users = await _getAllUsers();
+    final user = users.where((u) => u.username == username).firstOrNull;
+
+    if (user == null) {
+      throw Exception('User not found');
+    }
+
+    // Delete existing keys
+    await _biometric.deleteKeys();
+
+    // Create new keys with same settings
+    final keyResult = await _biometric.createKeys(
+      keyFormat: KeyFormat.base64,
+      promptMessage: 'Re-enroll biometric authentication',
+      config: CreateKeysConfig(
+        useDeviceCredentials: user.allowDeviceCredentials,
+        signatureType: SignatureType.rsa,
+        enforceBiometric: true,
+        setInvalidatedByBiometricEnrollment:
+            user.keyInvalidatedOnEnrollmentChange,
+      ),
+    );
+
+    if (keyResult.code != BiometricError.success) {
+      throw Exception(
+        'Failed to create new keys: ${keyResult.error ?? keyResult.code}',
+      );
+    }
+
+    final publicKey = keyResult.publicKey;
+    if (publicKey == null) {
+      throw Exception('Public key is null after successful key creation');
+    }
+
+    // Update user with new public key
+    final updatedUser = user.copyWith(
+      publicKey: publicKey,
+      lastReEnrollment: DateTime.now(),
+    );
+
+    await _updateUser(updatedUser);
+
+    return updatedUser;
+  }
+
+  /// Get current biometric availability status
+  Future<BiometricAvailability> getBiometricStatus() async {
+    return await _biometric.biometricAuthAvailable();
+  }
+
+  /// Check if biometric key exists and is valid
+  Future<KeyInfo> getKeyStatus() async {
+    return await _biometric.getKeyInfo(
+      checkValidity: true,
+      keyFormat: KeyFormat.base64,
+    );
+  }
+
+  /// Delete biometric keys
+  Future<bool> deleteKeys() async {
+    return await _biometric.deleteKeys();
   }
 
   // Helper methods

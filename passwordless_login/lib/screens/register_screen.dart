@@ -15,6 +15,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   bool _isLoading = false;
+  bool _allowDeviceCredentials = false;
+  bool _keyInvalidatedOnEnrollmentChange = true;
 
   @override
   void dispose() {
@@ -32,6 +34,24 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final username = _usernameController.text.trim();
       final email = _emailController.text.trim();
 
+      // Check biometric availability first
+      final availability = await _authService.getBiometricStatus();
+      if (!(availability.canAuthenticate ?? false)) {
+        _showError(
+          'Biometric authentication is not available on this device${availability.reason != null ? ': ${availability.reason}' : ''}',
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      if (!(availability.hasEnrolledBiometrics ?? false)) {
+        _showError(
+          'No biometrics are enrolled. Please enroll fingerprint or face in device settings.',
+        );
+        setState(() => _isLoading = false);
+        return;
+      }
+
       // Check username availability
       final isAvailable = await _authService.isUsernameAvailable(username);
       if (!isAvailable) {
@@ -46,7 +66,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
 
       // Register user (this will trigger biometric enrollment)
-      await _authService.register(username: username, email: email);
+      await _authService.register(
+        username: username,
+        email: email,
+        allowDeviceCredentials: _allowDeviceCredentials,
+        keyInvalidatedOnEnrollmentChange: _keyInvalidatedOnEnrollmentChange,
+      );
 
       // Auto-login after registration
       final challenge = await _authService.requestChallenge(username);
@@ -62,6 +87,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
           (route) => false,
         );
       }
+    } on Exception catch (e) {
+      _showError(e.toString().replaceFirst('Exception: ', ''));
+      setState(() => _isLoading = false);
     } catch (e) {
       _showError(e.toString());
       setState(() => _isLoading = false);
@@ -73,40 +101,79 @@ class _RegisterScreenState extends State<RegisterScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Enable Biometric Login'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'To complete registration, we need to set up biometric authentication.',
-            ),
-            SizedBox(height: 16),
-            Text('This will:'),
-            SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.check, size: 16, color: Colors.green),
-                SizedBox(width: 8),
-                Expanded(child: Text('Generate secure keys on your device')),
-              ],
-            ),
-            SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.check, size: 16, color: Colors.green),
-                SizedBox(width: 8),
-                Expanded(child: Text('Never send biometric data to server')),
-              ],
-            ),
-            SizedBox(height: 4),
-            Row(
-              children: [
-                Icon(Icons.check, size: 16, color: Colors.green),
-                SizedBox(width: 8),
-                Expanded(child: Text('Enable passwordless login')),
-              ],
-            ),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'To complete registration, we need to set up biometric authentication.',
+              ),
+              const SizedBox(height: 16),
+              const Text('This will:'),
+              const SizedBox(height: 8),
+              const Row(
+                children: [
+                  Icon(Icons.check, size: 16, color: Colors.green),
+                  SizedBox(width: 8),
+                  Expanded(child: Text('Generate secure keys on your device')),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Row(
+                children: [
+                  Icon(Icons.check, size: 16, color: Colors.green),
+                  SizedBox(width: 8),
+                  Expanded(child: Text('Never send biometric data to server')),
+                ],
+              ),
+              const SizedBox(height: 4),
+              const Row(
+                children: [
+                  Icon(Icons.check, size: 16, color: Colors.green),
+                  SizedBox(width: 8),
+                  Expanded(child: Text('Enable passwordless login')),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 8),
+              const Text(
+                'Configuration:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    _allowDeviceCredentials ? Icons.check_circle : Icons.cancel,
+                    size: 16,
+                    color: _allowDeviceCredentials ? Colors.green : Colors.grey,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(child: Text('Device credential fallback')),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Icon(
+                    _keyInvalidatedOnEnrollmentChange
+                        ? Icons.check_circle
+                        : Icons.cancel,
+                    size: 16,
+                    color: _keyInvalidatedOnEnrollmentChange
+                        ? Colors.green
+                        : Colors.grey,
+                  ),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text('Invalidate on biometric changes'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -186,7 +253,55 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   return null;
                 },
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
+              Card(
+                color: Colors.blue.withOpacity(0.05),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Security Options',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SwitchListTile(
+                        value: _allowDeviceCredentials,
+                        onChanged: _isLoading
+                            ? null
+                            : (v) =>
+                                setState(() => _allowDeviceCredentials = v),
+                        title: const Text('Allow Device Credentials'),
+                        subtitle: const Text(
+                          'Allow using PIN/pattern/passcode as fallback',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        value: _keyInvalidatedOnEnrollmentChange,
+                        onChanged: _isLoading
+                            ? null
+                            : (v) => setState(
+                                  () => _keyInvalidatedOnEnrollmentChange = v,
+                                ),
+                        title: const Text('Invalidate on Biometric Changes'),
+                        subtitle: const Text(
+                          'Require re-enrollment if new biometrics are added (recommended)',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(

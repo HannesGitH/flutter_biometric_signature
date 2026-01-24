@@ -5,6 +5,9 @@ class User {
   final String publicKey;
   final DateTime createdAt;
   final DateTime? lastLogin;
+  final bool allowDeviceCredentials;
+  final bool keyInvalidatedOnEnrollmentChange;
+  final DateTime? lastReEnrollment;
 
   User({
     required this.id,
@@ -13,6 +16,9 @@ class User {
     required this.publicKey,
     required this.createdAt,
     this.lastLogin,
+    this.allowDeviceCredentials = false,
+    this.keyInvalidatedOnEnrollmentChange = true,
+    this.lastReEnrollment,
   });
 
   User copyWith({
@@ -22,6 +28,9 @@ class User {
     String? publicKey,
     DateTime? createdAt,
     DateTime? lastLogin,
+    bool? allowDeviceCredentials,
+    bool? keyInvalidatedOnEnrollmentChange,
+    DateTime? lastReEnrollment,
   }) {
     return User(
       id: id ?? this.id,
@@ -30,6 +39,11 @@ class User {
       publicKey: publicKey ?? this.publicKey,
       createdAt: createdAt ?? this.createdAt,
       lastLogin: lastLogin ?? this.lastLogin,
+      allowDeviceCredentials:
+          allowDeviceCredentials ?? this.allowDeviceCredentials,
+      keyInvalidatedOnEnrollmentChange: keyInvalidatedOnEnrollmentChange ??
+          this.keyInvalidatedOnEnrollmentChange,
+      lastReEnrollment: lastReEnrollment ?? this.lastReEnrollment,
     );
   }
 
@@ -41,6 +55,9 @@ class User {
       'publicKey': publicKey,
       'createdAt': createdAt.toIso8601String(),
       'lastLogin': lastLogin?.toIso8601String(),
+      'allowDeviceCredentials': allowDeviceCredentials,
+      'keyInvalidatedOnEnrollmentChange': keyInvalidatedOnEnrollmentChange,
+      'lastReEnrollment': lastReEnrollment?.toIso8601String(),
     };
   }
 
@@ -53,6 +70,12 @@ class User {
       createdAt: DateTime.parse(json['createdAt']),
       lastLogin:
           json['lastLogin'] != null ? DateTime.parse(json['lastLogin']) : null,
+      allowDeviceCredentials: json['allowDeviceCredentials'] ?? false,
+      keyInvalidatedOnEnrollmentChange:
+          json['keyInvalidatedOnEnrollmentChange'] ?? true,
+      lastReEnrollment: json['lastReEnrollment'] != null
+          ? DateTime.parse(json['lastReEnrollment'])
+          : null,
     );
   }
 }
