@@ -1,3 +1,14 @@
+## [9.0.2] - 2026-01-24
+
+* **Package Optimization:** Reduced published package size significantly:
+  - Converted `assets/logo.png` (1.0 MB) to `assets/logo.jpeg` (120 KB), reducing image size by ~90%
+  - Added `.pubignore` to exclude example applications (`banking_app`, `document_signer`, `passwordless_login`) from published package
+  - Total package size reduced from ~2 MB to ~230 KB
+* **Maintenance:** Updated version references across all platform files and documentation.
+* Minor bug fix.
+* Enhanced the passwordless login example.
+* Added "Migration Guide" section to the README.md.
+
 ## [9.0.1] - 2025-12-21
 
 * **Feature:** Added "Biometric Decryption" section to `README.md` with a detailed lifecycle diagram (`usecase-2.png`) and process description.
