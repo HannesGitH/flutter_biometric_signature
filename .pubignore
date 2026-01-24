@@ -1,0 +1,7 @@
+# Exclude example applications from published package
+# These are kept in the repository for development and demonstration
+# but don't need to be included in the published package on pub.dev
+
+banking_app/
+document_signer/
+passwordless_login/

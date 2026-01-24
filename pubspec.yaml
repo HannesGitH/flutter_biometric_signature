@@ -3,7 +3,7 @@ description: Hardware-backed biometric authentication for Flutter (Android, iOS,
 topics: [biometrics, secure-enclave, strongbox, rsa, ecdsa]
 screenshots:
   - description: "Domain Logo"
-    path: assets/logo.png
+    path: assets/logo.jpeg
 version: 9.0.1
 homepage: https://github.com/chamodanethra/biometric_signature
 
