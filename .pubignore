@@ -12,3 +12,6 @@ scripts/
 benchmarks/
 EXAMPLES.md
 CONTRIBUTING.md
+
+# Build artifacts
+build/
