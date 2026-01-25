@@ -5,3 +5,10 @@
 banking_app/
 document_signer/
 passwordless_login/
+assets/
+test/
+.github/
+scripts/
+benchmarks/
+EXAMPLES.md
+CONTRIBUTING.md

@@ -1,3 +1,7 @@
+## [9.0.3] - 2026-01-25
+
+* Reduced published package size by ~45%.
+
 ## [9.0.2] - 2026-01-24
 
 * **Package Optimization:** Reduced published package size significantly:
