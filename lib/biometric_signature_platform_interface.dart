@@ -71,6 +71,14 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
   Future<KeyInfo> getKeyInfo(bool checkValidity, KeyFormat keyFormat) {
     throw UnimplementedError('getKeyInfo() has not been implemented.');
   }
+
+  /// Performs simple biometric authentication without cryptographic operations.
+  Future<SimplePromptResult> simplePrompt(
+    String promptMessage,
+    SimplePromptConfig? config,
+  ) {
+    throw UnimplementedError('simplePrompt() has not been implemented.');
+  }
 }
 
 class _PigeonBiometricSignature extends BiometricSignaturePlatform {
@@ -125,5 +133,13 @@ class _PigeonBiometricSignature extends BiometricSignaturePlatform {
   @override
   Future<KeyInfo> getKeyInfo(bool checkValidity, KeyFormat keyFormat) {
     return _api.getKeyInfo(checkValidity, keyFormat);
+  }
+
+  @override
+  Future<SimplePromptResult> simplePrompt(
+    String promptMessage,
+    SimplePromptConfig? config,
+  ) {
+    return _api.simplePrompt(promptMessage, config);
   }
 }

@@ -525,6 +525,124 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         }
     }
 
+    override fun simplePrompt(
+        promptMessage: String,
+        config: SimplePromptConfig?,
+        callback: (Result<SimplePromptResult>) -> Unit
+    ) {
+        val act = activity
+        if (act == null) {
+            callback(Result.success(SimplePromptResult(
+                success = false,
+                error = "Foreground activity required",
+                code = BiometricError.PROMPT_ERROR
+            )))
+            return
+        }
+
+        pluginScope.launch {
+            try {
+                val allowDeviceCredentials = config?.allowDeviceCredentials ?: false
+                val biometricStrength = config?.biometricStrength ?: BiometricStrength.STRONG
+
+                // Check biometric availability with the requested strength
+                val authenticators = getAuthenticators(allowDeviceCredentials, biometricStrength)
+                val canAuth = BiometricManager.from(act).canAuthenticate(authenticators)
+
+                if (canAuth != BiometricManager.BIOMETRIC_SUCCESS) {
+                    val (errorCode, errorMsg) = mapBiometricManagerError(canAuth, biometricStrength)
+                    callback(Result.success(SimplePromptResult(
+                        success = false,
+                        error = errorMsg,
+                        code = errorCode
+                    )))
+                    return@launch
+                }
+
+                // Build prompt info
+                val promptInfoBuilder = BiometricPrompt.PromptInfo.Builder()
+                    .setTitle(promptMessage)
+                    .setAllowedAuthenticators(authenticators)
+
+                config?.subtitle?.let { if (it.isNotBlank()) promptInfoBuilder.setSubtitle(it) }
+                config?.description?.let { if (it.isNotBlank()) promptInfoBuilder.setDescription(it) }
+
+                // Only set negative button if not using device credentials on Android 11+
+                if (!(allowDeviceCredentials && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)) {
+                    val cancelText = config?.cancelButtonText ?: "Cancel"
+                    promptInfoBuilder.setNegativeButtonText(cancelText)
+                }
+
+                val promptInfo = promptInfoBuilder.build()
+
+                // Show biometric prompt
+                val result = suspendCancellableCoroutine<BiometricPrompt.AuthenticationResult> { cont ->
+                    val callback = object : BiometricPrompt.AuthenticationCallback() {
+                        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                            if (cont.isActive) cont.resume(result)
+                        }
+                        override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                            if (cont.isActive) {
+                                cont.resumeWithException(
+                                    SecurityException("$errString", Throwable(errorCode.toString()))
+                                )
+                            }
+                        }
+                        override fun onAuthenticationFailed() {
+                            // Biometric didn't match, but prompt stays open for retry
+                        }
+                    }
+
+                    runCatching {
+                        act.setTheme(androidx.appcompat.R.style.Theme_AppCompat_Light_DarkActionBar)
+                        val prompt = BiometricPrompt(act, ContextCompat.getMainExecutor(act), callback)
+                        prompt.authenticate(promptInfo)
+                    }.onFailure { e ->
+                        if (cont.isActive) cont.resumeWithException(e)
+                    }
+                }
+
+                // If we get here, authentication succeeded
+                callback(Result.success(SimplePromptResult(
+                    success = true,
+                    code = BiometricError.SUCCESS
+                )))
+
+            } catch (e: Exception) {
+                val errorCode = mapToBiometricError(e)
+                callback(Result.success(SimplePromptResult(
+                    success = false,
+                    error = e.message,
+                    code = errorCode
+                )))
+            }
+        }
+    }
+
+    private fun mapBiometricManagerError(
+        canAuthResult: Int,
+        requestedStrength: BiometricStrength
+    ): Pair<BiometricError, String> {
+        return when (canAuthResult) {
+            BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE ->
+                Pair(BiometricError.NOT_AVAILABLE, "No biometric hardware available")
+            BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE ->
+                Pair(BiometricError.NOT_AVAILABLE, "Biometric hardware unavailable")
+            BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> {
+                val strengthName = if (requestedStrength == BiometricStrength.STRONG) "Class 3 (strong)" else "Class 2+ (weak or strong)"
+                Pair(BiometricError.NOT_ENROLLED, "No $strengthName biometrics enrolled.")
+            }
+            BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED ->
+                Pair(BiometricError.SECURITY_UPDATE_REQUIRED, "Security update required")
+            BiometricManager.BIOMETRIC_ERROR_UNSUPPORTED ->
+                Pair(BiometricError.NOT_SUPPORTED, "Biometric authentication not supported")
+            BiometricManager.BIOMETRIC_STATUS_UNKNOWN ->
+                Pair(BiometricError.UNKNOWN, "Biometric status unknown")
+            else ->
+                Pair(BiometricError.UNKNOWN, "Unknown biometric error (code: $canAuthResult)")
+        }
+    }
+
     private fun generateRsaKeyInKeyStore(
         useDeviceCredentials: Boolean,
         invalidateOnEnrollment: Boolean,
@@ -865,11 +983,19 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         }.onFailure { e -> if (cont.isActive) cont.resumeWithException(e) }
     }
 
-    private fun getAuthenticators(allowDeviceCredentials: Boolean): Int {
+    private fun getAuthenticators(
+        allowDeviceCredentials: Boolean,
+        biometricStrength: BiometricStrength = BiometricStrength.STRONG
+    ): Int {
+        val biometricAuth = when (biometricStrength) {
+            BiometricStrength.STRONG -> BiometricManager.Authenticators.BIOMETRIC_STRONG
+            BiometricStrength.WEAK -> BiometricManager.Authenticators.BIOMETRIC_WEAK
+        }
+
         return if (allowDeviceCredentials && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            biometricAuth or BiometricManager.Authenticators.DEVICE_CREDENTIAL
         } else {
-            BiometricManager.Authenticators.BIOMETRIC_STRONG
+            biometricAuth
         }
     }
 
@@ -1004,7 +1130,8 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         }
 
         val otherString = listOf("face", "iris", ",")
-        val biometricManager = BiometricManager.from(activity!!)
+        // Use appContext instead of activity!! to avoid NullPointerException
+        val biometricManager = BiometricManager.from(appContext)
 
         // Use reflection to access getStrings(int authenticators)
         var buttonLabel: String? = null
@@ -1049,14 +1176,23 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
     private fun mapToBiometricError(e: Throwable): BiometricError {
         // Map exceptions to BiometricError
         val msg = e.message ?: ""
+        val causeCode = e.cause?.message?.toIntOrNull()
+
         return when {
             msg.contains("BIOMETRIC_ERROR_NONE_ENROLLED") -> BiometricError.NOT_ENROLLED
             msg.contains("BIOMETRIC_ERROR_NO_HARDWARE") -> BiometricError.NOT_AVAILABLE
             msg.contains("BIOMETRIC_ERROR_HW_UNAVAILABLE") -> BiometricError.NOT_AVAILABLE
-            // User canceled
-            // e.cause might contain code 
-            e.cause?.message == "10" -> BiometricError.USER_CANCELED // 10 is USER_CANCELED usually
-            e.cause?.message == "13" -> BiometricError.USER_CANCELED // Negative button
+            msg.contains("BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED") -> BiometricError.SECURITY_UPDATE_REQUIRED
+            msg.contains("BIOMETRIC_ERROR_UNSUPPORTED") -> BiometricError.NOT_SUPPORTED
+
+            // BiometricPrompt error codes (from cause)
+            causeCode == 4 -> BiometricError.SYSTEM_CANCELED // ERROR_SYSTEM_CANCELED
+            causeCode == 5 -> BiometricError.USER_CANCELED // ERROR_CANCELED
+            causeCode == 7 -> BiometricError.LOCKED_OUT // ERROR_LOCKOUT
+            causeCode == 9 -> BiometricError.LOCKED_OUT_PERMANENT // ERROR_LOCKOUT_PERMANENT
+            causeCode == 10 -> BiometricError.USER_CANCELED // ERROR_USER_CANCELED
+            causeCode == 13 -> BiometricError.USER_CANCELED // ERROR_NEGATIVE_BUTTON
+            causeCode == 14 -> BiometricError.NOT_AVAILABLE // ERROR_NO_DEVICE_CREDENTIAL
 
             // Map simple Cancellation
             e is CancellationException -> BiometricError.USER_CANCELED

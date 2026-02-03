@@ -34,6 +34,21 @@ enum BiometricType {
   unavailable,
 }
 
+/// Biometric authentication strength level.
+///
+/// This affects which biometric sensors can be used for authentication.
+/// Note: On iOS/macOS, only strong biometrics are available (Face ID, Touch ID, Optic ID).
+/// On Windows, Windows Hello always uses strong authentication.
+enum BiometricStrength {
+  /// Strong biometrics only (e.g., fingerprint, face recognition with depth sensing).
+  /// This is the most secure option and is required for cryptographic operations.
+  strong,
+
+  /// Weak biometrics allowed (e.g., face recognition without depth sensing).
+  /// This option provides more device compatibility but lower security.
+  weak,
+}
+
 /// Standardized error codes for the plugin.
 enum BiometricError {
   /// The operation was successful.
@@ -65,6 +80,18 @@ enum BiometricError {
 
   /// The input payload was invalid (e.g. not valid Base64).
   invalidInput,
+
+  /// A security update is required before biometrics can be used.
+  securityUpdateRequired,
+
+  /// Biometric authentication is not supported on this device/OS version.
+  notSupported,
+
+  /// The system canceled the operation (e.g., app went to background).
+  systemCanceled,
+
+  /// Failed to show the biometric prompt (e.g., activity not available).
+  promptError,
 }
 
 class BiometricAvailability {
@@ -333,4 +360,73 @@ abstract class BiometricSignatureApi {
   /// Returns key metadata including algorithm, size, validity, and public keys.
   @async
   KeyInfo getKeyInfo(bool checkValidity, KeyFormat keyFormat);
+
+  /// Performs simple biometric authentication without cryptographic operations.
+  ///
+  /// This is useful for:
+  /// - Quick re-authentication flows
+  /// - Confirming user presence before sensitive operations
+  /// - Simple access control without key management
+  ///
+  /// [promptMessage] is the main message shown to the user (title on Android).
+  /// [config] contains optional platform-specific configuration.
+  ///
+  /// Returns a [SimplePromptResult] indicating success or failure.
+  @async
+  SimplePromptResult simplePrompt(
+    String promptMessage,
+    SimplePromptConfig? config,
+  );
+}
+
+/// Configuration for simple biometric prompt (authentication without crypto ops).
+///
+/// This allows customization of the biometric prompt across platforms.
+class SimplePromptConfig {
+  /// [Android] Subtitle text displayed below the title in the biometric prompt.
+  String? subtitle;
+
+  /// [Android] Description text displayed in the biometric prompt body.
+  String? description;
+
+  /// [Android] Text for the cancel/negative button.
+  /// Default: "Cancel" on Android, system default on iOS/macOS.
+  String? cancelButtonText;
+
+  /// [Android/iOS/macOS] Whether to allow device credentials (PIN/pattern/passcode)
+  /// as a fallback for biometric authentication.
+  ///
+  /// When true:
+  /// - Android: Shows "Use PIN" option after biometric failure
+  /// - iOS/macOS: Uses .deviceOwnerAuthentication policy
+  /// - Windows: Not applicable (Windows Hello handles fallback internally)
+  ///
+  /// Default: false (biometric-only authentication)
+  bool? allowDeviceCredentials;
+
+  /// [Android] The required biometric strength level.
+  ///
+  /// - strong: Only Class 3 biometrics (e.g., fingerprint, in-screen fingerprint)
+  /// - weak: Class 2 biometrics allowed (e.g., face unlock without depth)
+  ///
+  /// Note: iOS/macOS always use strong biometrics. Windows Hello also uses strong.
+  /// If strong biometrics are not available but weak are, and strength is set to
+  /// strong, authentication will fail with [BiometricError.notEnrolled].
+  ///
+  /// Default: strong
+  BiometricStrength? biometricStrength;
+}
+
+/// Result from simple biometric prompt authentication.
+class SimplePromptResult {
+  /// Whether authentication was successful.
+  bool? success;
+
+  /// Error message if authentication failed.
+  /// This is a human-readable description of what went wrong.
+  String? error;
+
+  /// Standardized error code if authentication failed.
+  /// Use this for programmatic error handling.
+  BiometricError? code;
 }

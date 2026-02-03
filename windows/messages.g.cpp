@@ -1184,6 +1184,200 @@ DecryptConfig DecryptConfig::FromEncodableList(const EncodableList& list) {
   return decoded;
 }
 
+// SimplePromptConfig
+
+SimplePromptConfig::SimplePromptConfig() {}
+
+SimplePromptConfig::SimplePromptConfig(
+  const std::string* subtitle,
+  const std::string* description,
+  const std::string* cancel_button_text,
+  const bool* allow_device_credentials,
+  const BiometricStrength* biometric_strength)
+ : subtitle_(subtitle ? std::optional<std::string>(*subtitle) : std::nullopt),
+    description_(description ? std::optional<std::string>(*description) : std::nullopt),
+    cancel_button_text_(cancel_button_text ? std::optional<std::string>(*cancel_button_text) : std::nullopt),
+    allow_device_credentials_(allow_device_credentials ? std::optional<bool>(*allow_device_credentials) : std::nullopt),
+    biometric_strength_(biometric_strength ? std::optional<BiometricStrength>(*biometric_strength) : std::nullopt) {}
+
+const std::string* SimplePromptConfig::subtitle() const {
+  return subtitle_ ? &(*subtitle_) : nullptr;
+}
+
+void SimplePromptConfig::set_subtitle(const std::string_view* value_arg) {
+  subtitle_ = value_arg ? std::optional<std::string>(*value_arg) : std::nullopt;
+}
+
+void SimplePromptConfig::set_subtitle(std::string_view value_arg) {
+  subtitle_ = value_arg;
+}
+
+
+const std::string* SimplePromptConfig::description() const {
+  return description_ ? &(*description_) : nullptr;
+}
+
+void SimplePromptConfig::set_description(const std::string_view* value_arg) {
+  description_ = value_arg ? std::optional<std::string>(*value_arg) : std::nullopt;
+}
+
+void SimplePromptConfig::set_description(std::string_view value_arg) {
+  description_ = value_arg;
+}
+
+
+const std::string* SimplePromptConfig::cancel_button_text() const {
+  return cancel_button_text_ ? &(*cancel_button_text_) : nullptr;
+}
+
+void SimplePromptConfig::set_cancel_button_text(const std::string_view* value_arg) {
+  cancel_button_text_ = value_arg ? std::optional<std::string>(*value_arg) : std::nullopt;
+}
+
+void SimplePromptConfig::set_cancel_button_text(std::string_view value_arg) {
+  cancel_button_text_ = value_arg;
+}
+
+
+const bool* SimplePromptConfig::allow_device_credentials() const {
+  return allow_device_credentials_ ? &(*allow_device_credentials_) : nullptr;
+}
+
+void SimplePromptConfig::set_allow_device_credentials(const bool* value_arg) {
+  allow_device_credentials_ = value_arg ? std::optional<bool>(*value_arg) : std::nullopt;
+}
+
+void SimplePromptConfig::set_allow_device_credentials(bool value_arg) {
+  allow_device_credentials_ = value_arg;
+}
+
+
+const BiometricStrength* SimplePromptConfig::biometric_strength() const {
+  return biometric_strength_ ? &(*biometric_strength_) : nullptr;
+}
+
+void SimplePromptConfig::set_biometric_strength(const BiometricStrength* value_arg) {
+  biometric_strength_ = value_arg ? std::optional<BiometricStrength>(*value_arg) : std::nullopt;
+}
+
+void SimplePromptConfig::set_biometric_strength(const BiometricStrength& value_arg) {
+  biometric_strength_ = value_arg;
+}
+
+
+EncodableList SimplePromptConfig::ToEncodableList() const {
+  EncodableList list;
+  list.reserve(5);
+  list.push_back(subtitle_ ? EncodableValue(*subtitle_) : EncodableValue());
+  list.push_back(description_ ? EncodableValue(*description_) : EncodableValue());
+  list.push_back(cancel_button_text_ ? EncodableValue(*cancel_button_text_) : EncodableValue());
+  list.push_back(allow_device_credentials_ ? EncodableValue(*allow_device_credentials_) : EncodableValue());
+  list.push_back(biometric_strength_ ? CustomEncodableValue(*biometric_strength_) : EncodableValue());
+  return list;
+}
+
+SimplePromptConfig SimplePromptConfig::FromEncodableList(const EncodableList& list) {
+  SimplePromptConfig decoded;
+  auto& encodable_subtitle = list[0];
+  if (!encodable_subtitle.IsNull()) {
+    decoded.set_subtitle(std::get<std::string>(encodable_subtitle));
+  }
+  auto& encodable_description = list[1];
+  if (!encodable_description.IsNull()) {
+    decoded.set_description(std::get<std::string>(encodable_description));
+  }
+  auto& encodable_cancel_button_text = list[2];
+  if (!encodable_cancel_button_text.IsNull()) {
+    decoded.set_cancel_button_text(std::get<std::string>(encodable_cancel_button_text));
+  }
+  auto& encodable_allow_device_credentials = list[3];
+  if (!encodable_allow_device_credentials.IsNull()) {
+    decoded.set_allow_device_credentials(std::get<bool>(encodable_allow_device_credentials));
+  }
+  auto& encodable_biometric_strength = list[4];
+  if (!encodable_biometric_strength.IsNull()) {
+    decoded.set_biometric_strength(std::any_cast<const BiometricStrength&>(std::get<CustomEncodableValue>(encodable_biometric_strength)));
+  }
+  return decoded;
+}
+
+// SimplePromptResult
+
+SimplePromptResult::SimplePromptResult() {}
+
+SimplePromptResult::SimplePromptResult(
+  const bool* success,
+  const std::string* error,
+  const BiometricError* code)
+ : success_(success ? std::optional<bool>(*success) : std::nullopt),
+    error_(error ? std::optional<std::string>(*error) : std::nullopt),
+    code_(code ? std::optional<BiometricError>(*code) : std::nullopt) {}
+
+const bool* SimplePromptResult::success() const {
+  return success_ ? &(*success_) : nullptr;
+}
+
+void SimplePromptResult::set_success(const bool* value_arg) {
+  success_ = value_arg ? std::optional<bool>(*value_arg) : std::nullopt;
+}
+
+void SimplePromptResult::set_success(bool value_arg) {
+  success_ = value_arg;
+}
+
+
+const std::string* SimplePromptResult::error() const {
+  return error_ ? &(*error_) : nullptr;
+}
+
+void SimplePromptResult::set_error(const std::string_view* value_arg) {
+  error_ = value_arg ? std::optional<std::string>(*value_arg) : std::nullopt;
+}
+
+void SimplePromptResult::set_error(std::string_view value_arg) {
+  error_ = value_arg;
+}
+
+
+const BiometricError* SimplePromptResult::code() const {
+  return code_ ? &(*code_) : nullptr;
+}
+
+void SimplePromptResult::set_code(const BiometricError* value_arg) {
+  code_ = value_arg ? std::optional<BiometricError>(*value_arg) : std::nullopt;
+}
+
+void SimplePromptResult::set_code(const BiometricError& value_arg) {
+  code_ = value_arg;
+}
+
+
+EncodableList SimplePromptResult::ToEncodableList() const {
+  EncodableList list;
+  list.reserve(3);
+  list.push_back(success_ ? EncodableValue(*success_) : EncodableValue());
+  list.push_back(error_ ? EncodableValue(*error_) : EncodableValue());
+  list.push_back(code_ ? CustomEncodableValue(*code_) : EncodableValue());
+  return list;
+}
+
+SimplePromptResult SimplePromptResult::FromEncodableList(const EncodableList& list) {
+  SimplePromptResult decoded;
+  auto& encodable_success = list[0];
+  if (!encodable_success.IsNull()) {
+    decoded.set_success(std::get<bool>(encodable_success));
+  }
+  auto& encodable_error = list[1];
+  if (!encodable_error.IsNull()) {
+    decoded.set_error(std::get<std::string>(encodable_error));
+  }
+  auto& encodable_code = list[2];
+  if (!encodable_code.IsNull()) {
+    decoded.set_code(std::any_cast<const BiometricError&>(std::get<CustomEncodableValue>(encodable_code)));
+  }
+  return decoded;
+}
+
 
 PigeonInternalCodecSerializer::PigeonInternalCodecSerializer() {}
 
@@ -1199,51 +1393,62 @@ EncodableValue PigeonInternalCodecSerializer::ReadValueOfType(
     case 130: {
         const auto& encodable_enum_arg = ReadValue(stream);
         const int64_t enum_arg_value = encodable_enum_arg.IsNull() ? 0 : encodable_enum_arg.LongValue();
-        return encodable_enum_arg.IsNull() ? EncodableValue() : CustomEncodableValue(static_cast<BiometricError>(enum_arg_value));
+        return encodable_enum_arg.IsNull() ? EncodableValue() : CustomEncodableValue(static_cast<BiometricStrength>(enum_arg_value));
       }
     case 131: {
         const auto& encodable_enum_arg = ReadValue(stream);
         const int64_t enum_arg_value = encodable_enum_arg.IsNull() ? 0 : encodable_enum_arg.LongValue();
-        return encodable_enum_arg.IsNull() ? EncodableValue() : CustomEncodableValue(static_cast<SignatureType>(enum_arg_value));
+        return encodable_enum_arg.IsNull() ? EncodableValue() : CustomEncodableValue(static_cast<BiometricError>(enum_arg_value));
       }
     case 132: {
         const auto& encodable_enum_arg = ReadValue(stream);
         const int64_t enum_arg_value = encodable_enum_arg.IsNull() ? 0 : encodable_enum_arg.LongValue();
-        return encodable_enum_arg.IsNull() ? EncodableValue() : CustomEncodableValue(static_cast<KeyFormat>(enum_arg_value));
+        return encodable_enum_arg.IsNull() ? EncodableValue() : CustomEncodableValue(static_cast<SignatureType>(enum_arg_value));
       }
     case 133: {
         const auto& encodable_enum_arg = ReadValue(stream);
         const int64_t enum_arg_value = encodable_enum_arg.IsNull() ? 0 : encodable_enum_arg.LongValue();
-        return encodable_enum_arg.IsNull() ? EncodableValue() : CustomEncodableValue(static_cast<SignatureFormat>(enum_arg_value));
+        return encodable_enum_arg.IsNull() ? EncodableValue() : CustomEncodableValue(static_cast<KeyFormat>(enum_arg_value));
       }
     case 134: {
         const auto& encodable_enum_arg = ReadValue(stream);
         const int64_t enum_arg_value = encodable_enum_arg.IsNull() ? 0 : encodable_enum_arg.LongValue();
-        return encodable_enum_arg.IsNull() ? EncodableValue() : CustomEncodableValue(static_cast<PayloadFormat>(enum_arg_value));
+        return encodable_enum_arg.IsNull() ? EncodableValue() : CustomEncodableValue(static_cast<SignatureFormat>(enum_arg_value));
       }
     case 135: {
-        return CustomEncodableValue(BiometricAvailability::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        const auto& encodable_enum_arg = ReadValue(stream);
+        const int64_t enum_arg_value = encodable_enum_arg.IsNull() ? 0 : encodable_enum_arg.LongValue();
+        return encodable_enum_arg.IsNull() ? EncodableValue() : CustomEncodableValue(static_cast<PayloadFormat>(enum_arg_value));
       }
     case 136: {
-        return CustomEncodableValue(KeyCreationResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(BiometricAvailability::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 137: {
-        return CustomEncodableValue(SignatureResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(KeyCreationResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 138: {
-        return CustomEncodableValue(DecryptResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(SignatureResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 139: {
-        return CustomEncodableValue(KeyInfo::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(DecryptResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 140: {
-        return CustomEncodableValue(CreateKeysConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(KeyInfo::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 141: {
-        return CustomEncodableValue(CreateSignatureConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(CreateKeysConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 142: {
+        return CustomEncodableValue(CreateSignatureConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+      }
+    case 143: {
         return CustomEncodableValue(DecryptConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+      }
+    case 144: {
+        return CustomEncodableValue(SimplePromptConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+      }
+    case 145: {
+        return CustomEncodableValue(SimplePromptResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     default:
       return flutter::StandardCodecSerializer::ReadValueOfType(type, stream);
@@ -1259,69 +1464,84 @@ void PigeonInternalCodecSerializer::WriteValue(
       WriteValue(EncodableValue(static_cast<int>(std::any_cast<BiometricType>(*custom_value))), stream);
       return;
     }
-    if (custom_value->type() == typeid(BiometricError)) {
+    if (custom_value->type() == typeid(BiometricStrength)) {
       stream->WriteByte(130);
+      WriteValue(EncodableValue(static_cast<int>(std::any_cast<BiometricStrength>(*custom_value))), stream);
+      return;
+    }
+    if (custom_value->type() == typeid(BiometricError)) {
+      stream->WriteByte(131);
       WriteValue(EncodableValue(static_cast<int>(std::any_cast<BiometricError>(*custom_value))), stream);
       return;
     }
     if (custom_value->type() == typeid(SignatureType)) {
-      stream->WriteByte(131);
+      stream->WriteByte(132);
       WriteValue(EncodableValue(static_cast<int>(std::any_cast<SignatureType>(*custom_value))), stream);
       return;
     }
     if (custom_value->type() == typeid(KeyFormat)) {
-      stream->WriteByte(132);
+      stream->WriteByte(133);
       WriteValue(EncodableValue(static_cast<int>(std::any_cast<KeyFormat>(*custom_value))), stream);
       return;
     }
     if (custom_value->type() == typeid(SignatureFormat)) {
-      stream->WriteByte(133);
+      stream->WriteByte(134);
       WriteValue(EncodableValue(static_cast<int>(std::any_cast<SignatureFormat>(*custom_value))), stream);
       return;
     }
     if (custom_value->type() == typeid(PayloadFormat)) {
-      stream->WriteByte(134);
+      stream->WriteByte(135);
       WriteValue(EncodableValue(static_cast<int>(std::any_cast<PayloadFormat>(*custom_value))), stream);
       return;
     }
     if (custom_value->type() == typeid(BiometricAvailability)) {
-      stream->WriteByte(135);
+      stream->WriteByte(136);
       WriteValue(EncodableValue(std::any_cast<BiometricAvailability>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(KeyCreationResult)) {
-      stream->WriteByte(136);
+      stream->WriteByte(137);
       WriteValue(EncodableValue(std::any_cast<KeyCreationResult>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(SignatureResult)) {
-      stream->WriteByte(137);
+      stream->WriteByte(138);
       WriteValue(EncodableValue(std::any_cast<SignatureResult>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(DecryptResult)) {
-      stream->WriteByte(138);
+      stream->WriteByte(139);
       WriteValue(EncodableValue(std::any_cast<DecryptResult>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(KeyInfo)) {
-      stream->WriteByte(139);
+      stream->WriteByte(140);
       WriteValue(EncodableValue(std::any_cast<KeyInfo>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(CreateKeysConfig)) {
-      stream->WriteByte(140);
+      stream->WriteByte(141);
       WriteValue(EncodableValue(std::any_cast<CreateKeysConfig>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(CreateSignatureConfig)) {
-      stream->WriteByte(141);
+      stream->WriteByte(142);
       WriteValue(EncodableValue(std::any_cast<CreateSignatureConfig>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(DecryptConfig)) {
-      stream->WriteByte(142);
+      stream->WriteByte(143);
       WriteValue(EncodableValue(std::any_cast<DecryptConfig>(*custom_value).ToEncodableList()), stream);
+      return;
+    }
+    if (custom_value->type() == typeid(SimplePromptConfig)) {
+      stream->WriteByte(144);
+      WriteValue(EncodableValue(std::any_cast<SimplePromptConfig>(*custom_value).ToEncodableList()), stream);
+      return;
+    }
+    if (custom_value->type() == typeid(SimplePromptResult)) {
+      stream->WriteByte(145);
+      WriteValue(EncodableValue(std::any_cast<SimplePromptResult>(*custom_value).ToEncodableList()), stream);
       return;
     }
   }
@@ -1525,6 +1745,37 @@ void BiometricSignatureApi::SetUp(
           }
           const auto& key_format_arg = std::any_cast<const KeyFormat&>(std::get<CustomEncodableValue>(encodable_key_format_arg));
           api->GetKeyInfo(check_validity_arg, key_format_arg, [reply](ErrorOr<KeyInfo>&& output) {
+            if (output.has_error()) {
+              reply(WrapError(output.error()));
+              return;
+            }
+            EncodableList wrapped;
+            wrapped.push_back(CustomEncodableValue(std::move(output).TakeValue()));
+            reply(EncodableValue(std::move(wrapped)));
+          });
+        } catch (const std::exception& exception) {
+          reply(WrapError(exception.what()));
+        }
+      });
+    } else {
+      channel.SetMessageHandler(nullptr);
+    }
+  }
+  {
+    BasicMessageChannel<> channel(binary_messenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.simplePrompt" + prepended_suffix, &GetCodec());
+    if (api != nullptr) {
+      channel.SetMessageHandler([api](const EncodableValue& message, const flutter::MessageReply<EncodableValue>& reply) {
+        try {
+          const auto& args = std::get<EncodableList>(message);
+          const auto& encodable_prompt_message_arg = args.at(0);
+          if (encodable_prompt_message_arg.IsNull()) {
+            reply(WrapError("prompt_message_arg unexpectedly null."));
+            return;
+          }
+          const auto& prompt_message_arg = std::get<std::string>(encodable_prompt_message_arg);
+          const auto& encodable_config_arg = args.at(1);
+          const auto* config_arg = encodable_config_arg.IsNull() ? nullptr : &(std::any_cast<const SimplePromptConfig&>(std::get<CustomEncodableValue>(encodable_config_arg)));
+          api->SimplePrompt(prompt_message_arg, config_arg, [reply](ErrorOr<SimplePromptResult>&& output) {
             if (output.has_error()) {
               reply(WrapError(output.error()));
               return;

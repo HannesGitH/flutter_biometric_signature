@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
       home: Scaffold(
-        appBar: AppBar(title: const Text('Biometric Signature v9.0.3')),
+        appBar: AppBar(title: const Text('Biometric Signature v10.0.0')),
         body: const ExampleAppBody(),
       ),
     );
@@ -53,10 +53,15 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
   KeyCreationResult? keyResult;
   SignatureResult? signatureResult;
   DecryptResult? decryptResult;
+  SimplePromptResult? simplePromptResult;
   String? payload;
   String? errorMessage;
   bool isLoading = false;
   BiometricAvailability? availability;
+
+  // Simple Prompt options
+  bool _allowDeviceCredentials = false;
+  BiometricStrength _biometricStrength = BiometricStrength.strong;
 
   @override
   void initState() {
@@ -412,6 +417,36 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
     }
   }
 
+  Future<void> _simplePrompt() async {
+    FocusScope.of(context).unfocus();
+    setState(() {
+      errorMessage = null;
+      simplePromptResult = null;
+    });
+
+    try {
+      final result = await _biometricSignature.simplePrompt(
+        promptMessage: 'Authenticate to continue',
+        config: SimplePromptConfig(
+          subtitle: 'Verify your identity',
+          description: 'Simple biometric prompt demo',
+          cancelButtonText: 'Cancel',
+          allowDeviceCredentials: _allowDeviceCredentials,
+          biometricStrength: _biometricStrength,
+        ),
+      );
+
+      setState(() => simplePromptResult = result);
+      if (result.success == true) {
+        _showSnack('Authentication successful! ✓');
+      } else {
+        _showSnack('Authentication failed: ${result.code}');
+      }
+    } catch (e) {
+      setState(() => errorMessage = e.toString());
+    }
+  }
+
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
@@ -646,6 +681,124 @@ class _ExampleAppBodyState extends State<ExampleAppBody> {
                         ),
                       ),
                     ],
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Simple Prompt Section
+          Card(
+            color: Colors.purple.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Simple Biometric Prompt',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Quick authentication without cryptographic operations',
+                    style: TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Text('Allow Device Credentials'),
+                      Switch(
+                        value: _allowDeviceCredentials,
+                        onChanged: (v) =>
+                            setState(() => _allowDeviceCredentials = v),
+                      ),
+                    ],
+                  ),
+                  if (Platform.isAndroid)
+                    Row(
+                      children: [
+                        const Text('Biometric Strength: '),
+                        DropdownButton<BiometricStrength>(
+                          value: _biometricStrength,
+                          onChanged: (v) {
+                            if (v != null) {
+                              setState(() => _biometricStrength = v);
+                            }
+                          },
+                          items: BiometricStrength.values
+                              .map(
+                                (s) => DropdownMenuItem(
+                                  value: s,
+                                  child: Text(s.name),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _simplePrompt,
+                      icon: const Icon(Icons.fingerprint),
+                      label: const Text('Authenticate'),
+                    ),
+                  ),
+                  if (simplePromptResult != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: (simplePromptResult!.success ?? false)
+                            ? Colors.green.shade100
+                            : Colors.red.shade100,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            (simplePromptResult!.success ?? false)
+                                ? Icons.check_circle
+                                : Icons.error,
+                            color: (simplePromptResult!.success ?? false)
+                                ? Colors.green
+                                : Colors.red,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  (simplePromptResult!.success ?? false)
+                                      ? 'Authentication Successful'
+                                      : 'Authentication Failed',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                Text(
+                                  'Code: ${simplePromptResult!.code}',
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                if (simplePromptResult!.error != null)
+                                  Text(
+                                    simplePromptResult!.error!,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.red,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ],
                 ],
               ),

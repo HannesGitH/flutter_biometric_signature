@@ -1,8 +1,9 @@
 #include "biometric_signature_plugin.h"
 
-#include <windows.h>
 #include <objbase.h>
 #include <ppltasks.h>
+#include <windows.h>
+
 
 // C++/WinRT Windows Hello APIs
 #include <winrt/Windows.Foundation.h>
@@ -11,12 +12,13 @@
 
 #include <flutter/plugin_registrar_windows.h>
 
+#include <functional>
+#include <iomanip>
 #include <memory>
 #include <sstream>
-#include <iomanip>
 #include <string>
 #include <vector>
-#include <functional>
+
 
 // Base64 encoding utility
 #include <wincrypt.h>
@@ -30,14 +32,17 @@ namespace {
 const std::wstring kKeyName = L"BiometricSignatureKey";
 
 // Base64 encode bytes
-std::string Base64Encode(const std::vector<uint8_t>& data) {
-  if (data.empty()) return "";
+std::string Base64Encode(const std::vector<uint8_t> &data) {
+  if (data.empty())
+    return "";
   DWORD size = 0;
   CryptBinaryToStringA(data.data(), static_cast<DWORD>(data.size()),
-                       CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, nullptr, &size);
+                       CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, nullptr,
+                       &size);
   std::string result(size, 0);
   CryptBinaryToStringA(data.data(), static_cast<DWORD>(data.size()),
-                       CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, &result[0], &size);
+                       CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, &result[0],
+                       &size);
   if (!result.empty() && result.back() == '\0') {
     result.pop_back();
   }
@@ -45,71 +50,77 @@ std::string Base64Encode(const std::vector<uint8_t>& data) {
 }
 
 // Hex encode bytes
-std::string HexEncode(const std::vector<uint8_t>& data) {
-  if (data.empty()) return "";
+std::string HexEncode(const std::vector<uint8_t> &data) {
+  if (data.empty())
+    return "";
   std::ostringstream oss;
   for (uint8_t byte : data) {
-    oss << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(byte);
+    oss << std::hex << std::setfill('0') << std::setw(2)
+        << static_cast<int>(byte);
   }
   return oss.str();
 }
 
 // Format public key according to the requested format
-std::string FormatPublicKey(const std::vector<uint8_t>& key_bytes, KeyFormat key_format) {
+std::string FormatPublicKey(const std::vector<uint8_t> &key_bytes,
+                            KeyFormat key_format) {
   std::string base64_key = Base64Encode(key_bytes);
-  
+
   switch (key_format) {
-    case KeyFormat::kBase64:
-    case KeyFormat::kRaw:
-      return base64_key;
-    case KeyFormat::kPem: {
-      std::string pem = "-----BEGIN PUBLIC KEY-----\n";
-      for (size_t i = 0; i < base64_key.length(); i += 64) {
-        pem += base64_key.substr(i, 64) + "\n";
-      }
-      pem += "-----END PUBLIC KEY-----";
-      return pem;
+  case KeyFormat::kBase64:
+  case KeyFormat::kRaw:
+    return base64_key;
+  case KeyFormat::kPem: {
+    std::string pem = "-----BEGIN PUBLIC KEY-----\n";
+    for (size_t i = 0; i < base64_key.length(); i += 64) {
+      pem += base64_key.substr(i, 64) + "\n";
     }
-    case KeyFormat::kHex:
-      return HexEncode(key_bytes);
-    default:
-      return base64_key;
+    pem += "-----END PUBLIC KEY-----";
+    return pem;
+  }
+  case KeyFormat::kHex:
+    return HexEncode(key_bytes);
+  default:
+    return base64_key;
   }
 }
 
 // Format signature according to the requested format
-std::string FormatSignature(const std::vector<uint8_t>& sig_bytes, SignatureFormat sig_format) {
+std::string FormatSignature(const std::vector<uint8_t> &sig_bytes,
+                            SignatureFormat sig_format) {
   switch (sig_format) {
-    case SignatureFormat::kBase64:
-    case SignatureFormat::kRaw:
-      return Base64Encode(sig_bytes);
-    case SignatureFormat::kHex:
-      return HexEncode(sig_bytes);
-    default:
-      return Base64Encode(sig_bytes);
+  case SignatureFormat::kBase64:
+  case SignatureFormat::kRaw:
+    return Base64Encode(sig_bytes);
+  case SignatureFormat::kHex:
+    return HexEncode(sig_bytes);
+  default:
+    return Base64Encode(sig_bytes);
   }
 }
 
 // Convert IBuffer to vector
-std::vector<uint8_t> IBufferToVector(
-    const winrt::Windows::Storage::Streams::IBuffer& buffer) {
-  auto reader = winrt::Windows::Storage::Streams::DataReader::FromBuffer(buffer);
+std::vector<uint8_t>
+IBufferToVector(const winrt::Windows::Storage::Streams::IBuffer &buffer) {
+  auto reader =
+      winrt::Windows::Storage::Streams::DataReader::FromBuffer(buffer);
   std::vector<uint8_t> data(buffer.Length());
   reader.ReadBytes(data);
   return data;
 }
 
 // Convert vector to IBuffer
-winrt::Windows::Storage::Streams::IBuffer VectorToIBuffer(
-    const std::vector<uint8_t>& data) {
+winrt::Windows::Storage::Streams::IBuffer
+VectorToIBuffer(const std::vector<uint8_t> &data) {
   auto writer = winrt::Windows::Storage::Streams::DataWriter();
   writer.WriteBytes(data);
   return writer.DetachBuffer();
 }
 
-}  // namespace
+} // namespace
 
-// Static window handle to bring window to foreground before Windows Hello dialogs
+// Static window handle to bring window to foreground before Windows Hello
+// dialogs
 static HWND g_window_handle = nullptr;
 
 // Helper function to bring the Flutter window to the foreground
@@ -124,8 +135,9 @@ static void BringWindowToForeground() {
 void BiometricSignaturePlugin::RegisterWithRegistrar(
     flutter::PluginRegistrarWindows *registrar) {
 
-  // Get the Flutter window handle for bringing it to foreground before Windows Hello dialogs
-  flutter::FlutterView* view = registrar->GetView();
+  // Get the Flutter window handle for bringing it to foreground before Windows
+  // Hello dialogs
+  flutter::FlutterView *view = registrar->GetView();
   if (view != nullptr) {
     g_window_handle = view->GetNativeWindow();
   }
@@ -144,25 +156,26 @@ BiometricSignaturePlugin::~BiometricSignaturePlugin() {}
 
 void BiometricSignaturePlugin::BiometricAuthAvailable(
     std::function<void(ErrorOr<BiometricAvailability> reply)> result) {
-  
+
   auto async_op = winrt::Windows::Security::Credentials::KeyCredentialManager::
       IsSupportedAsync();
-  
-  async_op.Completed([result](auto const& op, auto status) {
+
+  async_op.Completed([result](auto const &op, auto status) {
     BiometricAvailability response;
-    
+
     if (status == winrt::Windows::Foundation::AsyncStatus::Completed) {
       bool is_supported = op.GetResults();
-      
+
       response.set_can_authenticate(is_supported);
       response.set_has_enrolled_biometrics(is_supported);
-      
+
       flutter::EncodableList biometrics;
       if (is_supported) {
-        biometrics.push_back(flutter::CustomEncodableValue(BiometricType::kFingerprint));
+        biometrics.push_back(
+            flutter::CustomEncodableValue(BiometricType::kFingerprint));
       }
       response.set_available_biometrics(biometrics);
-      
+
       if (!is_supported) {
         response.set_reason("Windows Hello is not configured on this device");
       }
@@ -172,38 +185,38 @@ void BiometricSignaturePlugin::BiometricAuthAvailable(
       response.set_available_biometrics(flutter::EncodableList());
       response.set_reason("Failed to check Windows Hello availability");
     }
-    
+
     result(response);
   });
 }
 
 void BiometricSignaturePlugin::CreateKeys(
-    const CreateKeysConfig* config,
-    const KeyFormat& key_format,
-    const std::string* prompt_message,
+    const CreateKeysConfig *config, const KeyFormat &key_format,
+    const std::string *prompt_message,
     std::function<void(ErrorOr<KeyCreationResult> reply)> result) {
 
   // Bring Flutter window to foreground so Windows Hello dialog appears properly
   BringWindowToForeground();
 
   auto async_op = winrt::Windows::Security::Credentials::KeyCredentialManager::
-      RequestCreateAsync(kKeyName, 
-          winrt::Windows::Security::Credentials::KeyCredentialCreationOption::
-              ReplaceExisting);
-  
-  async_op.Completed([result, key_format](auto const& op, auto status) {
+      RequestCreateAsync(kKeyName,
+                         winrt::Windows::Security::Credentials::
+                             KeyCredentialCreationOption::ReplaceExisting);
+
+  async_op.Completed([result, key_format](auto const &op, auto status) {
     KeyCreationResult response;
-    
+
     if (status == winrt::Windows::Foundation::AsyncStatus::Completed) {
       auto create_result = op.GetResults();
-      
-      if (create_result.Status() == 
+
+      if (create_result.Status() ==
           winrt::Windows::Security::Credentials::KeyCredentialStatus::Success) {
-        
+
         auto credential = create_result.Credential();
         auto public_key_buffer = credential.RetrievePublicKey();
         auto public_key_bytes = IBufferToVector(public_key_buffer);
-        auto public_key_formatted = FormatPublicKey(public_key_bytes, key_format);
+        auto public_key_formatted =
+            FormatPublicKey(public_key_bytes, key_format);
 
         response.set_public_key(public_key_formatted);
         response.set_public_key_bytes(public_key_bytes);
@@ -214,24 +227,27 @@ void BiometricSignaturePlugin::CreateKeys(
       } else {
         std::string error_msg = "Failed to create key";
         BiometricError error_code = BiometricError::kUnknown;
-        
+
         switch (create_result.Status()) {
-          case winrt::Windows::Security::Credentials::KeyCredentialStatus::UserCanceled:
-            error_msg = "User canceled the operation";
-            error_code = BiometricError::kUserCanceled;
-            break;
-          case winrt::Windows::Security::Credentials::KeyCredentialStatus::NotFound:
-            error_msg = "Windows Hello not found";
-            error_code = BiometricError::kNotAvailable;
-            break;
-          case winrt::Windows::Security::Credentials::KeyCredentialStatus::SecurityDeviceLocked:
-            error_msg = "Security device is locked";
-            error_code = BiometricError::kLockedOut;
-            break;
-          default:
-            break;
+        case winrt::Windows::Security::Credentials::KeyCredentialStatus::
+            UserCanceled:
+          error_msg = "User canceled the operation";
+          error_code = BiometricError::kUserCanceled;
+          break;
+        case winrt::Windows::Security::Credentials::KeyCredentialStatus::
+            NotFound:
+          error_msg = "Windows Hello not found";
+          error_code = BiometricError::kNotAvailable;
+          break;
+        case winrt::Windows::Security::Credentials::KeyCredentialStatus::
+            SecurityDeviceLocked:
+          error_msg = "Security device is locked";
+          error_code = BiometricError::kLockedOut;
+          break;
+        default:
+          break;
         }
-        
+
         response.set_error(error_msg);
         response.set_code(error_code);
       }
@@ -239,17 +255,15 @@ void BiometricSignaturePlugin::CreateKeys(
       response.set_error("Operation failed or was canceled");
       response.set_code(BiometricError::kUnknown);
     }
-    
+
     result(response);
   });
 }
 
 void BiometricSignaturePlugin::CreateSignature(
-    const std::string& payload,
-    const CreateSignatureConfig* config,
-    const SignatureFormat& signature_format,
-    const KeyFormat& key_format,
-    const std::string* prompt_message,
+    const std::string &payload, const CreateSignatureConfig *config,
+    const SignatureFormat &signature_format, const KeyFormat &key_format,
+    const std::string *prompt_message,
     std::function<void(ErrorOr<SignatureResult> reply)> result) {
 
   if (payload.empty()) {
@@ -265,39 +279,46 @@ void BiometricSignaturePlugin::CreateSignature(
 
   std::string payload_copy = payload;
 
-  auto async_op = winrt::Windows::Security::Credentials::KeyCredentialManager::
-      OpenAsync(kKeyName);
-  
-  async_op.Completed([result, payload_copy, key_format, signature_format](auto const& op, auto status) {
+  auto async_op =
+      winrt::Windows::Security::Credentials::KeyCredentialManager::OpenAsync(
+          kKeyName);
+
+  async_op.Completed([result, payload_copy, key_format,
+                      signature_format](auto const &op, auto status) {
     SignatureResult response;
-    
+
     if (status == winrt::Windows::Foundation::AsyncStatus::Completed) {
       auto open_result = op.GetResults();
-      
-      if (open_result.Status() == 
+
+      if (open_result.Status() ==
           winrt::Windows::Security::Credentials::KeyCredentialStatus::Success) {
-        
+
         auto credential = open_result.Credential();
-        std::vector<uint8_t> payload_bytes(payload_copy.begin(), payload_copy.end());
+        std::vector<uint8_t> payload_bytes(payload_copy.begin(),
+                                           payload_copy.end());
         auto data_buffer = VectorToIBuffer(payload_bytes);
-        
+
         auto sign_op = credential.RequestSignAsync(data_buffer);
-        sign_op.Completed([result, credential, key_format, signature_format](auto const& sign_async, auto sign_status) {
+        sign_op.Completed([result, credential, key_format, signature_format](
+                              auto const &sign_async, auto sign_status) {
           SignatureResult resp;
-          
-          if (sign_status == winrt::Windows::Foundation::AsyncStatus::Completed) {
+
+          if (sign_status ==
+              winrt::Windows::Foundation::AsyncStatus::Completed) {
             auto sign_result = sign_async.GetResults();
-            
-            if (sign_result.Status() == 
-                winrt::Windows::Security::Credentials::KeyCredentialStatus::Success) {
-              
+
+            if (sign_result.Status() == winrt::Windows::Security::Credentials::
+                                            KeyCredentialStatus::Success) {
+
               auto signature_buffer = sign_result.Result();
               auto signature_bytes = IBufferToVector(signature_buffer);
-              auto signature_formatted = FormatSignature(signature_bytes, signature_format);
-              
+              auto signature_formatted =
+                  FormatSignature(signature_bytes, signature_format);
+
               auto public_key_buffer = credential.RetrievePublicKey();
               auto public_key_bytes = IBufferToVector(public_key_buffer);
-              auto public_key_formatted = FormatPublicKey(public_key_bytes, key_format);
+              auto public_key_formatted =
+                  FormatPublicKey(public_key_bytes, key_format);
 
               resp.set_signature(signature_formatted);
               resp.set_signature_bytes(signature_bytes);
@@ -308,20 +329,22 @@ void BiometricSignaturePlugin::CreateSignature(
             } else {
               std::string error_msg = "Signing failed";
               BiometricError error_code = BiometricError::kUnknown;
-              
+
               switch (sign_result.Status()) {
-                case winrt::Windows::Security::Credentials::KeyCredentialStatus::UserCanceled:
-                  error_msg = "User canceled the operation";
-                  error_code = BiometricError::kUserCanceled;
-                  break;
-                case winrt::Windows::Security::Credentials::KeyCredentialStatus::SecurityDeviceLocked:
-                  error_msg = "Security device is locked";
-                  error_code = BiometricError::kLockedOut;
-                  break;
-                default:
-                  break;
+              case winrt::Windows::Security::Credentials::KeyCredentialStatus::
+                  UserCanceled:
+                error_msg = "User canceled the operation";
+                error_code = BiometricError::kUserCanceled;
+                break;
+              case winrt::Windows::Security::Credentials::KeyCredentialStatus::
+                  SecurityDeviceLocked:
+                error_msg = "Security device is locked";
+                error_code = BiometricError::kLockedOut;
+                break;
+              default:
+                break;
               }
-              
+
               resp.set_error(error_msg);
               resp.set_code(error_code);
             }
@@ -329,10 +352,10 @@ void BiometricSignaturePlugin::CreateSignature(
             resp.set_error("Signing operation failed");
             resp.set_code(BiometricError::kUnknown);
           }
-          
+
           result(resp);
         });
-        return;  // Don't call result here, the nested callback will
+        return; // Don't call result here, the nested callback will
       } else {
         response.set_error("Key not found. Please create keys first.");
         response.set_code(BiometricError::kKeyNotFound);
@@ -341,43 +364,46 @@ void BiometricSignaturePlugin::CreateSignature(
       response.set_error("Failed to open key");
       response.set_code(BiometricError::kUnknown);
     }
-    
+
     result(response);
   });
 }
 
 void BiometricSignaturePlugin::DeleteKeys(
     std::function<void(ErrorOr<bool> reply)> result) {
-  
-  auto async_op = winrt::Windows::Security::Credentials::KeyCredentialManager::
-      DeleteAsync(kKeyName);
-  
-  async_op.Completed([result](auto const& op, auto status) {
-    result(true);  // Return true even if key didn't exist
+
+  auto async_op =
+      winrt::Windows::Security::Credentials::KeyCredentialManager::DeleteAsync(
+          kKeyName);
+
+  async_op.Completed([result](auto const &op, auto status) {
+    result(true); // Return true even if key didn't exist
   });
 }
 
 void BiometricSignaturePlugin::GetKeyInfo(
-    bool check_validity,
-    const KeyFormat& key_format,
+    bool check_validity, const KeyFormat &key_format,
     std::function<void(ErrorOr<KeyInfo> reply)> result) {
 
-  auto async_op = winrt::Windows::Security::Credentials::KeyCredentialManager::
-      OpenAsync(kKeyName);
-  
-  async_op.Completed([result, key_format, check_validity](auto const& op, auto status) {
+  auto async_op =
+      winrt::Windows::Security::Credentials::KeyCredentialManager::OpenAsync(
+          kKeyName);
+
+  async_op.Completed([result, key_format, check_validity](auto const &op,
+                                                          auto status) {
     KeyInfo response;
-    
+
     if (status == winrt::Windows::Foundation::AsyncStatus::Completed) {
       auto open_result = op.GetResults();
-      
-      if (open_result.Status() == 
+
+      if (open_result.Status() ==
           winrt::Windows::Security::Credentials::KeyCredentialStatus::Success) {
-        
+
         auto credential = open_result.Credential();
         auto public_key_buffer = credential.RetrievePublicKey();
         auto public_key_bytes = IBufferToVector(public_key_buffer);
-        auto public_key_formatted = FormatPublicKey(public_key_bytes, key_format);
+        auto public_key_formatted =
+            FormatPublicKey(public_key_bytes, key_format);
 
         response.set_exists(true);
         if (check_validity) {
@@ -393,23 +419,188 @@ void BiometricSignaturePlugin::GetKeyInfo(
     } else {
       response.set_exists(false);
     }
-    
+
     result(response);
   });
 }
 
 void BiometricSignaturePlugin::Decrypt(
-    const std::string& payload,
-    const PayloadFormat& payload_format,
-    const DecryptConfig* config,
-    const std::string* prompt_message,
+    const std::string &payload, const PayloadFormat &payload_format,
+    const DecryptConfig *config, const std::string *prompt_message,
     std::function<void(ErrorOr<DecryptResult> reply)> result) {
-  
+
   DecryptResult response;
-  response.set_error("Decryption is not supported on Windows. "
+  response.set_error(
+      "Decryption is not supported on Windows. "
       "Windows Hello is designed for authentication and signing only.");
   response.set_code(BiometricError::kNotAvailable);
   result(response);
 }
 
-}  // namespace biometric_signature
+void BiometricSignaturePlugin::SimplePrompt(
+    const std::string &prompt_message, const SimplePromptConfig *config,
+    std::function<void(ErrorOr<SimplePromptResult> reply)> result) {
+
+  // Bring Flutter window to foreground so Windows Hello dialog appears properly
+  BringWindowToForeground();
+
+  // Note: Windows Hello always uses strong biometrics, so biometricStrength
+  // config is ignored. allowDeviceCredentials is handled internally by Windows
+  // Hello. promptMessage is shown as the description in the Windows Hello
+  // dialog.
+
+  // First check if Windows Hello is available
+  auto is_supported_op = winrt::Windows::Security::Credentials::
+      KeyCredentialManager::IsSupportedAsync();
+
+  is_supported_op.Completed([result, prompt_message](auto const &support_op,
+                                                     auto support_status) {
+    if (support_status != winrt::Windows::Foundation::AsyncStatus::Completed) {
+      SimplePromptResult response;
+      response.set_success(false);
+      response.set_error("Failed to check Windows Hello availability");
+      response.set_code(BiometricError::kUnknown);
+      result(response);
+      return;
+    }
+
+    bool is_supported = support_op.GetResults();
+    if (!is_supported) {
+      SimplePromptResult response;
+      response.set_success(false);
+      response.set_error("Windows Hello is not configured on this device");
+      response.set_code(BiometricError::kNotAvailable);
+      result(response);
+      return;
+    }
+
+    // Use RequestSignAsync on an existing key to trigger authentication
+    // If no key exists, we'll use a verification approach
+    auto open_op =
+        winrt::Windows::Security::Credentials::KeyCredentialManager::OpenAsync(
+            kKeyName);
+
+    open_op.Completed([result, prompt_message](auto const &op, auto status) {
+      if (status == winrt::Windows::Foundation::AsyncStatus::Completed) {
+        auto open_result = op.GetResults();
+
+        if (open_result.Status() == winrt::Windows::Security::Credentials::
+                                        KeyCredentialStatus::Success) {
+          // Key exists, use it to trigger authentication via signing
+          auto credential = open_result.Credential();
+          std::vector<uint8_t> dummy_data = {0x00}; // Minimal data for signing
+          auto data_buffer = VectorToIBuffer(dummy_data);
+
+          auto sign_op = credential.RequestSignAsync(data_buffer);
+          sign_op.Completed([result](auto const &sign_async, auto sign_status) {
+            SimplePromptResult resp;
+
+            if (sign_status ==
+                winrt::Windows::Foundation::AsyncStatus::Completed) {
+              auto sign_result = sign_async.GetResults();
+
+              if (sign_result.Status() ==
+                  winrt::Windows::Security::Credentials::KeyCredentialStatus::
+                      Success) {
+                resp.set_success(true);
+                resp.set_code(BiometricError::kSuccess);
+              } else {
+                resp.set_success(false);
+                BiometricError error_code = BiometricError::kUnknown;
+                std::string error_msg = "Authentication failed";
+
+                switch (sign_result.Status()) {
+                case winrt::Windows::Security::Credentials::
+                    KeyCredentialStatus::UserCanceled:
+                  error_msg = "User canceled the operation";
+                  error_code = BiometricError::kUserCanceled;
+                  break;
+                case winrt::Windows::Security::Credentials::
+                    KeyCredentialStatus::SecurityDeviceLocked:
+                  error_msg = "Security device is locked";
+                  error_code = BiometricError::kLockedOut;
+                  break;
+                default:
+                  break;
+                }
+
+                resp.set_error(error_msg);
+                resp.set_code(error_code);
+              }
+            } else {
+              resp.set_success(false);
+              resp.set_error("Authentication operation failed");
+              resp.set_code(BiometricError::kUnknown);
+            }
+
+            result(resp);
+          });
+          return;
+        }
+      }
+
+      // No key exists - create a temporary key to trigger authentication
+      // Then delete it immediately after
+      auto create_op = winrt::Windows::Security::Credentials::
+          KeyCredentialManager::RequestCreateAsync(
+              L"BiometricSignatureTemp",
+              winrt::Windows::Security::Credentials::
+                  KeyCredentialCreationOption::ReplaceExisting);
+
+      create_op.Completed([result](auto const &create_async,
+                                   auto create_status) {
+        SimplePromptResult resp;
+
+        if (create_status ==
+            winrt::Windows::Foundation::AsyncStatus::Completed) {
+          auto create_result = create_async.GetResults();
+
+          if (create_result.Status() == winrt::Windows::Security::Credentials::
+                                            KeyCredentialStatus::Success) {
+            // Authentication succeeded, delete the temp key
+            winrt::Windows::Security::Credentials::KeyCredentialManager::
+                DeleteAsync(L"BiometricSignatureTemp");
+
+            resp.set_success(true);
+            resp.set_code(BiometricError::kSuccess);
+          } else {
+            resp.set_success(false);
+            BiometricError error_code = BiometricError::kUnknown;
+            std::string error_msg = "Authentication failed";
+
+            switch (create_result.Status()) {
+            case winrt::Windows::Security::Credentials::KeyCredentialStatus::
+                UserCanceled:
+              error_msg = "User canceled the operation";
+              error_code = BiometricError::kUserCanceled;
+              break;
+            case winrt::Windows::Security::Credentials::KeyCredentialStatus::
+                NotFound:
+              error_msg = "Windows Hello not found";
+              error_code = BiometricError::kNotAvailable;
+              break;
+            case winrt::Windows::Security::Credentials::KeyCredentialStatus::
+                SecurityDeviceLocked:
+              error_msg = "Security device is locked";
+              error_code = BiometricError::kLockedOut;
+              break;
+            default:
+              break;
+            }
+
+            resp.set_error(error_msg);
+            resp.set_code(error_code);
+          }
+        } else {
+          resp.set_success(false);
+          resp.set_error("Authentication operation failed or was canceled");
+          resp.set_code(BiometricError::kUnknown);
+        }
+
+        result(resp);
+      });
+    });
+  });
+}
+
+} // namespace biometric_signature

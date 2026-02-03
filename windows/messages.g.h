@@ -70,6 +70,20 @@ enum class BiometricType {
   kUnavailable = 4
 };
 
+// Biometric authentication strength level.
+//
+// This affects which biometric sensors can be used for authentication.
+// Note: On iOS/macOS, only strong biometrics are available (Face ID, Touch ID, Optic ID).
+// On Windows, Windows Hello always uses strong authentication.
+enum class BiometricStrength {
+  // Strong biometrics only (e.g., fingerprint, face recognition with depth sensing).
+  // This is the most secure option and is required for cryptographic operations.
+  kStrong = 0,
+  // Weak biometrics allowed (e.g., face recognition without depth sensing).
+  // This option provides more device compatibility but lower security.
+  kWeak = 1
+};
+
 // Standardized error codes for the plugin.
 enum class BiometricError {
   // The operation was successful.
@@ -91,7 +105,15 @@ enum class BiometricError {
   // An unknown error occurred.
   kUnknown = 8,
   // The input payload was invalid (e.g. not valid Base64).
-  kInvalidInput = 9
+  kInvalidInput = 9,
+  // A security update is required before biometrics can be used.
+  kSecurityUpdateRequired = 10,
+  // Biometric authentication is not supported on this device/OS version.
+  kNotSupported = 11,
+  // The system canceled the operation (e.g., app went to background).
+  kSystemCanceled = 12,
+  // Failed to show the biometric prompt (e.g., activity not available).
+  kPromptError = 13
 };
 
 // The cryptographic algorithm to use for key generation.
@@ -631,6 +653,122 @@ class DecryptConfig {
 };
 
 
+// Configuration for simple biometric prompt (authentication without crypto ops).
+//
+// This allows customization of the biometric prompt across platforms.
+//
+// Generated class from Pigeon that represents data sent in messages.
+class SimplePromptConfig {
+ public:
+  // Constructs an object setting all non-nullable fields.
+  SimplePromptConfig();
+
+  // Constructs an object setting all fields.
+  explicit SimplePromptConfig(
+    const std::string* subtitle,
+    const std::string* description,
+    const std::string* cancel_button_text,
+    const bool* allow_device_credentials,
+    const BiometricStrength* biometric_strength);
+
+  // [Android] Subtitle text displayed below the title in the biometric prompt.
+  const std::string* subtitle() const;
+  void set_subtitle(const std::string_view* value_arg);
+  void set_subtitle(std::string_view value_arg);
+
+  // [Android] Description text displayed in the biometric prompt body.
+  const std::string* description() const;
+  void set_description(const std::string_view* value_arg);
+  void set_description(std::string_view value_arg);
+
+  // [Android] Text for the cancel/negative button.
+  // Default: "Cancel" on Android, system default on iOS/macOS.
+  const std::string* cancel_button_text() const;
+  void set_cancel_button_text(const std::string_view* value_arg);
+  void set_cancel_button_text(std::string_view value_arg);
+
+  // [Android/iOS/macOS] Whether to allow device credentials (PIN/pattern/passcode)
+  // as a fallback for biometric authentication.
+  //
+  // When true:
+  // - Android: Shows "Use PIN" option after biometric failure
+  // - iOS/macOS: Uses .deviceOwnerAuthentication policy
+  // - Windows: Not applicable (Windows Hello handles fallback internally)
+  //
+  // Default: false (biometric-only authentication)
+  const bool* allow_device_credentials() const;
+  void set_allow_device_credentials(const bool* value_arg);
+  void set_allow_device_credentials(bool value_arg);
+
+  // [Android] The required biometric strength level.
+  //
+  // - strong: Only Class 3 biometrics (e.g., fingerprint, in-screen fingerprint)
+  // - weak: Class 2 biometrics allowed (e.g., face unlock without depth)
+  //
+  // Note: iOS/macOS always use strong biometrics. Windows Hello also uses strong.
+  // If strong biometrics are not available but weak are, and strength is set to
+  // strong, authentication will fail with [BiometricError.notEnrolled].
+  //
+  // Default: strong
+  const BiometricStrength* biometric_strength() const;
+  void set_biometric_strength(const BiometricStrength* value_arg);
+  void set_biometric_strength(const BiometricStrength& value_arg);
+
+ private:
+  static SimplePromptConfig FromEncodableList(const flutter::EncodableList& list);
+  flutter::EncodableList ToEncodableList() const;
+  friend class BiometricSignatureApi;
+  friend class PigeonInternalCodecSerializer;
+  std::optional<std::string> subtitle_;
+  std::optional<std::string> description_;
+  std::optional<std::string> cancel_button_text_;
+  std::optional<bool> allow_device_credentials_;
+  std::optional<BiometricStrength> biometric_strength_;
+};
+
+
+// Result from simple biometric prompt authentication.
+//
+// Generated class from Pigeon that represents data sent in messages.
+class SimplePromptResult {
+ public:
+  // Constructs an object setting all non-nullable fields.
+  SimplePromptResult();
+
+  // Constructs an object setting all fields.
+  explicit SimplePromptResult(
+    const bool* success,
+    const std::string* error,
+    const BiometricError* code);
+
+  // Whether authentication was successful.
+  const bool* success() const;
+  void set_success(const bool* value_arg);
+  void set_success(bool value_arg);
+
+  // Error message if authentication failed.
+  // This is a human-readable description of what went wrong.
+  const std::string* error() const;
+  void set_error(const std::string_view* value_arg);
+  void set_error(std::string_view value_arg);
+
+  // Standardized error code if authentication failed.
+  // Use this for programmatic error handling.
+  const BiometricError* code() const;
+  void set_code(const BiometricError* value_arg);
+  void set_code(const BiometricError& value_arg);
+
+ private:
+  static SimplePromptResult FromEncodableList(const flutter::EncodableList& list);
+  flutter::EncodableList ToEncodableList() const;
+  friend class BiometricSignatureApi;
+  friend class PigeonInternalCodecSerializer;
+  std::optional<bool> success_;
+  std::optional<std::string> error_;
+  std::optional<BiometricError> code_;
+};
+
+
 class PigeonInternalCodecSerializer : public flutter::StandardCodecSerializer {
  public:
   PigeonInternalCodecSerializer();
@@ -702,6 +840,21 @@ class BiometricSignatureApi {
     bool check_validity,
     const KeyFormat& key_format,
     std::function<void(ErrorOr<KeyInfo> reply)> result) = 0;
+  // Performs simple biometric authentication without cryptographic operations.
+  //
+  // This is useful for:
+  // - Quick re-authentication flows
+  // - Confirming user presence before sensitive operations
+  // - Simple access control without key management
+  //
+  // [promptMessage] is the main message shown to the user (title on Android).
+  // [config] contains optional platform-specific configuration.
+  //
+  // Returns a [SimplePromptResult] indicating success or failure.
+  virtual void SimplePrompt(
+    const std::string& prompt_message,
+    const SimplePromptConfig* config,
+    std::function<void(ErrorOr<SimplePromptResult> reply)> result) = 0;
 
   // The codec used by BiometricSignatureApi.
   static const flutter::StandardMessageCodec& GetCodec();

@@ -142,6 +142,20 @@ enum BiometricType: Int {
   case unavailable = 4
 }
 
+/// Biometric authentication strength level.
+///
+/// This affects which biometric sensors can be used for authentication.
+/// Note: On iOS/macOS, only strong biometrics are available (Face ID, Touch ID, Optic ID).
+/// On Windows, Windows Hello always uses strong authentication.
+enum BiometricStrength: Int {
+  /// Strong biometrics only (e.g., fingerprint, face recognition with depth sensing).
+  /// This is the most secure option and is required for cryptographic operations.
+  case strong = 0
+  /// Weak biometrics allowed (e.g., face recognition without depth sensing).
+  /// This option provides more device compatibility but lower security.
+  case weak = 1
+}
+
 /// Standardized error codes for the plugin.
 enum BiometricError: Int {
   /// The operation was successful.
@@ -164,6 +178,14 @@ enum BiometricError: Int {
   case unknown = 8
   /// The input payload was invalid (e.g. not valid Base64).
   case invalidInput = 9
+  /// A security update is required before biometrics can be used.
+  case securityUpdateRequired = 10
+  /// Biometric authentication is not supported on this device/OS version.
+  case notSupported = 11
+  /// The system canceled the operation (e.g., app went to background).
+  case systemCanceled = 12
+  /// Failed to show the biometric prompt (e.g., activity not available).
+  case promptError = 13
 }
 
 /// The cryptographic algorithm to use for key generation.
@@ -632,6 +654,114 @@ struct DecryptConfig: Hashable {
   }
 }
 
+/// Configuration for simple biometric prompt (authentication without crypto ops).
+///
+/// This allows customization of the biometric prompt across platforms.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct SimplePromptConfig: Hashable {
+  /// [Android] Subtitle text displayed below the title in the biometric prompt.
+  var subtitle: String? = nil
+  /// [Android] Description text displayed in the biometric prompt body.
+  var description: String? = nil
+  /// [Android] Text for the cancel/negative button.
+  /// Default: "Cancel" on Android, system default on iOS/macOS.
+  var cancelButtonText: String? = nil
+  /// [Android/iOS/macOS] Whether to allow device credentials (PIN/pattern/passcode)
+  /// as a fallback for biometric authentication.
+  ///
+  /// When true:
+  /// - Android: Shows "Use PIN" option after biometric failure
+  /// - iOS/macOS: Uses .deviceOwnerAuthentication policy
+  /// - Windows: Not applicable (Windows Hello handles fallback internally)
+  ///
+  /// Default: false (biometric-only authentication)
+  var allowDeviceCredentials: Bool? = nil
+  /// [Android] The required biometric strength level.
+  ///
+  /// - strong: Only Class 3 biometrics (e.g., fingerprint, in-screen fingerprint)
+  /// - weak: Class 2 biometrics allowed (e.g., face unlock without depth)
+  ///
+  /// Note: iOS/macOS always use strong biometrics. Windows Hello also uses strong.
+  /// If strong biometrics are not available but weak are, and strength is set to
+  /// strong, authentication will fail with [BiometricError.notEnrolled].
+  ///
+  /// Default: strong
+  var biometricStrength: BiometricStrength? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> SimplePromptConfig? {
+    let subtitle: String? = nilOrValue(pigeonVar_list[0])
+    let description: String? = nilOrValue(pigeonVar_list[1])
+    let cancelButtonText: String? = nilOrValue(pigeonVar_list[2])
+    let allowDeviceCredentials: Bool? = nilOrValue(pigeonVar_list[3])
+    let biometricStrength: BiometricStrength? = nilOrValue(pigeonVar_list[4])
+
+    return SimplePromptConfig(
+      subtitle: subtitle,
+      description: description,
+      cancelButtonText: cancelButtonText,
+      allowDeviceCredentials: allowDeviceCredentials,
+      biometricStrength: biometricStrength
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      subtitle,
+      description,
+      cancelButtonText,
+      allowDeviceCredentials,
+      biometricStrength,
+    ]
+  }
+  static func == (lhs: SimplePromptConfig, rhs: SimplePromptConfig) -> Bool {
+    return deepEqualsBiometricSignatureApi(lhs.toList(), rhs.toList())  }
+  func hash(into hasher: inout Hasher) {
+    deepHashBiometricSignatureApi(value: toList(), hasher: &hasher)
+  }
+}
+
+/// Result from simple biometric prompt authentication.
+///
+/// Generated class from Pigeon that represents data sent in messages.
+struct SimplePromptResult: Hashable {
+  /// Whether authentication was successful.
+  var success: Bool? = nil
+  /// Error message if authentication failed.
+  /// This is a human-readable description of what went wrong.
+  var error: String? = nil
+  /// Standardized error code if authentication failed.
+  /// Use this for programmatic error handling.
+  var code: BiometricError? = nil
+
+
+  // swift-format-ignore: AlwaysUseLowerCamelCase
+  static func fromList(_ pigeonVar_list: [Any?]) -> SimplePromptResult? {
+    let success: Bool? = nilOrValue(pigeonVar_list[0])
+    let error: String? = nilOrValue(pigeonVar_list[1])
+    let code: BiometricError? = nilOrValue(pigeonVar_list[2])
+
+    return SimplePromptResult(
+      success: success,
+      error: error,
+      code: code
+    )
+  }
+  func toList() -> [Any?] {
+    return [
+      success,
+      error,
+      code,
+    ]
+  }
+  static func == (lhs: SimplePromptResult, rhs: SimplePromptResult) -> Bool {
+    return deepEqualsBiometricSignatureApi(lhs.toList(), rhs.toList())  }
+  func hash(into hasher: inout Hasher) {
+    deepHashBiometricSignatureApi(value: toList(), hasher: &hasher)
+  }
+}
+
 private class BiometricSignatureApiPigeonCodecReader: FlutterStandardReader {
   override func readValue(ofType type: UInt8) -> Any? {
     switch type {
@@ -644,49 +774,59 @@ private class BiometricSignatureApiPigeonCodecReader: FlutterStandardReader {
     case 130:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return BiometricError(rawValue: enumResultAsInt)
+        return BiometricStrength(rawValue: enumResultAsInt)
       }
       return nil
     case 131:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return SignatureType(rawValue: enumResultAsInt)
+        return BiometricError(rawValue: enumResultAsInt)
       }
       return nil
     case 132:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return KeyFormat(rawValue: enumResultAsInt)
+        return SignatureType(rawValue: enumResultAsInt)
       }
       return nil
     case 133:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return SignatureFormat(rawValue: enumResultAsInt)
+        return KeyFormat(rawValue: enumResultAsInt)
       }
       return nil
     case 134:
       let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
       if let enumResultAsInt = enumResultAsInt {
-        return PayloadFormat(rawValue: enumResultAsInt)
+        return SignatureFormat(rawValue: enumResultAsInt)
       }
       return nil
     case 135:
-      return BiometricAvailability.fromList(self.readValue() as! [Any?])
+      let enumResultAsInt: Int? = nilOrValue(self.readValue() as! Int?)
+      if let enumResultAsInt = enumResultAsInt {
+        return PayloadFormat(rawValue: enumResultAsInt)
+      }
+      return nil
     case 136:
-      return KeyCreationResult.fromList(self.readValue() as! [Any?])
+      return BiometricAvailability.fromList(self.readValue() as! [Any?])
     case 137:
-      return SignatureResult.fromList(self.readValue() as! [Any?])
+      return KeyCreationResult.fromList(self.readValue() as! [Any?])
     case 138:
-      return DecryptResult.fromList(self.readValue() as! [Any?])
+      return SignatureResult.fromList(self.readValue() as! [Any?])
     case 139:
-      return KeyInfo.fromList(self.readValue() as! [Any?])
+      return DecryptResult.fromList(self.readValue() as! [Any?])
     case 140:
-      return CreateKeysConfig.fromList(self.readValue() as! [Any?])
+      return KeyInfo.fromList(self.readValue() as! [Any?])
     case 141:
-      return CreateSignatureConfig.fromList(self.readValue() as! [Any?])
+      return CreateKeysConfig.fromList(self.readValue() as! [Any?])
     case 142:
+      return CreateSignatureConfig.fromList(self.readValue() as! [Any?])
+    case 143:
       return DecryptConfig.fromList(self.readValue() as! [Any?])
+    case 144:
+      return SimplePromptConfig.fromList(self.readValue() as! [Any?])
+    case 145:
+      return SimplePromptResult.fromList(self.readValue() as! [Any?])
     default:
       return super.readValue(ofType: type)
     }
@@ -698,44 +838,53 @@ private class BiometricSignatureApiPigeonCodecWriter: FlutterStandardWriter {
     if let value = value as? BiometricType {
       super.writeByte(129)
       super.writeValue(value.rawValue)
-    } else if let value = value as? BiometricError {
+    } else if let value = value as? BiometricStrength {
       super.writeByte(130)
       super.writeValue(value.rawValue)
-    } else if let value = value as? SignatureType {
+    } else if let value = value as? BiometricError {
       super.writeByte(131)
       super.writeValue(value.rawValue)
-    } else if let value = value as? KeyFormat {
+    } else if let value = value as? SignatureType {
       super.writeByte(132)
       super.writeValue(value.rawValue)
-    } else if let value = value as? SignatureFormat {
+    } else if let value = value as? KeyFormat {
       super.writeByte(133)
       super.writeValue(value.rawValue)
-    } else if let value = value as? PayloadFormat {
+    } else if let value = value as? SignatureFormat {
       super.writeByte(134)
       super.writeValue(value.rawValue)
-    } else if let value = value as? BiometricAvailability {
+    } else if let value = value as? PayloadFormat {
       super.writeByte(135)
-      super.writeValue(value.toList())
-    } else if let value = value as? KeyCreationResult {
+      super.writeValue(value.rawValue)
+    } else if let value = value as? BiometricAvailability {
       super.writeByte(136)
       super.writeValue(value.toList())
-    } else if let value = value as? SignatureResult {
+    } else if let value = value as? KeyCreationResult {
       super.writeByte(137)
       super.writeValue(value.toList())
-    } else if let value = value as? DecryptResult {
+    } else if let value = value as? SignatureResult {
       super.writeByte(138)
       super.writeValue(value.toList())
-    } else if let value = value as? KeyInfo {
+    } else if let value = value as? DecryptResult {
       super.writeByte(139)
       super.writeValue(value.toList())
-    } else if let value = value as? CreateKeysConfig {
+    } else if let value = value as? KeyInfo {
       super.writeByte(140)
       super.writeValue(value.toList())
-    } else if let value = value as? CreateSignatureConfig {
+    } else if let value = value as? CreateKeysConfig {
       super.writeByte(141)
       super.writeValue(value.toList())
-    } else if let value = value as? DecryptConfig {
+    } else if let value = value as? CreateSignatureConfig {
       super.writeByte(142)
+      super.writeValue(value.toList())
+    } else if let value = value as? DecryptConfig {
+      super.writeByte(143)
+      super.writeValue(value.toList())
+    } else if let value = value as? SimplePromptConfig {
+      super.writeByte(144)
+      super.writeValue(value.toList())
+    } else if let value = value as? SimplePromptResult {
+      super.writeByte(145)
       super.writeValue(value.toList())
     } else {
       super.writeValue(value)
@@ -790,6 +939,18 @@ protocol BiometricSignatureApi {
   ///
   /// Returns key metadata including algorithm, size, validity, and public keys.
   func getKeyInfo(checkValidity: Bool, keyFormat: KeyFormat, completion: @escaping (Result<KeyInfo, Error>) -> Void)
+  /// Performs simple biometric authentication without cryptographic operations.
+  ///
+  /// This is useful for:
+  /// - Quick re-authentication flows
+  /// - Confirming user presence before sensitive operations
+  /// - Simple access control without key management
+  ///
+  /// [promptMessage] is the main message shown to the user (title on Android).
+  /// [config] contains optional platform-specific configuration.
+  ///
+  /// Returns a [SimplePromptResult] indicating success or failure.
+  func simplePrompt(promptMessage: String, config: SimplePromptConfig?, completion: @escaping (Result<SimplePromptResult, Error>) -> Void)
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -929,6 +1090,35 @@ class BiometricSignatureApiSetup {
       }
     } else {
       getKeyInfoChannel.setMessageHandler(nil)
+    }
+    /// Performs simple biometric authentication without cryptographic operations.
+    ///
+    /// This is useful for:
+    /// - Quick re-authentication flows
+    /// - Confirming user presence before sensitive operations
+    /// - Simple access control without key management
+    ///
+    /// [promptMessage] is the main message shown to the user (title on Android).
+    /// [config] contains optional platform-specific configuration.
+    ///
+    /// Returns a [SimplePromptResult] indicating success or failure.
+    let simplePromptChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.simplePrompt\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      simplePromptChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let promptMessageArg = args[0] as! String
+        let configArg: SimplePromptConfig? = nilOrValue(args[1])
+        api.simplePrompt(promptMessage: promptMessageArg, config: configArg) { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      simplePromptChannel.setMessageHandler(nil)
     }
   }
 }

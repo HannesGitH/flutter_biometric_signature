@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 echo "🐦 Running Pigeon code generator..."
-fvm use 3.35.7 && fvm flutter pub run pigeon --input pigeons/messages.dart
+fvm use 3.35.7 && fvm dart run pigeon --input pigeons/messages.dart
 
 echo "📋 Copying generated Swift file to macOS..."
 cp "$PROJECT_ROOT/ios/Classes/BiometricSignatureApi.swift" "$PROJECT_ROOT/macos/Classes/BiometricSignatureApi.swift"

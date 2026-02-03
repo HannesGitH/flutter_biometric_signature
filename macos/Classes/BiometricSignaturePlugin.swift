@@ -343,6 +343,105 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         )))
     }
 
+    func simplePrompt(
+        promptMessage: String,
+        config: SimplePromptConfig?,
+        completion: @escaping (Result<SimplePromptResult, Error>) -> Void
+    ) {
+        let context = LAContext()
+        
+        // Determine policy based on allowDeviceCredentials
+        let allowDeviceCredentials = config?.allowDeviceCredentials ?? false
+        let policy: LAPolicy = allowDeviceCredentials 
+            ? .deviceOwnerAuthentication 
+            : .deviceOwnerAuthenticationWithBiometrics
+        
+        // Hide fallback button when device credentials are not allowed
+        if !allowDeviceCredentials {
+            context.localizedFallbackTitle = ""
+        }
+
+        // Check if biometric authentication is available
+        var laError: NSError?
+        guard context.canEvaluatePolicy(policy, error: &laError) else {
+            let errorCode = mapLAError(laError)
+            let errorMsg = laError?.localizedDescription ?? "Biometric authentication not available"
+            completion(.success(SimplePromptResult(
+                success: false,
+                error: errorMsg,
+                code: errorCode
+            )))
+            return
+        }
+        
+        // Perform authentication
+        context.evaluatePolicy(policy, localizedReason: promptMessage) { success, error in
+            DispatchQueue.main.async {
+                if success {
+                    completion(.success(SimplePromptResult(
+                        success: true,
+                        error: nil,
+                        code: .success
+                    )))
+                } else {
+                    let nsError = error as NSError?
+                    let errorCode = self.mapLAError(nsError)
+                    let errorMsg = error?.localizedDescription ?? "Authentication failed"
+                    completion(.success(SimplePromptResult(
+                        success: false,
+                        error: errorMsg,
+                        code: errorCode
+                    )))
+                }
+            }
+        }
+    }
+
+    private func mapLAError(_ error: NSError?) -> BiometricError {
+        guard let error = error else { return .unknown }
+        
+        switch Int32(error.code) {
+        case kLAErrorUserCancel:
+            return .userCanceled
+        case kLAErrorSystemCancel:
+            return .systemCanceled
+        case kLAErrorUserFallback:
+            return .userCanceled
+        case kLAErrorBiometryNotAvailable:
+            return .notAvailable
+        case kLAErrorBiometryNotEnrolled:
+            return .notEnrolled
+        case kLAErrorBiometryLockout:
+            return .lockedOut
+        case kLAErrorAuthenticationFailed:
+            return .unknown
+        case kLAErrorPasscodeNotSet:
+            return .notAvailable
+        case kLAErrorInvalidContext:
+            return .promptError
+        default:
+            return .unknown
+        }
+    }
+
+    private func mapSecError(_ status: OSStatus) -> BiometricError {
+        switch status {
+        case errSecUserCanceled, -128:
+            return .userCanceled
+        case errSecAuthFailed:
+            return .unknown
+        case errSecInteractionNotAllowed:
+            return .notAvailable
+        case -25300:  // errSecItemNotFound
+            return .keyNotFound
+        default:
+            if status < 0 && status > -100 {
+                return mapLAError(NSError(domain: LAErrorDomain, code: Int(status), userInfo: nil))
+            }
+            return .unknown
+        }
+    }
+
     // MARK: - Private Implementations
 
     private func performKeyGeneration(
@@ -463,8 +562,9 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     }
     
     private func performRsaSigning(dataToSign: Data, prompt: String, signatureFormat: SignatureFormat, keyFormat: KeyFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
-        guard let rsaPrivateKey = unwrapRsaKey(prompt: prompt) else {
-             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Failed to access/unwrap RSA key", code: .unknown)))
+        let keyResult = unwrapRsaKey(prompt: prompt)
+        guard let rsaPrivateKey = keyResult.key else {
+             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "Failed to access/unwrap RSA key", code: keyResult.error)))
              return
         }
         
@@ -492,8 +592,9 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     }
     
     private func performEcSigning(dataToSign: Data, prompt: String, signatureFormat: SignatureFormat, keyFormat: KeyFormat, completion: @escaping (Result<SignatureResult, Error>) -> Void) {
-        guard let ecKey = getEcPrivateKey(prompt: prompt) else {
-             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "EC Key not found or auth failed", code: .unknown)))
+        let keyResult = getEcPrivateKey(prompt: prompt)
+        guard let ecKey = keyResult.key else {
+             completion(.success(SignatureResult(signature: nil, signatureBytes: nil, publicKey: nil, error: "EC Key not found or auth failed", code: keyResult.error)))
              return
         }
         
@@ -520,8 +621,9 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     }
     
     private func performRsaDecryption(payload: String, payloadFormat: PayloadFormat, prompt: String, completion: @escaping (Result<DecryptResult, Error>) -> Void) {
-        guard let rsaPrivateKey = unwrapRsaKey(prompt: prompt) else {
-               completion(.success(DecryptResult(decryptedData: nil, error: "Failed to access/unwrap RSA key", code: .unknown)))
+        let keyResult = unwrapRsaKey(prompt: prompt)
+        guard let rsaPrivateKey = keyResult.key else {
+               completion(.success(DecryptResult(decryptedData: nil, error: "Failed to access/unwrap RSA key", code: keyResult.error)))
                return
         }
         
@@ -542,8 +644,9 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     }
     
     private func performEcDecryption(payload: String, payloadFormat: PayloadFormat, prompt: String, completion: @escaping (Result<DecryptResult, Error>) -> Void) {
-         guard let ecKey = getEcPrivateKey(prompt: prompt) else {
-                completion(.success(DecryptResult(decryptedData: nil, error: "EC Key not found or auth failed", code: .unknown)))
+         let keyResult = getEcPrivateKey(prompt: prompt)
+         guard let ecKey = keyResult.key else {
+                completion(.success(DecryptResult(decryptedData: nil, error: "EC Key not found or auth failed", code: keyResult.error)))
                return
         }
         
@@ -597,7 +700,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         return SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess
     }
     
-    private func getEcPrivateKey(prompt: String) -> SecKey? {
+    private func getEcPrivateKey(prompt: String) -> (key: SecKey?, error: BiometricError) {
         let tag = Constants.ecKeyAlias
         let context = LAContext()
         context.localizedReason = prompt
@@ -611,13 +714,14 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         ]
         
         var item: CFTypeRef?
-        if SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess {
-            return (item as! SecKey)
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecSuccess {
+            return (item as! SecKey, .success)
         }
-        return nil
+        return (nil, mapSecError(status))
     }
     
-    private func unwrapRsaKey(prompt: String) -> SecKey? {
+    private func unwrapRsaKey(prompt: String) -> (key: SecKey?, error: BiometricError) {
         // 1. Get Wrapped Data
         let tag = Constants.biometricKeyAlias
         let query: [String: Any] = [
@@ -628,16 +732,28 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let wrappedData = item as? Data else { return nil }
+        let fetchStatus = SecItemCopyMatching(query as CFDictionary, &item)
+        guard fetchStatus == errSecSuccess, let wrappedData = item as? Data else {
+            return (nil, mapSecError(fetchStatus))
+        }
               
         // 2. Get EC Key (Auth logic handled by Secure Enclave)
-        guard let ecKey = getEcPrivateKey(prompt: prompt) else { return nil }
+        let ecKeyResult = getEcPrivateKey(prompt: prompt)
+        guard let ecKey = ecKeyResult.key else {
+            return (nil, ecKeyResult.error)
+        }
         
         // 3. Unwrap
         var error: Unmanaged<CFError>?
         guard let rsaData = SecKeyCreateDecryptedData(ecKey, .eciesEncryptionStandardX963SHA256AESGCM, wrappedData as CFData, &error) as Data? else {
-            return nil
+            if let cfError = error?.takeRetainedValue() {
+                let nsError = cfError as Error as NSError
+                if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError,
+                   underlying.domain == LAErrorDomain {
+                    return (nil, mapLAError(underlying))
+                }
+            }
+            return (nil, .unknown)
         }
         
         // 4. Restore Key
@@ -646,7 +762,10 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
             kSecAttrKeyClass as String: kSecAttrKeyClassPrivate,
             kSecAttrKeySizeInBits as String: 2048
         ]
-        return SecKeyCreateWithData(rsaData as CFData, attrs as CFDictionary, nil)
+        if let key = SecKeyCreateWithData(rsaData as CFData, attrs as CFDictionary, nil) {
+            return (key, .success)
+        }
+        return (nil, .unknown)
     }
 
     private func formatKey(_ key: SecKey, format: KeyFormat) -> String {

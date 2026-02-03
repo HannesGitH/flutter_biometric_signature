@@ -98,6 +98,32 @@ enum class BiometricType(val raw: Int) {
   }
 }
 
+/**
+ * Biometric authentication strength level.
+ *
+ * This affects which biometric sensors can be used for authentication.
+ * Note: On iOS/macOS, only strong biometrics are available (Face ID, Touch ID, Optic ID).
+ * On Windows, Windows Hello always uses strong authentication.
+ */
+enum class BiometricStrength(val raw: Int) {
+  /**
+   * Strong biometrics only (e.g., fingerprint, face recognition with depth sensing).
+   * This is the most secure option and is required for cryptographic operations.
+   */
+  STRONG(0),
+  /**
+   * Weak biometrics allowed (e.g., face recognition without depth sensing).
+   * This option provides more device compatibility but lower security.
+   */
+  WEAK(1);
+
+  companion object {
+    fun ofRaw(raw: Int): BiometricStrength? {
+      return values().firstOrNull { it.raw == raw }
+    }
+  }
+}
+
 /** Standardized error codes for the plugin. */
 enum class BiometricError(val raw: Int) {
   /** The operation was successful. */
@@ -119,7 +145,15 @@ enum class BiometricError(val raw: Int) {
   /** An unknown error occurred. */
   UNKNOWN(8),
   /** The input payload was invalid (e.g. not valid Base64). */
-  INVALID_INPUT(9);
+  INVALID_INPUT(9),
+  /** A security update is required before biometrics can be used. */
+  SECURITY_UPDATE_REQUIRED(10),
+  /** Biometric authentication is not supported on this device/OS version. */
+  NOT_SUPPORTED(11),
+  /** The system canceled the operation (e.g., app went to background). */
+  SYSTEM_CANCELED(12),
+  /** Failed to show the biometric prompt (e.g., activity not available). */
+  PROMPT_ERROR(13);
 
   companion object {
     fun ofRaw(raw: Int): BiometricError? {
@@ -618,6 +652,128 @@ data class DecryptConfig (
 
   override fun hashCode(): Int = toList().hashCode()
 }
+
+/**
+ * Configuration for simple biometric prompt (authentication without crypto ops).
+ *
+ * This allows customization of the biometric prompt across platforms.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class SimplePromptConfig (
+  /** [Android] Subtitle text displayed below the title in the biometric prompt. */
+  val subtitle: String? = null,
+  /** [Android] Description text displayed in the biometric prompt body. */
+  val description: String? = null,
+  /**
+   * [Android] Text for the cancel/negative button.
+   * Default: "Cancel" on Android, system default on iOS/macOS.
+   */
+  val cancelButtonText: String? = null,
+  /**
+   * [Android/iOS/macOS] Whether to allow device credentials (PIN/pattern/passcode)
+   * as a fallback for biometric authentication.
+   *
+   * When true:
+   * - Android: Shows "Use PIN" option after biometric failure
+   * - iOS/macOS: Uses .deviceOwnerAuthentication policy
+   * - Windows: Not applicable (Windows Hello handles fallback internally)
+   *
+   * Default: false (biometric-only authentication)
+   */
+  val allowDeviceCredentials: Boolean? = null,
+  /**
+   * [Android] The required biometric strength level.
+   *
+   * - strong: Only Class 3 biometrics (e.g., fingerprint, in-screen fingerprint)
+   * - weak: Class 2 biometrics allowed (e.g., face unlock without depth)
+   *
+   * Note: iOS/macOS always use strong biometrics. Windows Hello also uses strong.
+   * If strong biometrics are not available but weak are, and strength is set to
+   * strong, authentication will fail with [BiometricError.notEnrolled].
+   *
+   * Default: strong
+   */
+  val biometricStrength: BiometricStrength? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): SimplePromptConfig {
+      val subtitle = pigeonVar_list[0] as String?
+      val description = pigeonVar_list[1] as String?
+      val cancelButtonText = pigeonVar_list[2] as String?
+      val allowDeviceCredentials = pigeonVar_list[3] as Boolean?
+      val biometricStrength = pigeonVar_list[4] as BiometricStrength?
+      return SimplePromptConfig(subtitle, description, cancelButtonText, allowDeviceCredentials, biometricStrength)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      subtitle,
+      description,
+      cancelButtonText,
+      allowDeviceCredentials,
+      biometricStrength,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other !is SimplePromptConfig) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    return BiometricSignatureApiPigeonUtils.deepEquals(toList(), other.toList())  }
+
+  override fun hashCode(): Int = toList().hashCode()
+}
+
+/**
+ * Result from simple biometric prompt authentication.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class SimplePromptResult (
+  /** Whether authentication was successful. */
+  val success: Boolean? = null,
+  /**
+   * Error message if authentication failed.
+   * This is a human-readable description of what went wrong.
+   */
+  val error: String? = null,
+  /**
+   * Standardized error code if authentication failed.
+   * Use this for programmatic error handling.
+   */
+  val code: BiometricError? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): SimplePromptResult {
+      val success = pigeonVar_list[0] as Boolean?
+      val error = pigeonVar_list[1] as String?
+      val code = pigeonVar_list[2] as BiometricError?
+      return SimplePromptResult(success, error, code)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      success,
+      error,
+      code,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other !is SimplePromptResult) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    return BiometricSignatureApiPigeonUtils.deepEquals(toList(), other.toList())  }
+
+  override fun hashCode(): Int = toList().hashCode()
+}
 private open class BiometricSignatureApiPigeonCodec : StandardMessageCodec() {
   override fun readValueOfType(type: Byte, buffer: ByteBuffer): Any? {
     return when (type) {
@@ -628,67 +784,82 @@ private open class BiometricSignatureApiPigeonCodec : StandardMessageCodec() {
       }
       130.toByte() -> {
         return (readValue(buffer) as Long?)?.let {
-          BiometricError.ofRaw(it.toInt())
+          BiometricStrength.ofRaw(it.toInt())
         }
       }
       131.toByte() -> {
         return (readValue(buffer) as Long?)?.let {
-          SignatureType.ofRaw(it.toInt())
+          BiometricError.ofRaw(it.toInt())
         }
       }
       132.toByte() -> {
         return (readValue(buffer) as Long?)?.let {
-          KeyFormat.ofRaw(it.toInt())
+          SignatureType.ofRaw(it.toInt())
         }
       }
       133.toByte() -> {
         return (readValue(buffer) as Long?)?.let {
-          SignatureFormat.ofRaw(it.toInt())
+          KeyFormat.ofRaw(it.toInt())
         }
       }
       134.toByte() -> {
         return (readValue(buffer) as Long?)?.let {
-          PayloadFormat.ofRaw(it.toInt())
+          SignatureFormat.ofRaw(it.toInt())
         }
       }
       135.toByte() -> {
-        return (readValue(buffer) as? List<Any?>)?.let {
-          BiometricAvailability.fromList(it)
+        return (readValue(buffer) as Long?)?.let {
+          PayloadFormat.ofRaw(it.toInt())
         }
       }
       136.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          KeyCreationResult.fromList(it)
+          BiometricAvailability.fromList(it)
         }
       }
       137.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          SignatureResult.fromList(it)
+          KeyCreationResult.fromList(it)
         }
       }
       138.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          DecryptResult.fromList(it)
+          SignatureResult.fromList(it)
         }
       }
       139.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          KeyInfo.fromList(it)
+          DecryptResult.fromList(it)
         }
       }
       140.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          CreateKeysConfig.fromList(it)
+          KeyInfo.fromList(it)
         }
       }
       141.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          CreateSignatureConfig.fromList(it)
+          CreateKeysConfig.fromList(it)
         }
       }
       142.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
+          CreateSignatureConfig.fromList(it)
+        }
+      }
+      143.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
           DecryptConfig.fromList(it)
+        }
+      }
+      144.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          SimplePromptConfig.fromList(it)
+        }
+      }
+      145.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          SimplePromptResult.fromList(it)
         }
       }
       else -> super.readValueOfType(type, buffer)
@@ -700,56 +871,68 @@ private open class BiometricSignatureApiPigeonCodec : StandardMessageCodec() {
         stream.write(129)
         writeValue(stream, value.raw.toLong())
       }
-      is BiometricError -> {
+      is BiometricStrength -> {
         stream.write(130)
         writeValue(stream, value.raw.toLong())
       }
-      is SignatureType -> {
+      is BiometricError -> {
         stream.write(131)
         writeValue(stream, value.raw.toLong())
       }
-      is KeyFormat -> {
+      is SignatureType -> {
         stream.write(132)
         writeValue(stream, value.raw.toLong())
       }
-      is SignatureFormat -> {
+      is KeyFormat -> {
         stream.write(133)
         writeValue(stream, value.raw.toLong())
       }
-      is PayloadFormat -> {
+      is SignatureFormat -> {
         stream.write(134)
         writeValue(stream, value.raw.toLong())
       }
-      is BiometricAvailability -> {
+      is PayloadFormat -> {
         stream.write(135)
-        writeValue(stream, value.toList())
+        writeValue(stream, value.raw.toLong())
       }
-      is KeyCreationResult -> {
+      is BiometricAvailability -> {
         stream.write(136)
         writeValue(stream, value.toList())
       }
-      is SignatureResult -> {
+      is KeyCreationResult -> {
         stream.write(137)
         writeValue(stream, value.toList())
       }
-      is DecryptResult -> {
+      is SignatureResult -> {
         stream.write(138)
         writeValue(stream, value.toList())
       }
-      is KeyInfo -> {
+      is DecryptResult -> {
         stream.write(139)
         writeValue(stream, value.toList())
       }
-      is CreateKeysConfig -> {
+      is KeyInfo -> {
         stream.write(140)
         writeValue(stream, value.toList())
       }
-      is CreateSignatureConfig -> {
+      is CreateKeysConfig -> {
         stream.write(141)
         writeValue(stream, value.toList())
       }
-      is DecryptConfig -> {
+      is CreateSignatureConfig -> {
         stream.write(142)
+        writeValue(stream, value.toList())
+      }
+      is DecryptConfig -> {
+        stream.write(143)
+        writeValue(stream, value.toList())
+      }
+      is SimplePromptConfig -> {
+        stream.write(144)
+        writeValue(stream, value.toList())
+      }
+      is SimplePromptResult -> {
+        stream.write(145)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -798,6 +981,20 @@ interface BiometricSignatureApi {
    * Returns key metadata including algorithm, size, validity, and public keys.
    */
   fun getKeyInfo(checkValidity: Boolean, keyFormat: KeyFormat, callback: (Result<KeyInfo>) -> Unit)
+  /**
+   * Performs simple biometric authentication without cryptographic operations.
+   *
+   * This is useful for:
+   * - Quick re-authentication flows
+   * - Confirming user presence before sensitive operations
+   * - Simple access control without key management
+   *
+   * [promptMessage] is the main message shown to the user (title on Android).
+   * [config] contains optional platform-specific configuration.
+   *
+   * Returns a [SimplePromptResult] indicating success or failure.
+   */
+  fun simplePrompt(promptMessage: String, config: SimplePromptConfig?, callback: (Result<SimplePromptResult>) -> Unit)
 
   companion object {
     /** The codec used by BiometricSignatureApi. */
@@ -921,6 +1118,27 @@ interface BiometricSignatureApi {
             val checkValidityArg = args[0] as Boolean
             val keyFormatArg = args[1] as KeyFormat
             api.getKeyInfo(checkValidityArg, keyFormatArg) { result: Result<KeyInfo> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(BiometricSignatureApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.simplePrompt$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val promptMessageArg = args[0] as String
+            val configArg = args[1] as SimplePromptConfig?
+            api.simplePrompt(promptMessageArg, configArg) { result: Result<SimplePromptResult> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))

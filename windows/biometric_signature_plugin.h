@@ -54,6 +54,11 @@ class BiometricSignaturePlugin : public flutter::Plugin,
       bool check_validity,
       const KeyFormat& key_format,
       std::function<void(ErrorOr<KeyInfo> reply)> result) override;
+
+  void SimplePrompt(
+      const std::string& prompt_message,
+      const SimplePromptConfig* config,
+      std::function<void(ErrorOr<SimplePromptResult> reply)> result) override;
 };
 
 }  // namespace biometric_signature

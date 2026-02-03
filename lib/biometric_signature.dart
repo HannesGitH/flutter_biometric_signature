@@ -11,11 +11,14 @@ export 'biometric_signature_platform_interface.dart'
         PayloadFormat,
         BiometricError,
         BiometricType,
+        BiometricStrength,
         BiometricAvailability,
         KeyCreationResult,
         SignatureResult,
         DecryptResult,
-        KeyInfo;
+        KeyInfo,
+        SimplePromptConfig,
+        SimplePromptResult;
 
 /// High-level API for interacting with the Biometric Signature plugin.
 class BiometricSignature {
@@ -124,5 +127,31 @@ class BiometricSignature {
   Future<bool> biometricKeyExists({bool checkValidity = false}) async {
     final info = await getKeyInfo(checkValidity: checkValidity);
     return (info.exists ?? false) && (info.isValid ?? true);
+  }
+
+  /// Performs simple biometric authentication without cryptographic operations.
+  ///
+  /// This is useful for:
+  /// - Quick re-authentication flows (e.g., unlock app after timeout)
+  /// - Confirming user presence before sensitive operations
+  /// - Simple access control without key management overhead
+  ///
+  /// Unlike [createSignature] or [createKeys], this method does not require
+  /// any key material and simply verifies the user's biometric identity.
+  ///
+  /// [promptMessage] is the main message shown to the user. On Android, this
+  /// is used as the dialog title. On iOS/macOS, this is the localized reason.
+  ///
+  /// [config] contains optional platform-specific configuration. See [SimplePromptConfig].
+  ///
+  /// Returns a [SimplePromptResult] indicating success or failure with error details.
+  Future<SimplePromptResult> simplePrompt({
+    required String promptMessage,
+    SimplePromptConfig? config,
+  }) async {
+    return BiometricSignaturePlatform.instance.simplePrompt(
+      promptMessage,
+      config,
+    );
   }
 }
