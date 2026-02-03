@@ -19,6 +19,7 @@ Even if an attacker bypasses or hooks biometric APIs, your backend will still re
   - **iOS/macOS Hybrid RSA:** Software RSA key for **both signing and decryption**, wrapped using ECIES with Secure Enclave EC public key. Hardware EC is only used for wrapping/unwrapping.
 - **Key Invalidation:** Keys can be bound to biometric enrollment state (fingerprint/Face ID changes).
 - **Device Credentials:** Optional PIN/Pattern/Password fallback on Android.
+- **Simple Prompt (No Crypto):** Verify user presence without key operations. Supports device-credential fallback and Android biometric strength selection.
 
 
 ## Security Architecture
@@ -164,7 +165,7 @@ To get started with Biometric Signature, follow these steps:
 
 ```yaml
 dependencies:
-  biometric_signature: ^9.0.3
+  biometric_signature: ^10.0.0
 ```
 
 |             | Android | iOS   | macOS  | Windows |
@@ -486,6 +487,37 @@ Convenience method that wraps `getKeyInfo()` and returns a simple boolean.
 
 ```dart
 final exists = await biometricSignature.biometricKeyExists(checkValidity: true);
+```
+
+### `simplePrompt({ promptMessage, config })`
+
+Performs biometric authentication without performing any cryptographic operation. Useful for quick re-authentication or gating sensitive UI.
+
+#### SimplePromptConfig Options
+
+| Option | Platforms | Description |
+|--------|-----------|-------------|
+| `subtitle` | Android | Subtitle for biometric prompt |
+| `description` | Android | Description for biometric prompt |
+| `cancelButtonText` | Android | Cancel button text |
+| `allowDeviceCredentials` | Android/iOS/macOS | Allow PIN/pattern/passcode fallback |
+| `biometricStrength` | Android | `BiometricStrength.strong` or `BiometricStrength.weak` |
+
+```dart
+final result = await biometricSignature.simplePrompt(
+  promptMessage: 'Verify your identity',
+  config: SimplePromptConfig(
+    subtitle: 'Access secure features',
+    allowDeviceCredentials: true,
+    biometricStrength: BiometricStrength.strong,
+  ),
+);
+
+if (result.success == true) {
+  // Authenticated
+} else {
+  print('Failed: ${result.code} - ${result.error}');
+}
 ```
 
 ---

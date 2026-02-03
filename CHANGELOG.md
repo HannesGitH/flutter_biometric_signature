@@ -1,3 +1,11 @@
+## [10.0.0] - 2026-02-03
+
+* **Breaking:** Added new `BiometricError` enum values; consumers using exhaustive switches must handle the new cases(security update required, not supported, system canceled, prompt error).
+* **Feature:** Added `simplePrompt()` for lightweight biometric authentication without cryptographic operations.
+* **Fix:** Improved Android error handling and prompt robustness.
+* **Fix:** Aligned iOS/macOS error mapping with Android.
+* **Docs:** Updated README and usage examples.
+
 ## [9.0.3] - 2026-01-25
 
 * Reduced published package size by ~45%.

@@ -1,5 +1,5 @@
 PODS:
-  - biometric_signature (9.0.3):
+  - biometric_signature (10.0.0):
     - FlutterMacOS
   - FlutterMacOS (1.0.0)
 
@@ -14,7 +14,7 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral
 
 SPEC CHECKSUMS:
-  biometric_signature: 48b625fa512230740df9c56ffd4ecdb5f117fd55
+  biometric_signature: 7e6fd7033091e5b85256df5c6089aad0799f43de
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
 
 PODFILE CHECKSUM: 54d867c82ac51cbd61b565781b9fada492027009
