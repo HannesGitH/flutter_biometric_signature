@@ -98,6 +98,20 @@ class MockBiometricSignaturePlatform
       code: BiometricError.success,
     );
   }
+
+  @override
+  Future<SimplePromptResult> simplePrompt(
+    String promptMessage,
+    SimplePromptConfig? config,
+  ) async {
+    if (_shouldThrowError) throw Exception('Simple prompt failed');
+
+    return SimplePromptResult(
+      success: true,
+      error: null,
+      code: BiometricError.success,
+    );
+  }
 }
 
 void main() {
@@ -298,6 +312,49 @@ void main() {
           payload: 'encrypted_payload',
           payloadFormat: PayloadFormat.base64,
         ),
+        throwsException,
+      );
+    });
+  });
+  group('simplePrompt', () {
+    test('Success', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final result = await biometricSignature.simplePrompt(
+        promptMessage: 'Verify identity',
+      );
+      expect(result.success, true);
+      expect(result.code, BiometricError.success);
+    });
+
+    test('with config options', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final result = await biometricSignature.simplePrompt(
+        promptMessage: 'Verify identity',
+        config: SimplePromptConfig(
+          subtitle: 'Test subtitle',
+          allowDeviceCredentials: true,
+        ),
+      );
+      expect(result.success, true);
+    });
+
+    test('Error handling', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      fakePlatform.setShouldThrowError(true);
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      expect(
+        () => biometricSignature.simplePrompt(promptMessage: 'Verify'),
         throwsException,
       );
     });
