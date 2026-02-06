@@ -2,8 +2,11 @@
 
 **Stop just unlocking the UI. Start proving the identity.**
 
-Typical biometric plugins (such as `local_auth`) return only a boolean indicating whether authentication succeeded.
-`biometric_signature` goes significantly further by generating a **verifiable cryptographic signature** using a private key stored in hardware (Secure Enclave / StrongBox).
+Standard biometric integrations typically return only a boolean indicating whether authentication succeeded.
+`biometric_signature` provides a complete biometric solution:
+
+1.  **Cryptographic Proof (Core Feature):** Generates a **verifiable cryptographic signature** using a private key stored in hardware (Secure Enclave / StrongBox). This allows your backend to mathematically verify the user's identity, preventing replay attacks and API hooks.
+2.  **Simple Authentication:** Supports standard biometric prompts (returning success/failure) for local UI gating or quick re-authentication, with full support for Android biometric strength levels and device credentials.
 
 Even if an attacker bypasses or hooks biometric APIs, your backend will still reject the request because **the attacker cannot forge a hardware-backed signature without the private key**.
 

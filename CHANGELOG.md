@@ -1,4 +1,4 @@
-## [10.0.0] - 2026-02-03
+## [10.0.0] - 2026-02-06
 
 * **Breaking:** Added new `BiometricError` enum values; consumers using exhaustive switches must handle the new cases(security update required, not supported, system canceled, prompt error).
 * **Feature:** Added `simplePrompt()` for lightweight biometric authentication without cryptographic operations.
