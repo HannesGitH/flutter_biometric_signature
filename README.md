@@ -841,3 +841,20 @@ import 'package:biometric_signature/signature_options.dart';
 import 'package:biometric_signature/biometric_signature.dart';
 // All types exported from single import
 ```
+
+### Migrating from v9 to v10
+
+**v10.0.0** refines error handling and introduces non-cryptographic authentication.
+
+#### Breaking: `BiometricError` Changes
+
+**Values Added**: New error codes were added to cover more edge cases:
+-   `BiometricError.securityUpdateRequired`
+-   `BiometricError.notSupported`
+-   `BiometricError.systemCanceled`
+-   `BiometricError.promptError`
+-   **Impact**: If you use exhaustive switch statements (e.g., in Dart 3.0+), you must add cases for these new values.
+
+#### New Feature: `simplePrompt()`
+
+v10 adds `simplePrompt()` for scenarios where you only need to verify the user's presence without cryptographic operations. See the [Usage](#usage) section for details.
