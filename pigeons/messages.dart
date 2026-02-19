@@ -9,7 +9,8 @@ import 'package:pigeon/pigeon.dart';
     kotlinOptions: KotlinOptions(
       package: 'com.visionflutter.biometric_signature',
     ),
-    swiftOut: 'ios/Classes/BiometricSignatureApi.swift',
+    swiftOut:
+        'ios/biometric_signature/Sources/biometric_signature/BiometricSignatureApi.swift',
     swiftOptions: SwiftOptions(),
     cppSourceOut: 'windows/messages.g.cpp',
     cppHeaderOut: 'windows/messages.g.h',
