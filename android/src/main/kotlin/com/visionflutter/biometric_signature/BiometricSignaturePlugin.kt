@@ -1328,6 +1328,14 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
 
         if (!canAuth) return emptyList()
 
+        val hasFace = pm.hasSystemFeature(PackageManager.FEATURE_FACE)
+        val hasFingerprint = pm.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT)
+        val hasIris = pm.hasSystemFeature(PackageManager.FEATURE_IRIS)
+        val featureBackedTypes = mutableListOf<BiometricType>()
+        if (hasFace) featureBackedTypes.add(BiometricType.FACE)
+        if (hasFingerprint) featureBackedTypes.add(BiometricType.FINGERPRINT)
+        if (hasIris) featureBackedTypes.add(BiometricType.IRIS)
+
         var buttonLabel: String? = null
         try {
             val getStringsMethod = BiometricManager::class.java.getMethod(
@@ -1390,30 +1398,26 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
 //        println("Fingerprint terms: $fingerprintTerms")
 //        println("Iris terms: $irisTerms")
 
-        val biometricTypes = mutableListOf<BiometricType>()
-        if (pm.hasSystemFeature(PackageManager.FEATURE_FACE) &&
-            matchesLabel(buttonLabel, faceTerms)
-        ) {
-            biometricTypes.add(BiometricType.FACE)
+        if (buttonLabel.isNullOrBlank()) return featureBackedTypes
+
+        val labelMatchedTypes = mutableListOf<BiometricType>()
+        if (hasFace && matchesLabel(buttonLabel, faceTerms)) {
+            labelMatchedTypes.add(BiometricType.FACE)
         }
 
-        if (pm.hasSystemFeature(PackageManager.FEATURE_FINGERPRINT) &&
-            matchesLabel(buttonLabel, fingerprintTerms)
-        ) {
-            biometricTypes.add(BiometricType.FINGERPRINT)
+        if (hasFingerprint && matchesLabel(buttonLabel, fingerprintTerms)) {
+            labelMatchedTypes.add(BiometricType.FINGERPRINT)
         }
 
-        if (pm.hasSystemFeature(PackageManager.FEATURE_IRIS) &&
-            matchesLabel(buttonLabel, irisTerms)
-        ) {
-            biometricTypes.add(BiometricType.IRIS)
+        if (hasIris && matchesLabel(buttonLabel, irisTerms)) {
+            labelMatchedTypes.add(BiometricType.IRIS)
         }
 
-        return biometricTypes;
+        return if (labelMatchedTypes.isNotEmpty()) labelMatchedTypes else featureBackedTypes
     }
 
     private fun matchesLabel(buttonLabel: String?, terms: List<String>): Boolean {
-        if (buttonLabel == null || terms.isEmpty()) return false
+        if (buttonLabel.isNullOrBlank() || terms.isEmpty()) return false
         return terms.any { term ->
             // Try full term match first
             if (buttonLabel.contains(term, ignoreCase = true)) return@any true
