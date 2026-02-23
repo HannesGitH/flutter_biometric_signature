@@ -1,3 +1,12 @@
+## [10.1.0] - 2026-02-19
+
+* Added Swift Package Manager (SPM) support for iOS and macOS plugin integration.
+* Migrated iOS/macOS native source layout to `Package.swift` + `Sources/<plugin_name>/`.
+* Updated Pigeon generation output paths for Darwin host code to match the SPM layout.
+* Updated CocoaPods podspecs to remain compatible alongside SPM.
+* Updated package and platform version references/documentation.
+* **Fix:** Enhanced biometric type detection for android.
+
 ## [10.0.0] - 2026-02-06
 
 * **Breaking:** Added new `BiometricError` enum values; consumers using exhaustive switches must handle the new cases(security update required, not supported, system canceled, prompt error).
