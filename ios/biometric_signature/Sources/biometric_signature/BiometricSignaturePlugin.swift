@@ -319,7 +319,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
             kSecAttrService as String: unencryptedKeyTag,
             kSecAttrAccount as String: unencryptedKeyTag,
             kSecValueData as String: encryptedRSAKeyData,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly
         ]
 
         SecItemDelete(encryptedKeyAttributes as CFDictionary) // Delete any existing item
@@ -648,7 +648,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
             kSecAttrService as String: tag,
             kSecAttrAccount as String: tag,
             kSecValueData as String: encryptedRsa,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly
         ]
         SecItemAdd(saveQuery as CFDictionary, nil)
         

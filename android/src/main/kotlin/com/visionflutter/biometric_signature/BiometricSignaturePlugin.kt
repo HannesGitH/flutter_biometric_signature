@@ -66,6 +66,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
     )
 
     private lateinit var appContext: Context
+    @Volatile
     private var activity: FlutterFragmentActivity? = null
 
     private val pluginJob = SupervisorJob()
@@ -376,7 +377,8 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                 )
 
                 val signatureBytes = withContext(Dispatchers.IO) {
-                    val sig = authResult.cryptoObject?.signature ?: signature
+                    val sig = authResult.cryptoObject?.signature
+                        ?: throw SecurityException("Biometric authentication did not return an authenticated signature")
                     try {
                         sig.update(payload.toByteArray(Charsets.UTF_8))
                         sig.sign()
@@ -913,7 +915,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         }
     }
 
-    private fun prepareSignature(mode: KeyMode): Pair<Signature, BiometricPrompt.CryptoObject?> {
+    private fun prepareSignature(mode: KeyMode): Pair<Signature, BiometricPrompt.CryptoObject> {
         val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
         val entry = keyStore.getEntry(BIOMETRIC_KEY_ALIAS, null) as? KeyStore.PrivateKeyEntry
             ?: throw IllegalStateException("Signing key not found")
@@ -924,12 +926,8 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         }
 
         val signature = Signature.getInstance(algorithm)
-        return try {
-            signature.initSign(entry.privateKey)
-            Pair(signature, BiometricPrompt.CryptoObject(signature))
-        } catch (e: Exception) {
-            Pair(signature, null)
-        }
+        signature.initSign(entry.privateKey)
+        return Pair(signature, BiometricPrompt.CryptoObject(signature))
     }
 
     private fun getSigningPublicKey(): PublicKey {

@@ -1,0 +1,2 @@
+-keep class com.visionflutter.biometric_signature.** { *; }
+-keep class androidx.biometric.** { *; }

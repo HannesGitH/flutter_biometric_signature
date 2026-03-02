@@ -151,10 +151,8 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         
         var availableBiometrics: [BiometricType?] = []
         if canEvaluate {
-             // Basic detection based on biometryType
-             if #available(iOS 11.0, *) {
+             if #available(macOS 10.15, *) {
                  switch context.biometryType {
-                 case .faceID: availableBiometrics.append(.face)
                  case .touchID: availableBiometrics.append(.fingerprint)
                  default: break
                  }
@@ -537,7 +535,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
             kSecAttrService as String: tag,
             kSecAttrAccount as String: tag,
             kSecValueData as String: encryptedRsa,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenPasscodeSetThisDeviceOnly
         ]
         SecItemAdd(saveQuery as CFDictionary, nil)
         
