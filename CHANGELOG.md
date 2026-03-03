@@ -1,3 +1,9 @@
+## [10.2.0] - 2026-03-03
+
+* Enhance biometric key security on iOS/macOS.
+* Enforce CryptoObject usage for Android signatures.
+* Add Android ProGuard rules.
+
 ## [10.1.0] - 2026-02-19
 
 * Added Swift Package Manager (SPM) support for iOS and macOS plugin integration.
