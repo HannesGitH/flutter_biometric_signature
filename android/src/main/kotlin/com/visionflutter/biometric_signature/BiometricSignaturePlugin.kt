@@ -210,7 +210,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                     Result.success(
                         KeyCreationResult(
                             code = mapToBiometricError(e),
-                            error = e.message
+                            error = safeErrorMessage(e)
                         )
                     )
                 )
@@ -397,7 +397,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                     Result.success(
                         SignatureResult(
                             code = mapToBiometricError(e),
-                            error = e.message
+                            error = safeErrorMessage(e)
                         )
                     )
                 )
@@ -488,7 +488,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                     Result.success(
                         DecryptResult(
                             code = mapToBiometricError(e),
-                            error = e.message
+                            error = safeErrorMessage(e)
                         )
                     )
                 )
@@ -505,12 +505,20 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         cancel: String,
         allowDeviceCredentials: Boolean
     ): String {
+        // Detect padding support before showing biometric prompt (no double-prompt)
         val cipher = withContext(Dispatchers.IO) {
             val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
             val entry = keyStore.getEntry(BIOMETRIC_KEY_ALIAS, null) as? KeyStore.PrivateKeyEntry
                 ?: throw IllegalStateException("RSA key not found")
-            Cipher.getInstance("RSA/ECB/PKCS1Padding").apply {
-                init(Cipher.DECRYPT_MODE, entry.privateKey)
+            // Try OAEP (new keys) first; if key rejects it, fall back to PKCS1 (legacy keys)
+            try {
+                Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding").apply {
+                    init(Cipher.DECRYPT_MODE, entry.privateKey)
+                }
+            } catch (e: InvalidKeyException) {
+                Cipher.getInstance("RSA/ECB/PKCS1Padding").apply {
+                    init(Cipher.DECRYPT_MODE, entry.privateKey)
+                }
             }
         }
 
@@ -768,7 +776,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                     Result.success(
                         SimplePromptResult(
                             success = false,
-                            error = e.message,
+                            error = safeErrorMessage(e),
                             code = errorCode
                         )
                     )
@@ -826,7 +834,7 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
             .setUserAuthenticationRequired(true)
 
         if (enableDecryption) {
-            builder.setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_PKCS1)
+            builder.setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_OAEP)
         }
 
         configurePerOperationAuth(builder, useDeviceCredentials)
@@ -885,7 +893,8 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
 
     private fun getCipherForDecryption(): Cipher? {
         val wrapped = readFileIfExists(EC_WRAPPED_FILENAME) ?: return null
-        if (wrapped.size < GCM_IV_SIZE + 1) return null
+        // Minimum: GCM IV (12) + at least 1 byte ciphertext + GCM tag (16)
+        if (wrapped.size < GCM_IV_SIZE + 1 + GCM_TAG_BYTES) return null
 
         val iv = wrapped.copyOfRange(0, GCM_IV_SIZE)
         val keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
@@ -1446,6 +1455,24 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         }
     }
 
+    private fun safeErrorMessage(e: Throwable): String {
+        return when (val code = mapToBiometricError(e)) {
+            BiometricError.USER_CANCELED -> "Authentication was canceled"
+            BiometricError.SYSTEM_CANCELED -> "Authentication was canceled by the system"
+            BiometricError.NOT_AVAILABLE -> "Biometric authentication is not available"
+            BiometricError.NOT_ENROLLED -> "No biometrics enrolled on this device"
+            BiometricError.LOCKED_OUT -> "Too many attempts. Try again later"
+            BiometricError.LOCKED_OUT_PERMANENT -> "Biometric authentication is permanently locked. Use device credentials to unlock"
+            BiometricError.KEY_NOT_FOUND -> "Biometric key not found"
+            BiometricError.KEY_INVALIDATED -> "Biometric key has been invalidated"
+            BiometricError.SECURITY_UPDATE_REQUIRED -> "A security update is required"
+            BiometricError.NOT_SUPPORTED -> "Operation not supported on this device"
+            BiometricError.INVALID_INPUT -> "Invalid input provided"
+            BiometricError.PROMPT_ERROR -> "Biometric prompt error"
+            else -> "Biometric operation failed"
+        }
+    }
+
     private fun mapToBiometricError(e: Throwable): BiometricError {
         // Map exceptions to BiometricError
         val msg = e.message ?: ""
@@ -1479,7 +1506,13 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
     }
 
     private fun writeFileAtomic(fileName: String, data: ByteArray) {
-        File(appContext.filesDir, fileName).outputStream().use { it.write(data) }
+        val target = File(appContext.filesDir, fileName)
+        val tmp = File(appContext.filesDir, "$fileName.tmp")
+        tmp.outputStream().use { it.write(data) }
+        if (!tmp.renameTo(target)) {
+            tmp.delete()
+            throw IllegalStateException("Failed to atomically write $fileName")
+        }
     }
 
     private fun readFileIfExists(fileName: String): ByteArray? {

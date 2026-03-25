@@ -522,8 +522,12 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         }
         
         // Wrap RSA Private Key
-        guard let rsaPrivateData = SecKeyCopyExternalRepresentation(rsaPrivateKey, &error) as Data?,
-              let encryptedRsa = SecKeyCreateEncryptedData(ecPublicKey, .eciesEncryptionStandardX963SHA256AESGCM, rsaPrivateData as CFData, &error) as Data? else {
+        guard var rsaPrivateData = SecKeyCopyExternalRepresentation(rsaPrivateKey, &error) as Data? else {
+             completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "RSA Wrapping Error", code: .unknown)))
+             return
+        }
+        defer { rsaPrivateData.resetBytes(in: 0..<rsaPrivateData.count) }
+        guard let encryptedRsa = SecKeyCreateEncryptedData(ecPublicKey, .eciesEncryptionStandardX963SHA256AESGCM, rsaPrivateData as CFData, &error) as Data? else {
              completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "RSA Wrapping Error", code: .unknown)))
              return
         }
@@ -631,13 +635,26 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
              return
         }
         
-        guard let decrypted = SecKeyCreateDecryptedData(rsaPrivateKey, .rsaEncryptionPKCS1, encryptedData as CFData, &error) as Data?,
-              let str = String(data: decrypted, encoding: .utf8) else {
-             let msg = error?.takeRetainedValue().localizedDescription ?? "Unknown"
-             completion(.success(DecryptResult(decryptedData: nil, error: "Decryption Error: \(msg)", code: .unknown)))
-             return
+        // Try OAEP first (modern/secure), fall back to PKCS1 for legacy-encrypted data
+        var oaepError: Unmanaged<CFError>?
+        let decryptedData: Data
+        if let oaepResult = SecKeyCreateDecryptedData(rsaPrivateKey, .rsaEncryptionOAEPSHA256, encryptedData as CFData, &oaepError) as Data? {
+            decryptedData = oaepResult
+        } else if let pkcs1Result = SecKeyCreateDecryptedData(rsaPrivateKey, .rsaEncryptionPKCS1, encryptedData as CFData, &error) as Data? {
+            decryptedData = pkcs1Result
+        } else {
+            let msg = oaepError?.takeRetainedValue().localizedDescription
+                ?? error?.takeRetainedValue().localizedDescription
+                ?? "Unknown"
+            completion(.success(DecryptResult(decryptedData: nil, error: "Decryption Error: \(msg)", code: .unknown)))
+            return
         }
-        
+
+        guard let str = String(data: decryptedData, encoding: .utf8) else {
+            completion(.success(DecryptResult(decryptedData: nil, error: "Decryption Error: Invalid UTF-8", code: .unknown)))
+            return
+        }
+
         completion(.success(DecryptResult(decryptedData: str, error: nil, code: .success)))
     }
     
@@ -743,7 +760,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         
         // 3. Unwrap
         var error: Unmanaged<CFError>?
-        guard let rsaData = SecKeyCreateDecryptedData(ecKey, .eciesEncryptionStandardX963SHA256AESGCM, wrappedData as CFData, &error) as Data? else {
+        guard var rsaData = SecKeyCreateDecryptedData(ecKey, .eciesEncryptionStandardX963SHA256AESGCM, wrappedData as CFData, &error) as Data? else {
             if let cfError = error?.takeRetainedValue() {
                 let nsError = cfError as Error as NSError
                 if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError,
@@ -753,7 +770,8 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
             }
             return (nil, .unknown)
         }
-        
+        defer { rsaData.resetBytes(in: 0..<rsaData.count) }
+
         // 4. Restore Key
         let attrs: [String: Any] = [
             kSecAttrKeyType as String: kSecAttrKeyTypeRSA,
