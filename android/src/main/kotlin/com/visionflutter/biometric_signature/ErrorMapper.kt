@@ -1,5 +1,6 @@
 package com.visionflutter.biometric_signature
 
+import android.security.keystore.KeyPermanentlyInvalidatedException
 import androidx.biometric.BiometricManager
 import kotlinx.coroutines.CancellationException
 
@@ -40,6 +41,8 @@ object ErrorMapper {
             causeCode == 10 -> BiometricError.USER_CANCELED
             causeCode == 13 -> BiometricError.USER_CANCELED
             causeCode == 14 -> BiometricError.NOT_AVAILABLE
+
+            e is KeyPermanentlyInvalidatedException -> BiometricError.KEY_INVALIDATED
 
             e is CancellationException -> BiometricError.USER_CANCELED
 

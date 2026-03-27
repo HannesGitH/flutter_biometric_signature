@@ -408,8 +408,10 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
     }
 
     override fun deleteKeys(callback: (Result<Boolean>) -> Unit) {
-        keyManager.deleteAllKeys()
-        callback(Result.success(true))
+        pluginScope.launch {
+            withContext(Dispatchers.IO) { keyManager.deleteAllKeys() }
+            callback(Result.success(true))
+        }
     }
 
     override fun getKeyInfo(
@@ -417,73 +419,62 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         keyFormat: KeyFormat,
         callback: (Result<KeyInfo>) -> Unit
     ) {
-        pluginScope.launch(Dispatchers.IO) {
+        pluginScope.launch {
             try {
-                val keyStore = KeyStore.getInstance(Constants.KEYSTORE_PROVIDER).apply { load(null) }
-                if (!keyStore.containsAlias(Constants.BIOMETRIC_KEY_ALIAS)) {
-                    callback(Result.success(KeyInfo(exists = false)))
-                    return@launch
-                }
-
-                val entry = keyStore.getEntry(Constants.BIOMETRIC_KEY_ALIAS, null) as? KeyStore.PrivateKeyEntry
-                if (entry == null) {
-                    callback(Result.success(KeyInfo(exists = false)))
-                    return@launch
-                }
-
-                val publicKey = entry.certificate.publicKey
-                val mode = keyManager.inferKeyModeFromKeystore()
-
-                val isValid = if (checkValidity) {
-                    runCatching {
-                        val algorithm = when (mode) {
-                            KeyMode.RSA -> "SHA256withRSA"
-                            else -> "SHA256withECDSA"
-                        }
-                        val signature = java.security.Signature.getInstance(algorithm)
-                        signature.initSign(entry.privateKey)
-                        true
-                    }.getOrDefault(false)
-                } else {
-                    null
-                }
-
-                val algorithm = publicKey.algorithm
-                val keySize = (publicKey as? java.security.interfaces.RSAKey)?.modulus?.bitLength()?.toLong()
-                    ?: (publicKey as? java.security.interfaces.ECKey)?.params?.order?.bitLength()?.toLong()
-
-                val formattedPublicKey = FormatUtils.formatOutput(publicKey.encoded, keyFormat)
-
-                val isHybridMode = mode == KeyMode.HYBRID_EC
-                var decryptingPublicKey: String? = null
-                var decryptingAlgorithm: String? = null
-                var decryptingKeySize: Long? = null
-
-                if (isHybridMode) {
-                    val pubBytes = fileIOHelper.readFileIfExists(Constants.EC_PUB_FILENAME)
-                    if (pubBytes != null) {
-                        val decryptKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(pubBytes))
-                        decryptingPublicKey = FormatUtils.formatOutput(decryptKey.encoded, keyFormat).value
-                        decryptingAlgorithm = "EC"
-                        decryptingKeySize = 256
+                val keyInfo = withContext(Dispatchers.IO) {
+                    val keyStore = KeyStore.getInstance(Constants.KEYSTORE_PROVIDER).apply { load(null) }
+                    if (!keyStore.containsAlias(Constants.BIOMETRIC_KEY_ALIAS)) {
+                        return@withContext KeyInfo(exists = false)
                     }
-                }
 
-                callback(
-                    Result.success(
-                        KeyInfo(
-                            exists = true,
-                            isValid = isValid,
-                            algorithm = algorithm,
-                            keySize = keySize,
-                            isHybridMode = isHybridMode,
-                            publicKey = formattedPublicKey.value,
-                            decryptingPublicKey = decryptingPublicKey,
-                            decryptingAlgorithm = decryptingAlgorithm,
-                            decryptingKeySize = decryptingKeySize
-                        )
+                    val entry = keyStore.getEntry(Constants.BIOMETRIC_KEY_ALIAS, null) as? KeyStore.PrivateKeyEntry
+                        ?: return@withContext KeyInfo(exists = false)
+
+                    val publicKey = entry.certificate.publicKey
+                    val mode = keyManager.inferKeyModeFromKeystore()
+
+                    val isValid = if (checkValidity) {
+                        runCatching {
+                            val algorithm = when (mode) {
+                                KeyMode.RSA -> "SHA256withRSA"
+                                else -> "SHA256withECDSA"
+                            }
+                            val signature = java.security.Signature.getInstance(algorithm)
+                            signature.initSign(entry.privateKey)
+                            true
+                        }.getOrDefault(false)
+                    } else {
+                        null
+                    }
+
+                    val algorithm = publicKey.algorithm
+                    val keySize = (publicKey as? java.security.interfaces.RSAKey)?.modulus?.bitLength()?.toLong()
+                        ?: (publicKey as? java.security.interfaces.ECKey)?.params?.order?.bitLength()?.toLong()
+
+                    val formattedPublicKey = FormatUtils.formatOutput(publicKey.encoded, keyFormat)
+
+                    val isHybridMode = mode == KeyMode.HYBRID_EC
+                    val decryptingInfo = if (isHybridMode) {
+                        val pubBytes = fileIOHelper.readFileIfExists(Constants.EC_PUB_FILENAME)
+                        if (pubBytes != null) {
+                            val decryptKey = KeyFactory.getInstance("EC").generatePublic(X509EncodedKeySpec(pubBytes))
+                            Triple(FormatUtils.formatOutput(decryptKey.encoded, keyFormat).value, "EC", 256L)
+                        } else null
+                    } else null
+
+                    KeyInfo(
+                        exists = true,
+                        isValid = isValid,
+                        algorithm = algorithm,
+                        keySize = keySize,
+                        isHybridMode = isHybridMode,
+                        publicKey = formattedPublicKey.value,
+                        decryptingPublicKey = decryptingInfo?.first,
+                        decryptingAlgorithm = decryptingInfo?.second,
+                        decryptingKeySize = decryptingInfo?.third
                     )
-                )
+                }
+                callback(Result.success(keyInfo))
             } catch (e: Exception) {
                 callback(Result.success(KeyInfo(exists = false)))
             }
@@ -514,20 +505,6 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
                     callback(Result.success(SimplePromptResult(success = false, error = errorMsg, code = errorCode)))
                     return@launch
                 }
-
-                val promptInfoBuilder = BiometricPrompt.PromptInfo.Builder()
-                    .setTitle(promptMessage)
-                    .setAllowedAuthenticators(authenticators)
-
-                config?.subtitle?.let { if (it.isNotBlank()) promptInfoBuilder.setSubtitle(it) }
-                config?.description?.let { if (it.isNotBlank()) promptInfoBuilder.setDescription(it) }
-
-                if (!(allowDeviceCredentials && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R)) {
-                    val cancelText = config?.cancelButtonText ?: "Cancel"
-                    promptInfoBuilder.setNegativeButtonText(cancelText)
-                }
-
-                val promptInfo = promptInfoBuilder.build()
 
                 val cancelText = config?.cancelButtonText ?: "Cancel"
                 val authResult = biometricPromptHelper.authenticate(
