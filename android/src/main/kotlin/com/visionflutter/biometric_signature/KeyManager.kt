@@ -18,6 +18,7 @@ import javax.crypto.KeyGenerator
 class KeyManager(private val appContext: Context, private val fileIO: FileIOHelper) {
 
     fun generateRsaKeyInKeyStore(
+        keyAlias: String?,
         useDeviceCredentials: Boolean,
         invalidateOnEnrollment: Boolean,
         enableDecryption: Boolean
@@ -28,7 +29,8 @@ class KeyManager(private val appContext: Context, private val fileIO: FileIOHelp
             KeyProperties.PURPOSE_SIGN
         }
 
-        val builder = KeyGenParameterSpec.Builder(Constants.BIOMETRIC_KEY_ALIAS, purposes)
+        val alias = Constants.biometricKeyAlias(keyAlias)
+        val builder = KeyGenParameterSpec.Builder(alias, purposes)
             .setDigests(KeyProperties.DIGEST_SHA256)
             .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
             .setAlgorithmParameterSpec(RSAKeyGenParameterSpec(2048, RSAKeyGenParameterSpec.F4))
@@ -48,10 +50,12 @@ class KeyManager(private val appContext: Context, private val fileIO: FileIOHelp
     }
 
     fun generateEcKeyInKeyStore(
+        keyAlias: String?,
         useDeviceCredentials: Boolean,
         invalidateOnEnrollment: Boolean
     ): KeyPair {
-        val builder = KeyGenParameterSpec.Builder(Constants.BIOMETRIC_KEY_ALIAS, KeyProperties.PURPOSE_SIGN)
+        val alias = Constants.biometricKeyAlias(keyAlias)
+        val builder = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN)
             .setDigests(KeyProperties.DIGEST_SHA256)
             .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
             .setUserAuthenticationRequired(true)
@@ -65,9 +69,10 @@ class KeyManager(private val appContext: Context, private val fileIO: FileIOHelp
         return kpg.generateKeyPair()
     }
 
-    fun generateMasterKey(useDeviceCredentials: Boolean, invalidateOnEnrollment: Boolean) {
+    fun generateMasterKey(keyAlias: String?, useDeviceCredentials: Boolean, invalidateOnEnrollment: Boolean) {
+        val alias = Constants.masterKeyAlias(keyAlias)
         val builder = KeyGenParameterSpec.Builder(
-            Constants.MASTER_KEY_ALIAS,
+            alias,
             KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT
         )
             .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
@@ -83,12 +88,18 @@ class KeyManager(private val appContext: Context, private val fileIO: FileIOHelp
         keyGen.generateKey()
     }
 
-    fun deleteAllKeys() {
+    fun deleteKeysForAlias(keyAlias: String?) {
         val keyStore = KeyStore.getInstance(Constants.KEYSTORE_PROVIDER).apply { load(null) }
-        runCatching { keyStore.deleteEntry(Constants.BIOMETRIC_KEY_ALIAS) }
-        runCatching { keyStore.deleteEntry(Constants.MASTER_KEY_ALIAS) }
+        val biometricAlias = Constants.biometricKeyAlias(keyAlias)
+        val masterAlias = Constants.masterKeyAlias(keyAlias)
 
-        listOf(Constants.EC_WRAPPED_FILENAME, Constants.EC_PUB_FILENAME).forEach { fileName ->
+        runCatching { keyStore.deleteEntry(biometricAlias) }
+        runCatching { keyStore.deleteEntry(masterAlias) }
+
+        listOf(
+            Constants.ecWrappedFilename(keyAlias),
+            Constants.ecPubFilename(keyAlias)
+        ).forEach { fileName ->
             val file = File(appContext.filesDir, fileName)
             if (file.exists()) {
                 runCatching { file.writeBytes(ByteArray(file.length().toInt())) }
@@ -97,26 +108,47 @@ class KeyManager(private val appContext: Context, private val fileIO: FileIOHelp
         }
     }
 
-    fun checkKeyExistsInternal(checkValidity: Boolean): Boolean {
+    fun deleteAllKeys() {
         val keyStore = KeyStore.getInstance(Constants.KEYSTORE_PROVIDER).apply { load(null) }
-        if (!keyStore.containsAlias(Constants.BIOMETRIC_KEY_ALIAS)) return false
-        if (!checkValidity) return true
 
-        return runCatching {
-            val entry = keyStore.getEntry(Constants.BIOMETRIC_KEY_ALIAS, null) as? KeyStore.PrivateKeyEntry
-            entry != null
-        }.getOrDefault(false)
+        // Delete all plugin-managed keys from KeyStore
+        val aliases = keyStore.aliases().toList()
+        for (alias in aliases) {
+            if (alias.startsWith(Constants.KEY_ALIAS_PREFIX) ||
+                alias.startsWith(Constants.MASTER_KEY_ALIAS_PREFIX) ||
+                alias == "biometric_key" ||
+                alias == "biometric_master_key"
+            ) {
+                runCatching { keyStore.deleteEntry(alias) }
+            }
+        }
+
+        // Delete all plugin-managed files
+        appContext.filesDir.listFiles()?.forEach { file ->
+            if (file.name.startsWith("biometric_ec_wrapped") ||
+                file.name.startsWith("biometric_ec_pub")
+            ) {
+                runCatching { file.writeBytes(ByteArray(file.length().toInt())) }
+                file.delete()
+            }
+        }
     }
 
-    fun inferKeyModeFromKeystore(): KeyMode? {
+    fun keyExistsForAlias(keyAlias: String?): Boolean {
         val keyStore = KeyStore.getInstance(Constants.KEYSTORE_PROVIDER).apply { load(null) }
-        if (!keyStore.containsAlias(Constants.BIOMETRIC_KEY_ALIAS)) return null
-        val entry = keyStore.getEntry(Constants.BIOMETRIC_KEY_ALIAS, null) as? KeyStore.PrivateKeyEntry ?: return null
+        return keyStore.containsAlias(Constants.biometricKeyAlias(keyAlias))
+    }
+
+    fun inferKeyModeFromKeystore(keyAlias: String?): KeyMode? {
+        val keyStore = KeyStore.getInstance(Constants.KEYSTORE_PROVIDER).apply { load(null) }
+        val alias = Constants.biometricKeyAlias(keyAlias)
+        if (!keyStore.containsAlias(alias)) return null
+        val entry = keyStore.getEntry(alias, null) as? KeyStore.PrivateKeyEntry ?: return null
         val pub = entry.certificate.publicKey
         return when (pub) {
             is RSAPublicKey -> KeyMode.RSA
             is ECPublicKey -> {
-                val wrappedExists = File(appContext.filesDir, Constants.EC_WRAPPED_FILENAME).exists()
+                val wrappedExists = File(appContext.filesDir, Constants.ecWrappedFilename(keyAlias)).exists()
                 if (wrappedExists) KeyMode.HYBRID_EC else KeyMode.EC_SIGN_ONLY
             }
             else -> null

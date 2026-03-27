@@ -113,7 +113,9 @@ enum class BiometricError {
   // The system canceled the operation (e.g., app went to background).
   kSystemCanceled = 12,
   // Failed to show the biometric prompt (e.g., activity not available).
-  kPromptError = 13
+  kPromptError = 13,
+  // A key with the specified alias already exists and failIfExists was set.
+  kKeyAlreadyExists = 14
 };
 
 // The cryptographic algorithm to use for key generation.
@@ -473,7 +475,8 @@ class CreateKeysConfig {
     const bool* enable_decryption,
     const std::string* prompt_subtitle,
     const std::string* prompt_description,
-    const std::string* cancel_button_text);
+    const std::string* cancel_button_text,
+    const bool* fail_if_exists);
 
   // [Android/iOS/macOS] The cryptographic algorithm to use.
   // Windows only supports RSA and ignores this field.
@@ -524,6 +527,15 @@ class CreateKeysConfig {
   void set_cancel_button_text(const std::string_view* value_arg);
   void set_cancel_button_text(std::string_view value_arg);
 
+  // [All platforms] When `true`, key creation will fail with
+  // [BiometricError.keyAlreadyExists] if a key with the specified alias
+  // (or the default alias) already exists.
+  //
+  // When `false` (default), existing keys are silently replaced.
+  const bool* fail_if_exists() const;
+  void set_fail_if_exists(const bool* value_arg);
+  void set_fail_if_exists(bool value_arg);
+
  private:
   static CreateKeysConfig FromEncodableList(const flutter::EncodableList& list);
   flutter::EncodableList ToEncodableList() const;
@@ -537,6 +549,7 @@ class CreateKeysConfig {
   std::optional<std::string> prompt_subtitle_;
   std::optional<std::string> prompt_description_;
   std::optional<std::string> cancel_button_text_;
+  std::optional<bool> fail_if_exists_;
 };
 
 
@@ -796,10 +809,13 @@ class BiometricSignatureApi {
   virtual void BiometricAuthAvailable(std::function<void(ErrorOr<BiometricAvailability> reply)> result) = 0;
   // Creates a new key pair.
   //
+  // [keyAlias] is an optional alias for the key. When null, the default
+  // alias is used. Different aliases create independent key pairs.
   // [config] contains platform-specific options. See [CreateKeysConfig].
   // [keyFormat] specifies the output format for the public key.
   // [promptMessage] is the message shown to the user during authentication.
   virtual void CreateKeys(
+    const std::string* key_alias,
     const CreateKeysConfig* config,
     const KeyFormat& key_format,
     const std::string* prompt_message,
@@ -807,12 +823,14 @@ class BiometricSignatureApi {
   // Creates a signature.
   //
   // [payload] is the data to sign.
+  // [keyAlias] specifies which key to sign with. Defaults to the default alias.
   // [config] contains platform-specific options. See [CreateSignatureConfig].
   // [signatureFormat] specifies the output format for the signature.
   // [keyFormat] specifies the output format for the public key.
   // [promptMessage] is the message shown to the user during authentication.
   virtual void CreateSignature(
     const std::string& payload,
+    const std::string* key_alias,
     const CreateSignatureConfig* config,
     const SignatureFormat& signature_format,
     const KeyFormat& key_format,
@@ -822,21 +840,35 @@ class BiometricSignatureApi {
   //
   // Note: Not supported on Windows.
   // [payload] is the encrypted data.
+  // [keyAlias] specifies which key to decrypt with. Defaults to the default alias.
   // [payloadFormat] specifies the format of the encrypted data.
   // [config] contains platform-specific options. See [DecryptConfig].
   // [promptMessage] is the message shown to the user during authentication.
   virtual void Decrypt(
     const std::string& payload,
+    const std::string* key_alias,
     const PayloadFormat& payload_format,
     const DecryptConfig* config,
     const std::string* prompt_message,
     std::function<void(ErrorOr<DecryptResult> reply)> result) = 0;
-  // Deletes keys.
-  virtual void DeleteKeys(std::function<void(ErrorOr<bool> reply)> result) = 0;
+  // Deletes keys for a specific alias.
+  //
+  // [keyAlias] specifies which key to delete. When null, deletes the
+  // default alias only. Other aliases are not affected.
+  virtual void DeleteKeys(
+    const std::string* key_alias,
+    std::function<void(ErrorOr<bool> reply)> result) = 0;
+  // Deletes all biometric keys across all aliases.
+  //
+  // This is a destructive operation that removes every key managed by
+  // this plugin. Use [deleteKeys] for targeted deletion.
+  virtual void DeleteAllKeys(std::function<void(ErrorOr<bool> reply)> result) = 0;
   // Gets detailed information about existing biometric keys.
   //
+  // [keyAlias] specifies which key to query. Defaults to the default alias.
   // Returns key metadata including algorithm, size, validity, and public keys.
   virtual void GetKeyInfo(
+    const std::string* key_alias,
     bool check_validity,
     const KeyFormat& key_format,
     std::function<void(ErrorOr<KeyInfo> reply)> result) = 0;

@@ -24,6 +24,10 @@ export 'biometric_signature_platform_interface.dart'
 class BiometricSignature {
   /// Creates a new biometric-protected key pair.
   ///
+  /// [keyAlias] is an optional name for this key pair. Different aliases
+  /// create independent key pairs, allowing apps to manage multiple keys
+  /// (e.g., one for auth, one for payment signing). When null, the default
+  /// alias is used.
   /// [config] contains platform-specific options. See [CreateKeysConfig] for
   /// available options and which platforms they apply to.
   /// [keyFormat] specifies the output format for the public key.
@@ -31,11 +35,13 @@ class BiometricSignature {
   ///
   /// Returns a [KeyCreationResult] containing the public key or error details.
   Future<KeyCreationResult> createKeys({
+    String? keyAlias,
     CreateKeysConfig? config,
     KeyFormat keyFormat = KeyFormat.base64,
     String? promptMessage,
   }) async {
     return BiometricSignaturePlatform.instance.createKeys(
+      keyAlias,
       config,
       keyFormat,
       promptMessage,
@@ -45,6 +51,7 @@ class BiometricSignature {
   /// Creates a digital signature using biometric authentication.
   ///
   /// [payload] is the data to sign.
+  /// [keyAlias] specifies which key to sign with. Defaults to the default alias.
   /// [config] contains platform-specific options. See [CreateSignatureConfig].
   /// [signatureFormat] specifies the output format for the signature.
   /// [keyFormat] specifies the output format for the public key.
@@ -53,6 +60,7 @@ class BiometricSignature {
   /// Returns a [SignatureResult] containing the signature or error details.
   Future<SignatureResult> createSignature({
     required String payload,
+    String? keyAlias,
     CreateSignatureConfig? config,
     SignatureFormat signatureFormat = SignatureFormat.base64,
     KeyFormat keyFormat = KeyFormat.base64,
@@ -60,6 +68,7 @@ class BiometricSignature {
   }) async {
     return BiometricSignaturePlatform.instance.createSignature(
       payload,
+      keyAlias,
       config,
       signatureFormat,
       keyFormat,
@@ -72,6 +81,7 @@ class BiometricSignature {
   /// Note: Not supported on Windows.
   ///
   /// [payload] is the encrypted data.
+  /// [keyAlias] specifies which key to decrypt with. Defaults to the default alias.
   /// [payloadFormat] specifies the format of the encrypted data.
   /// [config] contains platform-specific options. See [DecryptConfig].
   /// [promptMessage] is the message shown during biometric authentication.
@@ -80,22 +90,37 @@ class BiometricSignature {
   Future<DecryptResult> decrypt({
     required String payload,
     required PayloadFormat payloadFormat,
+    String? keyAlias,
     DecryptConfig? config,
     String? promptMessage,
   }) async {
     return BiometricSignaturePlatform.instance.decrypt(
       payload,
+      keyAlias,
       payloadFormat,
       config,
       promptMessage,
     );
   }
 
-  /// Deletes all active biometric key material.
+  /// Deletes biometric key material for a specific alias.
   ///
-  /// Returns `true` if keys were deleted or no keys existed.
-  Future<bool> deleteKeys() async {
-    return BiometricSignaturePlatform.instance.deleteKeys();
+  /// [keyAlias] specifies which key to delete. When null, deletes the
+  /// default alias only. Other aliases are not affected.
+  ///
+  /// Returns `true` if keys were deleted or no keys existed for the alias.
+  Future<bool> deleteKeys({String? keyAlias}) async {
+    return BiometricSignaturePlatform.instance.deleteKeys(keyAlias);
+  }
+
+  /// Deletes all biometric key material across all aliases.
+  ///
+  /// This is a destructive operation. Use [deleteKeys] with a specific
+  /// alias for targeted deletion.
+  ///
+  /// Returns `true` if all keys were deleted.
+  Future<bool> deleteAllKeys() async {
+    return BiometricSignaturePlatform.instance.deleteAllKeys();
   }
 
   /// Determines whether biometric authentication is available on the device.
@@ -107,15 +132,18 @@ class BiometricSignature {
 
   /// Gets detailed information about existing biometric keys.
   ///
+  /// [keyAlias] specifies which key to query. Defaults to the default alias.
   /// [checkValidity] whether to verify key hasn't been invalidated.
   /// [keyFormat] output format for the public key.
   ///
   /// Returns a [KeyInfo] with key metadata.
   Future<KeyInfo> getKeyInfo({
+    String? keyAlias,
     bool checkValidity = false,
     KeyFormat keyFormat = KeyFormat.base64,
   }) async {
     return BiometricSignaturePlatform.instance.getKeyInfo(
+      keyAlias,
       checkValidity,
       keyFormat,
     );
@@ -123,9 +151,16 @@ class BiometricSignature {
 
   /// Checks whether a hardware-backed signing key currently exists.
   ///
+  /// [keyAlias] specifies which key to check. Defaults to the default alias.
   /// This is a convenience wrapper around [getKeyInfo].
-  Future<bool> biometricKeyExists({bool checkValidity = false}) async {
-    final info = await getKeyInfo(checkValidity: checkValidity);
+  Future<bool> biometricKeyExists({
+    String? keyAlias,
+    bool checkValidity = false,
+  }) async {
+    final info = await getKeyInfo(
+      keyAlias: keyAlias,
+      checkValidity: checkValidity,
+    );
     return (info.exists ?? false) && (info.isValid ?? true);
   }
 

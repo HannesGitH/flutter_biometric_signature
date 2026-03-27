@@ -153,7 +153,9 @@ enum class BiometricError(val raw: Int) {
   /** The system canceled the operation (e.g., app went to background). */
   SYSTEM_CANCELED(12),
   /** Failed to show the biometric prompt (e.g., activity not available). */
-  PROMPT_ERROR(13);
+  PROMPT_ERROR(13),
+  /** A key with the specified alias already exists and failIfExists was set. */
+  KEY_ALREADY_EXISTS(14);
 
   companion object {
     fun ofRaw(raw: Int): BiometricError? {
@@ -510,7 +512,15 @@ data class CreateKeysConfig (
   /** [Android] Description text for the biometric prompt. */
   val promptDescription: String? = null,
   /** [Android] Text for the cancel button in the biometric prompt. */
-  val cancelButtonText: String? = null
+  val cancelButtonText: String? = null,
+  /**
+   * [All platforms] When `true`, key creation will fail with
+   * [BiometricError.keyAlreadyExists] if a key with the specified alias
+   * (or the default alias) already exists.
+   *
+   * When `false` (default), existing keys are silently replaced.
+   */
+  val failIfExists: Boolean? = null
 )
  {
   companion object {
@@ -523,7 +533,8 @@ data class CreateKeysConfig (
       val promptSubtitle = pigeonVar_list[5] as String?
       val promptDescription = pigeonVar_list[6] as String?
       val cancelButtonText = pigeonVar_list[7] as String?
-      return CreateKeysConfig(signatureType, enforceBiometric, setInvalidatedByBiometricEnrollment, useDeviceCredentials, enableDecryption, promptSubtitle, promptDescription, cancelButtonText)
+      val failIfExists = pigeonVar_list[8] as Boolean?
+      return CreateKeysConfig(signatureType, enforceBiometric, setInvalidatedByBiometricEnrollment, useDeviceCredentials, enableDecryption, promptSubtitle, promptDescription, cancelButtonText, failIfExists)
     }
   }
   fun toList(): List<Any?> {
@@ -536,6 +547,7 @@ data class CreateKeysConfig (
       promptSubtitle,
       promptDescription,
       cancelButtonText,
+      failIfExists,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -948,39 +960,56 @@ interface BiometricSignatureApi {
   /**
    * Creates a new key pair.
    *
+   * [keyAlias] is an optional alias for the key. When null, the default
+   * alias is used. Different aliases create independent key pairs.
    * [config] contains platform-specific options. See [CreateKeysConfig].
    * [keyFormat] specifies the output format for the public key.
    * [promptMessage] is the message shown to the user during authentication.
    */
-  fun createKeys(config: CreateKeysConfig?, keyFormat: KeyFormat, promptMessage: String?, callback: (Result<KeyCreationResult>) -> Unit)
+  fun createKeys(keyAlias: String?, config: CreateKeysConfig?, keyFormat: KeyFormat, promptMessage: String?, callback: (Result<KeyCreationResult>) -> Unit)
   /**
    * Creates a signature.
    *
    * [payload] is the data to sign.
+   * [keyAlias] specifies which key to sign with. Defaults to the default alias.
    * [config] contains platform-specific options. See [CreateSignatureConfig].
    * [signatureFormat] specifies the output format for the signature.
    * [keyFormat] specifies the output format for the public key.
    * [promptMessage] is the message shown to the user during authentication.
    */
-  fun createSignature(payload: String, config: CreateSignatureConfig?, signatureFormat: SignatureFormat, keyFormat: KeyFormat, promptMessage: String?, callback: (Result<SignatureResult>) -> Unit)
+  fun createSignature(payload: String, keyAlias: String?, config: CreateSignatureConfig?, signatureFormat: SignatureFormat, keyFormat: KeyFormat, promptMessage: String?, callback: (Result<SignatureResult>) -> Unit)
   /**
    * Decrypts data.
    *
    * Note: Not supported on Windows.
    * [payload] is the encrypted data.
+   * [keyAlias] specifies which key to decrypt with. Defaults to the default alias.
    * [payloadFormat] specifies the format of the encrypted data.
    * [config] contains platform-specific options. See [DecryptConfig].
    * [promptMessage] is the message shown to the user during authentication.
    */
-  fun decrypt(payload: String, payloadFormat: PayloadFormat, config: DecryptConfig?, promptMessage: String?, callback: (Result<DecryptResult>) -> Unit)
-  /** Deletes keys. */
-  fun deleteKeys(callback: (Result<Boolean>) -> Unit)
+  fun decrypt(payload: String, keyAlias: String?, payloadFormat: PayloadFormat, config: DecryptConfig?, promptMessage: String?, callback: (Result<DecryptResult>) -> Unit)
+  /**
+   * Deletes keys for a specific alias.
+   *
+   * [keyAlias] specifies which key to delete. When null, deletes the
+   * default alias only. Other aliases are not affected.
+   */
+  fun deleteKeys(keyAlias: String?, callback: (Result<Boolean>) -> Unit)
+  /**
+   * Deletes all biometric keys across all aliases.
+   *
+   * This is a destructive operation that removes every key managed by
+   * this plugin. Use [deleteKeys] for targeted deletion.
+   */
+  fun deleteAllKeys(callback: (Result<Boolean>) -> Unit)
   /**
    * Gets detailed information about existing biometric keys.
    *
+   * [keyAlias] specifies which key to query. Defaults to the default alias.
    * Returns key metadata including algorithm, size, validity, and public keys.
    */
-  fun getKeyInfo(checkValidity: Boolean, keyFormat: KeyFormat, callback: (Result<KeyInfo>) -> Unit)
+  fun getKeyInfo(keyAlias: String?, checkValidity: Boolean, keyFormat: KeyFormat, callback: (Result<KeyInfo>) -> Unit)
   /**
    * Performs simple biometric authentication without cryptographic operations.
    *
@@ -1028,10 +1057,11 @@ interface BiometricSignatureApi {
         if (api != null) {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
-            val configArg = args[0] as CreateKeysConfig?
-            val keyFormatArg = args[1] as KeyFormat
-            val promptMessageArg = args[2] as String?
-            api.createKeys(configArg, keyFormatArg, promptMessageArg) { result: Result<KeyCreationResult> ->
+            val keyAliasArg = args[0] as String?
+            val configArg = args[1] as CreateKeysConfig?
+            val keyFormatArg = args[2] as KeyFormat
+            val promptMessageArg = args[3] as String?
+            api.createKeys(keyAliasArg, configArg, keyFormatArg, promptMessageArg) { result: Result<KeyCreationResult> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
@@ -1051,11 +1081,12 @@ interface BiometricSignatureApi {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
             val payloadArg = args[0] as String
-            val configArg = args[1] as CreateSignatureConfig?
-            val signatureFormatArg = args[2] as SignatureFormat
-            val keyFormatArg = args[3] as KeyFormat
-            val promptMessageArg = args[4] as String?
-            api.createSignature(payloadArg, configArg, signatureFormatArg, keyFormatArg, promptMessageArg) { result: Result<SignatureResult> ->
+            val keyAliasArg = args[1] as String?
+            val configArg = args[2] as CreateSignatureConfig?
+            val signatureFormatArg = args[3] as SignatureFormat
+            val keyFormatArg = args[4] as KeyFormat
+            val promptMessageArg = args[5] as String?
+            api.createSignature(payloadArg, keyAliasArg, configArg, signatureFormatArg, keyFormatArg, promptMessageArg) { result: Result<SignatureResult> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
@@ -1075,10 +1106,11 @@ interface BiometricSignatureApi {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
             val payloadArg = args[0] as String
-            val payloadFormatArg = args[1] as PayloadFormat
-            val configArg = args[2] as DecryptConfig?
-            val promptMessageArg = args[3] as String?
-            api.decrypt(payloadArg, payloadFormatArg, configArg, promptMessageArg) { result: Result<DecryptResult> ->
+            val keyAliasArg = args[1] as String?
+            val payloadFormatArg = args[2] as PayloadFormat
+            val configArg = args[3] as DecryptConfig?
+            val promptMessageArg = args[4] as String?
+            api.decrypt(payloadArg, keyAliasArg, payloadFormatArg, configArg, promptMessageArg) { result: Result<DecryptResult> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
@@ -1095,8 +1127,28 @@ interface BiometricSignatureApi {
       run {
         val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.deleteKeys$separatedMessageChannelSuffix", codec)
         if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val keyAliasArg = args[0] as String?
+            api.deleteKeys(keyAliasArg) { result: Result<Boolean> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(BiometricSignatureApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.deleteAllKeys$separatedMessageChannelSuffix", codec)
+        if (api != null) {
           channel.setMessageHandler { _, reply ->
-            api.deleteKeys{ result: Result<Boolean> ->
+            api.deleteAllKeys{ result: Result<Boolean> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
@@ -1115,9 +1167,10 @@ interface BiometricSignatureApi {
         if (api != null) {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
-            val checkValidityArg = args[0] as Boolean
-            val keyFormatArg = args[1] as KeyFormat
-            api.getKeyInfo(checkValidityArg, keyFormatArg) { result: Result<KeyInfo> ->
+            val keyAliasArg = args[0] as String?
+            val checkValidityArg = args[1] as Boolean
+            val keyFormatArg = args[2] as KeyFormat
+            api.getKeyInfo(keyAliasArg, checkValidityArg, keyFormatArg) { result: Result<KeyInfo> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))

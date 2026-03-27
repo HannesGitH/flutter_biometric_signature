@@ -15,6 +15,12 @@ class MockBiometricSignaturePlatform
   bool _shouldThrowError = false;
   SignatureType _signatureType = SignatureType.rsa;
 
+  // Track which aliases have been "created" to test failIfExists
+  final Set<String> _createdAliases = {};
+  // Track deletion calls
+  final List<String?> deletedAliases = [];
+  bool deleteAllKeysCalled = false;
+
   void setAuthAvailableResult(BiometricAvailability result) {
     _authAvailableResult = result;
   }
@@ -27,6 +33,10 @@ class MockBiometricSignaturePlatform
     _signatureType = type;
   }
 
+  void addCreatedAlias(String alias) {
+    _createdAliases.add(alias);
+  }
+
   @override
   Future<BiometricAvailability> biometricAuthAvailable() async {
     if (_shouldThrowError) throw Exception('Auth check failed');
@@ -34,29 +44,50 @@ class MockBiometricSignaturePlatform
   }
 
   @override
-  Future<KeyInfo> getKeyInfo(bool checkValidity, KeyFormat keyFormat) async {
+  Future<KeyInfo> getKeyInfo(
+    String? keyAlias,
+    bool checkValidity,
+    KeyFormat keyFormat,
+  ) async {
+    final effectiveAlias = keyAlias ?? 'biometric_key';
+    if (!_createdAliases.contains(effectiveAlias)) {
+      return KeyInfo(exists: false);
+    }
     return KeyInfo(
       exists: true,
       isValid: true,
       algorithm: 'RSA',
       keySize: 2048,
       isHybridMode: false,
-      publicKey: 'test_public_key',
+      publicKey: 'test_public_key_$effectiveAlias',
     );
   }
 
   @override
   Future<KeyCreationResult> createKeys(
+    String? keyAlias,
     CreateKeysConfig? config,
     KeyFormat keyFormat,
     String? promptMessage,
   ) async {
     if (_shouldThrowError) throw Exception('Key creation failed');
 
+    final effectiveAlias = keyAlias ?? 'biometric_key';
+    final failIfExists = config?.failIfExists ?? false;
+
+    if (failIfExists && _createdAliases.contains(effectiveAlias)) {
+      return KeyCreationResult(
+        code: BiometricError.keyAlreadyExists,
+        error: 'Key with alias "$effectiveAlias" already exists',
+      );
+    }
+
+    _createdAliases.add(effectiveAlias);
+
     final isEc =
         (config?.signatureType ?? _signatureType) == SignatureType.ecdsa;
     return KeyCreationResult(
-      publicKey: 'test_public_key',
+      publicKey: 'test_public_key_$effectiveAlias',
       code: BiometricError.success,
       algorithm: isEc ? 'EC' : 'RSA',
       keySize: isEc ? 256 : 2048,
@@ -66,6 +97,7 @@ class MockBiometricSignaturePlatform
   @override
   Future<SignatureResult> createSignature(
     String payload,
+    String? keyAlias,
     CreateSignatureConfig? config,
     SignatureFormat signatureFormat,
     KeyFormat keyFormat,
@@ -73,9 +105,10 @@ class MockBiometricSignaturePlatform
   ) async {
     if (_shouldThrowError) throw Exception('Signing failed');
 
+    final effectiveAlias = keyAlias ?? 'biometric_key';
     return SignatureResult(
-      signature: 'test_signature',
-      publicKey: 'test_public_key',
+      signature: 'test_signature_$effectiveAlias',
+      publicKey: 'test_public_key_$effectiveAlias',
       code: BiometricError.success,
       algorithm: 'RSA',
       keySize: 2048,
@@ -83,18 +116,31 @@ class MockBiometricSignaturePlatform
   }
 
   @override
-  Future<bool> deleteKeys() => Future.value(true);
+  Future<bool> deleteKeys(String? keyAlias) {
+    deletedAliases.add(keyAlias);
+    _createdAliases.remove(keyAlias ?? 'biometric_key');
+    return Future.value(true);
+  }
+
+  @override
+  Future<bool> deleteAllKeys() {
+    deleteAllKeysCalled = true;
+    _createdAliases.clear();
+    return Future.value(true);
+  }
 
   @override
   Future<DecryptResult> decrypt(
     String payload,
+    String? keyAlias,
     PayloadFormat payloadFormat,
     DecryptConfig? config,
     String? promptMessage,
   ) async {
     if (_shouldThrowError) throw Exception('Decryption failed');
+    final effectiveAlias = keyAlias ?? 'biometric_key';
     return DecryptResult(
-      decryptedData: 'decrypted_$payload',
+      decryptedData: 'decrypted_${effectiveAlias}_$payload',
       code: BiometricError.success,
     );
   }
@@ -163,7 +209,7 @@ void main() {
       BiometricSignaturePlatform.instance = fakePlatform;
 
       final result = await biometricSignature.createKeys();
-      expect(result.publicKey, 'test_public_key');
+      expect(result.publicKey, 'test_public_key_biometric_key');
       expect(result.algorithm, 'RSA');
       expect(result.keySize, 2048);
       expect(result.code, BiometricError.success);
@@ -220,8 +266,8 @@ void main() {
       final result = await biometricSignature.createSignature(
         payload: 'test_data',
       );
-      expect(result.signature, 'test_signature');
-      expect(result.publicKey, 'test_public_key');
+      expect(result.signature, 'test_signature_biometric_key');
+      expect(result.publicKey, 'test_public_key_biometric_key');
       expect(result.code, BiometricError.success);
     });
 
@@ -266,6 +312,7 @@ void main() {
     BiometricSignature biometricSignature = BiometricSignature();
     MockBiometricSignaturePlatform fakePlatform =
         MockBiometricSignaturePlatform();
+    fakePlatform.addCreatedAlias('biometric_key');
     BiometricSignaturePlatform.instance = fakePlatform;
 
     expect(await biometricSignature.biometricKeyExists(), true);
@@ -282,7 +329,7 @@ void main() {
         payload: 'encrypted_payload',
         payloadFormat: PayloadFormat.base64,
       );
-      expect(result.decryptedData, 'decrypted_encrypted_payload');
+      expect(result.decryptedData, 'decrypted_biometric_key_encrypted_payload');
       expect(result.code, BiometricError.success);
     });
 
@@ -316,6 +363,7 @@ void main() {
       );
     });
   });
+
   group('simplePrompt', () {
     test('Success', () async {
       BiometricSignature biometricSignature = BiometricSignature();
@@ -357,6 +405,258 @@ void main() {
         () => biometricSignature.simplePrompt(promptMessage: 'Verify'),
         throwsException,
       );
+    });
+  });
+
+  // ============================================================
+  // Step 2: Named Key Aliases
+  // ============================================================
+
+  group('named key aliases', () {
+    test('createKeys with custom alias', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final result = await biometricSignature.createKeys(
+        keyAlias: 'payment_signing',
+      );
+      expect(result.publicKey, 'test_public_key_payment_signing');
+      expect(result.code, BiometricError.success);
+    });
+
+    test('createKeys with null alias uses default', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final result = await biometricSignature.createKeys();
+      expect(result.publicKey, 'test_public_key_biometric_key');
+    });
+
+    test('multiple independent aliases', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final authResult = await biometricSignature.createKeys(
+        keyAlias: 'auth',
+      );
+      final paymentResult = await biometricSignature.createKeys(
+        keyAlias: 'payment',
+      );
+
+      expect(authResult.publicKey, 'test_public_key_auth');
+      expect(paymentResult.publicKey, 'test_public_key_payment');
+      expect(authResult.publicKey, isNot(paymentResult.publicKey));
+    });
+
+    test('createSignature with alias', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final result = await biometricSignature.createSignature(
+        payload: 'test_data',
+        keyAlias: 'payment',
+      );
+      expect(result.signature, 'test_signature_payment');
+      expect(result.publicKey, 'test_public_key_payment');
+    });
+
+    test('decrypt with alias', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final result = await biometricSignature.decrypt(
+        payload: 'ciphertext',
+        payloadFormat: PayloadFormat.base64,
+        keyAlias: 'payment',
+      );
+      expect(result.decryptedData, 'decrypted_payment_ciphertext');
+    });
+
+    test('getKeyInfo with alias', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      fakePlatform.addCreatedAlias('payment');
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final info = await biometricSignature.getKeyInfo(keyAlias: 'payment');
+      expect(info.exists, true);
+      expect(info.publicKey, 'test_public_key_payment');
+    });
+
+    test('getKeyInfo with unknown alias returns exists=false', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final info = await biometricSignature.getKeyInfo(
+        keyAlias: 'nonexistent',
+      );
+      expect(info.exists, false);
+    });
+
+    test('biometricKeyExists with alias', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      fakePlatform.addCreatedAlias('payment');
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      expect(
+        await biometricSignature.biometricKeyExists(keyAlias: 'payment'),
+        true,
+      );
+      expect(
+        await biometricSignature.biometricKeyExists(keyAlias: 'nonexistent'),
+        false,
+      );
+    });
+  });
+
+  // ============================================================
+  // Step 3: Key Overwrite Protection & Safe Deletion
+  // ============================================================
+
+  group('key overwrite protection', () {
+    test('failIfExists prevents overwriting existing key', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      // Create a key first
+      final first = await biometricSignature.createKeys(
+        keyAlias: 'payment',
+      );
+      expect(first.code, BiometricError.success);
+
+      // Try to create again with failIfExists
+      final second = await biometricSignature.createKeys(
+        keyAlias: 'payment',
+        config: CreateKeysConfig(failIfExists: true),
+      );
+      expect(second.code, BiometricError.keyAlreadyExists);
+      expect(second.error, contains('already exists'));
+    });
+
+    test('failIfExists allows creation when key does not exist', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final result = await biometricSignature.createKeys(
+        keyAlias: 'new_key',
+        config: CreateKeysConfig(failIfExists: true),
+      );
+      expect(result.code, BiometricError.success);
+      expect(result.publicKey, 'test_public_key_new_key');
+    });
+
+    test('default failIfExists=false allows overwrite', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      await biometricSignature.createKeys(keyAlias: 'payment');
+      final second = await biometricSignature.createKeys(
+        keyAlias: 'payment',
+      );
+      expect(second.code, BiometricError.success);
+    });
+
+    test('failIfExists on default alias', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      await biometricSignature.createKeys();
+      final second = await biometricSignature.createKeys(
+        config: CreateKeysConfig(failIfExists: true),
+      );
+      expect(second.code, BiometricError.keyAlreadyExists);
+    });
+  });
+
+  group('safe deletion', () {
+    test('deleteKeys with alias deletes only that alias', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      await biometricSignature.createKeys(keyAlias: 'auth');
+      await biometricSignature.createKeys(keyAlias: 'payment');
+
+      await biometricSignature.deleteKeys(keyAlias: 'auth');
+
+      expect(fakePlatform.deletedAliases, ['auth']);
+
+      // 'payment' should still exist
+      final paymentInfo = await biometricSignature.getKeyInfo(
+        keyAlias: 'payment',
+      );
+      expect(paymentInfo.exists, true);
+
+      // 'auth' should be gone
+      final authInfo = await biometricSignature.getKeyInfo(keyAlias: 'auth');
+      expect(authInfo.exists, false);
+    });
+
+    test('deleteKeys with no alias deletes default', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      await biometricSignature.deleteKeys();
+      expect(fakePlatform.deletedAliases, [null]);
+    });
+
+    test('deleteAllKeys clears everything', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      await biometricSignature.createKeys(keyAlias: 'auth');
+      await biometricSignature.createKeys(keyAlias: 'payment');
+
+      await biometricSignature.deleteAllKeys();
+      expect(fakePlatform.deleteAllKeysCalled, true);
+
+      // All keys should be gone
+      final authInfo = await biometricSignature.getKeyInfo(keyAlias: 'auth');
+      expect(authInfo.exists, false);
+      final paymentInfo = await biometricSignature.getKeyInfo(
+        keyAlias: 'payment',
+      );
+      expect(paymentInfo.exists, false);
+    });
+
+    test('deleting nonexistent key is idempotent', () async {
+      BiometricSignature biometricSignature = BiometricSignature();
+      MockBiometricSignaturePlatform fakePlatform =
+          MockBiometricSignaturePlatform();
+      BiometricSignaturePlatform.instance = fakePlatform;
+
+      final result = await biometricSignature.deleteKeys(
+        keyAlias: 'nonexistent',
+      );
+      expect(result, true);
     });
   });
 }

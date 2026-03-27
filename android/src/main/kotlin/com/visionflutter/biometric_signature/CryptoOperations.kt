@@ -15,22 +15,25 @@ class CryptoOperations(
     private val fileIO: FileIOHelper
 ) {
 
-    fun getCipherForEncryption(): Cipher {
+    fun getCipherForEncryption(keyAlias: String?): Cipher {
         val keyStore = KeyStore.getInstance(Constants.KEYSTORE_PROVIDER).apply { load(null) }
-        val masterKey = keyStore.getKey(Constants.MASTER_KEY_ALIAS, null) as? SecretKey
+        val masterAlias = Constants.masterKeyAlias(keyAlias)
+        val masterKey = keyStore.getKey(masterAlias, null) as? SecretKey
             ?: throw IllegalStateException("Master key not found")
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, masterKey)
         return cipher
     }
 
-    fun getCipherForDecryption(): Cipher? {
-        val wrapped = fileIO.readFileIfExists(Constants.EC_WRAPPED_FILENAME) ?: return null
+    fun getCipherForDecryption(keyAlias: String?): Cipher? {
+        val wrappedFilename = Constants.ecWrappedFilename(keyAlias)
+        val wrapped = fileIO.readFileIfExists(wrappedFilename) ?: return null
         if (wrapped.size < Constants.GCM_IV_SIZE + 1 + Constants.GCM_TAG_BYTES) return null
 
         val iv = wrapped.copyOfRange(0, Constants.GCM_IV_SIZE)
         val keyStore = KeyStore.getInstance(Constants.KEYSTORE_PROVIDER).apply { load(null) }
-        val masterKey = keyStore.getKey(Constants.MASTER_KEY_ALIAS, null) as? SecretKey ?: return null
+        val masterAlias = Constants.masterKeyAlias(keyAlias)
+        val masterKey = keyStore.getKey(masterAlias, null) as? SecretKey ?: return null
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, masterKey, GCMParameterSpec(Constants.GCM_TAG_BITS, iv))
         return cipher
@@ -56,9 +59,10 @@ class CryptoOperations(
         }
     }
 
-    fun prepareSignature(mode: KeyMode): Pair<Signature, BiometricPrompt.CryptoObject> {
+    fun prepareSignature(keyAlias: String?, mode: KeyMode): Pair<Signature, BiometricPrompt.CryptoObject> {
         val keyStore = KeyStore.getInstance(Constants.KEYSTORE_PROVIDER).apply { load(null) }
-        val entry = keyStore.getEntry(Constants.BIOMETRIC_KEY_ALIAS, null) as? KeyStore.PrivateKeyEntry
+        val alias = Constants.biometricKeyAlias(keyAlias)
+        val entry = keyStore.getEntry(alias, null) as? KeyStore.PrivateKeyEntry
             ?: throw IllegalStateException("Signing key not found")
 
         val algorithm = when (mode) {
@@ -71,19 +75,22 @@ class CryptoOperations(
         return Pair(signature, BiometricPrompt.CryptoObject(signature))
     }
 
-    fun getSigningPublicKey(): PublicKey {
+    fun getSigningPublicKey(keyAlias: String?): PublicKey {
         val keyStore = KeyStore.getInstance(Constants.KEYSTORE_PROVIDER).apply { load(null) }
-        val entry = keyStore.getEntry(Constants.BIOMETRIC_KEY_ALIAS, null) as? KeyStore.PrivateKeyEntry
+        val alias = Constants.biometricKeyAlias(keyAlias)
+        val entry = keyStore.getEntry(alias, null) as? KeyStore.PrivateKeyEntry
             ?: throw IllegalStateException("Signing key not found")
         return entry.certificate.publicKey
     }
 
     fun performEciesDecryption(
+        keyAlias: String?,
         unwrapCipher: Cipher,
         payload: String,
         format: PayloadFormat
     ): String {
-        val wrapped = fileIO.readFileIfExists(Constants.EC_WRAPPED_FILENAME)
+        val wrappedFilename = Constants.ecWrappedFilename(keyAlias)
+        val wrapped = fileIO.readFileIfExists(wrappedFilename)
             ?: throw IllegalStateException("Encrypted EC key not found")
         if (wrapped.size < Constants.GCM_IV_SIZE + 1) throw IllegalStateException("Malformed wrapped blob")
 

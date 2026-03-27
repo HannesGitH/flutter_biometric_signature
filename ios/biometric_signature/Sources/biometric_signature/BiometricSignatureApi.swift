@@ -186,6 +186,8 @@ enum BiometricError: Int {
   case systemCanceled = 12
   /// Failed to show the biometric prompt (e.g., activity not available).
   case promptError = 13
+  /// A key with the specified alias already exists and failIfExists was set.
+  case keyAlreadyExists = 14
 }
 
 /// The cryptographic algorithm to use for key generation.
@@ -510,6 +512,12 @@ struct CreateKeysConfig: Hashable {
   var promptDescription: String? = nil
   /// [Android] Text for the cancel button in the biometric prompt.
   var cancelButtonText: String? = nil
+  /// [All platforms] When `true`, key creation will fail with
+  /// [BiometricError.keyAlreadyExists] if a key with the specified alias
+  /// (or the default alias) already exists.
+  ///
+  /// When `false` (default), existing keys are silently replaced.
+  var failIfExists: Bool? = nil
 
 
   // swift-format-ignore: AlwaysUseLowerCamelCase
@@ -522,6 +530,7 @@ struct CreateKeysConfig: Hashable {
     let promptSubtitle: String? = nilOrValue(pigeonVar_list[5])
     let promptDescription: String? = nilOrValue(pigeonVar_list[6])
     let cancelButtonText: String? = nilOrValue(pigeonVar_list[7])
+    let failIfExists: Bool? = nilOrValue(pigeonVar_list[8])
 
     return CreateKeysConfig(
       signatureType: signatureType,
@@ -531,7 +540,8 @@ struct CreateKeysConfig: Hashable {
       enableDecryption: enableDecryption,
       promptSubtitle: promptSubtitle,
       promptDescription: promptDescription,
-      cancelButtonText: cancelButtonText
+      cancelButtonText: cancelButtonText,
+      failIfExists: failIfExists
     )
   }
   func toList() -> [Any?] {
@@ -544,6 +554,7 @@ struct CreateKeysConfig: Hashable {
       promptSubtitle,
       promptDescription,
       cancelButtonText,
+      failIfExists,
     ]
   }
   static func == (lhs: CreateKeysConfig, rhs: CreateKeysConfig) -> Bool {
@@ -913,32 +924,45 @@ protocol BiometricSignatureApi {
   func biometricAuthAvailable(completion: @escaping (Result<BiometricAvailability, Error>) -> Void)
   /// Creates a new key pair.
   ///
+  /// [keyAlias] is an optional alias for the key. When null, the default
+  /// alias is used. Different aliases create independent key pairs.
   /// [config] contains platform-specific options. See [CreateKeysConfig].
   /// [keyFormat] specifies the output format for the public key.
   /// [promptMessage] is the message shown to the user during authentication.
-  func createKeys(config: CreateKeysConfig?, keyFormat: KeyFormat, promptMessage: String?, completion: @escaping (Result<KeyCreationResult, Error>) -> Void)
+  func createKeys(keyAlias: String?, config: CreateKeysConfig?, keyFormat: KeyFormat, promptMessage: String?, completion: @escaping (Result<KeyCreationResult, Error>) -> Void)
   /// Creates a signature.
   ///
   /// [payload] is the data to sign.
+  /// [keyAlias] specifies which key to sign with. Defaults to the default alias.
   /// [config] contains platform-specific options. See [CreateSignatureConfig].
   /// [signatureFormat] specifies the output format for the signature.
   /// [keyFormat] specifies the output format for the public key.
   /// [promptMessage] is the message shown to the user during authentication.
-  func createSignature(payload: String, config: CreateSignatureConfig?, signatureFormat: SignatureFormat, keyFormat: KeyFormat, promptMessage: String?, completion: @escaping (Result<SignatureResult, Error>) -> Void)
+  func createSignature(payload: String, keyAlias: String?, config: CreateSignatureConfig?, signatureFormat: SignatureFormat, keyFormat: KeyFormat, promptMessage: String?, completion: @escaping (Result<SignatureResult, Error>) -> Void)
   /// Decrypts data.
   ///
   /// Note: Not supported on Windows.
   /// [payload] is the encrypted data.
+  /// [keyAlias] specifies which key to decrypt with. Defaults to the default alias.
   /// [payloadFormat] specifies the format of the encrypted data.
   /// [config] contains platform-specific options. See [DecryptConfig].
   /// [promptMessage] is the message shown to the user during authentication.
-  func decrypt(payload: String, payloadFormat: PayloadFormat, config: DecryptConfig?, promptMessage: String?, completion: @escaping (Result<DecryptResult, Error>) -> Void)
-  /// Deletes keys.
-  func deleteKeys(completion: @escaping (Result<Bool, Error>) -> Void)
+  func decrypt(payload: String, keyAlias: String?, payloadFormat: PayloadFormat, config: DecryptConfig?, promptMessage: String?, completion: @escaping (Result<DecryptResult, Error>) -> Void)
+  /// Deletes keys for a specific alias.
+  ///
+  /// [keyAlias] specifies which key to delete. When null, deletes the
+  /// default alias only. Other aliases are not affected.
+  func deleteKeys(keyAlias: String?, completion: @escaping (Result<Bool, Error>) -> Void)
+  /// Deletes all biometric keys across all aliases.
+  ///
+  /// This is a destructive operation that removes every key managed by
+  /// this plugin. Use [deleteKeys] for targeted deletion.
+  func deleteAllKeys(completion: @escaping (Result<Bool, Error>) -> Void)
   /// Gets detailed information about existing biometric keys.
   ///
+  /// [keyAlias] specifies which key to query. Defaults to the default alias.
   /// Returns key metadata including algorithm, size, validity, and public keys.
-  func getKeyInfo(checkValidity: Bool, keyFormat: KeyFormat, completion: @escaping (Result<KeyInfo, Error>) -> Void)
+  func getKeyInfo(keyAlias: String?, checkValidity: Bool, keyFormat: KeyFormat, completion: @escaping (Result<KeyInfo, Error>) -> Void)
   /// Performs simple biometric authentication without cryptographic operations.
   ///
   /// This is useful for:
@@ -977,6 +1001,8 @@ class BiometricSignatureApiSetup {
     }
     /// Creates a new key pair.
     ///
+    /// [keyAlias] is an optional alias for the key. When null, the default
+    /// alias is used. Different aliases create independent key pairs.
     /// [config] contains platform-specific options. See [CreateKeysConfig].
     /// [keyFormat] specifies the output format for the public key.
     /// [promptMessage] is the message shown to the user during authentication.
@@ -984,10 +1010,11 @@ class BiometricSignatureApiSetup {
     if let api = api {
       createKeysChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
-        let configArg: CreateKeysConfig? = nilOrValue(args[0])
-        let keyFormatArg = args[1] as! KeyFormat
-        let promptMessageArg: String? = nilOrValue(args[2])
-        api.createKeys(config: configArg, keyFormat: keyFormatArg, promptMessage: promptMessageArg) { result in
+        let keyAliasArg: String? = nilOrValue(args[0])
+        let configArg: CreateKeysConfig? = nilOrValue(args[1])
+        let keyFormatArg = args[2] as! KeyFormat
+        let promptMessageArg: String? = nilOrValue(args[3])
+        api.createKeys(keyAlias: keyAliasArg, config: configArg, keyFormat: keyFormatArg, promptMessage: promptMessageArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))
@@ -1002,6 +1029,7 @@ class BiometricSignatureApiSetup {
     /// Creates a signature.
     ///
     /// [payload] is the data to sign.
+    /// [keyAlias] specifies which key to sign with. Defaults to the default alias.
     /// [config] contains platform-specific options. See [CreateSignatureConfig].
     /// [signatureFormat] specifies the output format for the signature.
     /// [keyFormat] specifies the output format for the public key.
@@ -1011,11 +1039,12 @@ class BiometricSignatureApiSetup {
       createSignatureChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let payloadArg = args[0] as! String
-        let configArg: CreateSignatureConfig? = nilOrValue(args[1])
-        let signatureFormatArg = args[2] as! SignatureFormat
-        let keyFormatArg = args[3] as! KeyFormat
-        let promptMessageArg: String? = nilOrValue(args[4])
-        api.createSignature(payload: payloadArg, config: configArg, signatureFormat: signatureFormatArg, keyFormat: keyFormatArg, promptMessage: promptMessageArg) { result in
+        let keyAliasArg: String? = nilOrValue(args[1])
+        let configArg: CreateSignatureConfig? = nilOrValue(args[2])
+        let signatureFormatArg = args[3] as! SignatureFormat
+        let keyFormatArg = args[4] as! KeyFormat
+        let promptMessageArg: String? = nilOrValue(args[5])
+        api.createSignature(payload: payloadArg, keyAlias: keyAliasArg, config: configArg, signatureFormat: signatureFormatArg, keyFormat: keyFormatArg, promptMessage: promptMessageArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))
@@ -1031,6 +1060,7 @@ class BiometricSignatureApiSetup {
     ///
     /// Note: Not supported on Windows.
     /// [payload] is the encrypted data.
+    /// [keyAlias] specifies which key to decrypt with. Defaults to the default alias.
     /// [payloadFormat] specifies the format of the encrypted data.
     /// [config] contains platform-specific options. See [DecryptConfig].
     /// [promptMessage] is the message shown to the user during authentication.
@@ -1039,10 +1069,11 @@ class BiometricSignatureApiSetup {
       decryptChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
         let payloadArg = args[0] as! String
-        let payloadFormatArg = args[1] as! PayloadFormat
-        let configArg: DecryptConfig? = nilOrValue(args[2])
-        let promptMessageArg: String? = nilOrValue(args[3])
-        api.decrypt(payload: payloadArg, payloadFormat: payloadFormatArg, config: configArg, promptMessage: promptMessageArg) { result in
+        let keyAliasArg: String? = nilOrValue(args[1])
+        let payloadFormatArg = args[2] as! PayloadFormat
+        let configArg: DecryptConfig? = nilOrValue(args[3])
+        let promptMessageArg: String? = nilOrValue(args[4])
+        api.decrypt(payload: payloadArg, keyAlias: keyAliasArg, payloadFormat: payloadFormatArg, config: configArg, promptMessage: promptMessageArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))
@@ -1054,11 +1085,16 @@ class BiometricSignatureApiSetup {
     } else {
       decryptChannel.setMessageHandler(nil)
     }
-    /// Deletes keys.
+    /// Deletes keys for a specific alias.
+    ///
+    /// [keyAlias] specifies which key to delete. When null, deletes the
+    /// default alias only. Other aliases are not affected.
     let deleteKeysChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.deleteKeys\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
-      deleteKeysChannel.setMessageHandler { _, reply in
-        api.deleteKeys { result in
+      deleteKeysChannel.setMessageHandler { message, reply in
+        let args = message as! [Any?]
+        let keyAliasArg: String? = nilOrValue(args[0])
+        api.deleteKeys(keyAlias: keyAliasArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))
@@ -1070,16 +1106,37 @@ class BiometricSignatureApiSetup {
     } else {
       deleteKeysChannel.setMessageHandler(nil)
     }
+    /// Deletes all biometric keys across all aliases.
+    ///
+    /// This is a destructive operation that removes every key managed by
+    /// this plugin. Use [deleteKeys] for targeted deletion.
+    let deleteAllKeysChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.deleteAllKeys\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      deleteAllKeysChannel.setMessageHandler { _, reply in
+        api.deleteAllKeys { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      deleteAllKeysChannel.setMessageHandler(nil)
+    }
     /// Gets detailed information about existing biometric keys.
     ///
+    /// [keyAlias] specifies which key to query. Defaults to the default alias.
     /// Returns key metadata including algorithm, size, validity, and public keys.
     let getKeyInfoChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.getKeyInfo\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
     if let api = api {
       getKeyInfoChannel.setMessageHandler { message, reply in
         let args = message as! [Any?]
-        let checkValidityArg = args[0] as! Bool
-        let keyFormatArg = args[1] as! KeyFormat
-        api.getKeyInfo(checkValidity: checkValidityArg, keyFormat: keyFormatArg) { result in
+        let keyAliasArg: String? = nilOrValue(args[0])
+        let checkValidityArg = args[1] as! Bool
+        let keyFormatArg = args[2] as! KeyFormat
+        api.getKeyInfo(keyAlias: keyAliasArg, checkValidity: checkValidityArg, keyFormat: keyFormatArg) { result in
           switch result {
           case .success(let res):
             reply(wrapResult(res))

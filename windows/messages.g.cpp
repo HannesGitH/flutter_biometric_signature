@@ -785,7 +785,8 @@ CreateKeysConfig::CreateKeysConfig(
   const bool* enable_decryption,
   const std::string* prompt_subtitle,
   const std::string* prompt_description,
-  const std::string* cancel_button_text)
+  const std::string* cancel_button_text,
+  const bool* fail_if_exists)
  : signature_type_(signature_type ? std::optional<SignatureType>(*signature_type) : std::nullopt),
     enforce_biometric_(enforce_biometric ? std::optional<bool>(*enforce_biometric) : std::nullopt),
     set_invalidated_by_biometric_enrollment_(set_invalidated_by_biometric_enrollment ? std::optional<bool>(*set_invalidated_by_biometric_enrollment) : std::nullopt),
@@ -793,7 +794,8 @@ CreateKeysConfig::CreateKeysConfig(
     enable_decryption_(enable_decryption ? std::optional<bool>(*enable_decryption) : std::nullopt),
     prompt_subtitle_(prompt_subtitle ? std::optional<std::string>(*prompt_subtitle) : std::nullopt),
     prompt_description_(prompt_description ? std::optional<std::string>(*prompt_description) : std::nullopt),
-    cancel_button_text_(cancel_button_text ? std::optional<std::string>(*cancel_button_text) : std::nullopt) {}
+    cancel_button_text_(cancel_button_text ? std::optional<std::string>(*cancel_button_text) : std::nullopt),
+    fail_if_exists_(fail_if_exists ? std::optional<bool>(*fail_if_exists) : std::nullopt) {}
 
 const SignatureType* CreateKeysConfig::signature_type() const {
   return signature_type_ ? &(*signature_type_) : nullptr;
@@ -899,9 +901,22 @@ void CreateKeysConfig::set_cancel_button_text(std::string_view value_arg) {
 }
 
 
+const bool* CreateKeysConfig::fail_if_exists() const {
+  return fail_if_exists_ ? &(*fail_if_exists_) : nullptr;
+}
+
+void CreateKeysConfig::set_fail_if_exists(const bool* value_arg) {
+  fail_if_exists_ = value_arg ? std::optional<bool>(*value_arg) : std::nullopt;
+}
+
+void CreateKeysConfig::set_fail_if_exists(bool value_arg) {
+  fail_if_exists_ = value_arg;
+}
+
+
 EncodableList CreateKeysConfig::ToEncodableList() const {
   EncodableList list;
-  list.reserve(8);
+  list.reserve(9);
   list.push_back(signature_type_ ? CustomEncodableValue(*signature_type_) : EncodableValue());
   list.push_back(enforce_biometric_ ? EncodableValue(*enforce_biometric_) : EncodableValue());
   list.push_back(set_invalidated_by_biometric_enrollment_ ? EncodableValue(*set_invalidated_by_biometric_enrollment_) : EncodableValue());
@@ -910,6 +925,7 @@ EncodableList CreateKeysConfig::ToEncodableList() const {
   list.push_back(prompt_subtitle_ ? EncodableValue(*prompt_subtitle_) : EncodableValue());
   list.push_back(prompt_description_ ? EncodableValue(*prompt_description_) : EncodableValue());
   list.push_back(cancel_button_text_ ? EncodableValue(*cancel_button_text_) : EncodableValue());
+  list.push_back(fail_if_exists_ ? EncodableValue(*fail_if_exists_) : EncodableValue());
   return list;
 }
 
@@ -946,6 +962,10 @@ CreateKeysConfig CreateKeysConfig::FromEncodableList(const EncodableList& list) 
   auto& encodable_cancel_button_text = list[7];
   if (!encodable_cancel_button_text.IsNull()) {
     decoded.set_cancel_button_text(std::get<std::string>(encodable_cancel_button_text));
+  }
+  auto& encodable_fail_if_exists = list[8];
+  if (!encodable_fail_if_exists.IsNull()) {
+    decoded.set_fail_if_exists(std::get<bool>(encodable_fail_if_exists));
   }
   return decoded;
 }
@@ -1593,17 +1613,19 @@ void BiometricSignatureApi::SetUp(
       channel.SetMessageHandler([api](const EncodableValue& message, const flutter::MessageReply<EncodableValue>& reply) {
         try {
           const auto& args = std::get<EncodableList>(message);
-          const auto& encodable_config_arg = args.at(0);
+          const auto& encodable_key_alias_arg = args.at(0);
+          const auto* key_alias_arg = std::get_if<std::string>(&encodable_key_alias_arg);
+          const auto& encodable_config_arg = args.at(1);
           const auto* config_arg = encodable_config_arg.IsNull() ? nullptr : &(std::any_cast<const CreateKeysConfig&>(std::get<CustomEncodableValue>(encodable_config_arg)));
-          const auto& encodable_key_format_arg = args.at(1);
+          const auto& encodable_key_format_arg = args.at(2);
           if (encodable_key_format_arg.IsNull()) {
             reply(WrapError("key_format_arg unexpectedly null."));
             return;
           }
           const auto& key_format_arg = std::any_cast<const KeyFormat&>(std::get<CustomEncodableValue>(encodable_key_format_arg));
-          const auto& encodable_prompt_message_arg = args.at(2);
+          const auto& encodable_prompt_message_arg = args.at(3);
           const auto* prompt_message_arg = std::get_if<std::string>(&encodable_prompt_message_arg);
-          api->CreateKeys(config_arg, key_format_arg, prompt_message_arg, [reply](ErrorOr<KeyCreationResult>&& output) {
+          api->CreateKeys(key_alias_arg, config_arg, key_format_arg, prompt_message_arg, [reply](ErrorOr<KeyCreationResult>&& output) {
             if (output.has_error()) {
               reply(WrapError(output.error()));
               return;
@@ -1632,23 +1654,25 @@ void BiometricSignatureApi::SetUp(
             return;
           }
           const auto& payload_arg = std::get<std::string>(encodable_payload_arg);
-          const auto& encodable_config_arg = args.at(1);
+          const auto& encodable_key_alias_arg = args.at(1);
+          const auto* key_alias_arg = std::get_if<std::string>(&encodable_key_alias_arg);
+          const auto& encodable_config_arg = args.at(2);
           const auto* config_arg = encodable_config_arg.IsNull() ? nullptr : &(std::any_cast<const CreateSignatureConfig&>(std::get<CustomEncodableValue>(encodable_config_arg)));
-          const auto& encodable_signature_format_arg = args.at(2);
+          const auto& encodable_signature_format_arg = args.at(3);
           if (encodable_signature_format_arg.IsNull()) {
             reply(WrapError("signature_format_arg unexpectedly null."));
             return;
           }
           const auto& signature_format_arg = std::any_cast<const SignatureFormat&>(std::get<CustomEncodableValue>(encodable_signature_format_arg));
-          const auto& encodable_key_format_arg = args.at(3);
+          const auto& encodable_key_format_arg = args.at(4);
           if (encodable_key_format_arg.IsNull()) {
             reply(WrapError("key_format_arg unexpectedly null."));
             return;
           }
           const auto& key_format_arg = std::any_cast<const KeyFormat&>(std::get<CustomEncodableValue>(encodable_key_format_arg));
-          const auto& encodable_prompt_message_arg = args.at(4);
+          const auto& encodable_prompt_message_arg = args.at(5);
           const auto* prompt_message_arg = std::get_if<std::string>(&encodable_prompt_message_arg);
-          api->CreateSignature(payload_arg, config_arg, signature_format_arg, key_format_arg, prompt_message_arg, [reply](ErrorOr<SignatureResult>&& output) {
+          api->CreateSignature(payload_arg, key_alias_arg, config_arg, signature_format_arg, key_format_arg, prompt_message_arg, [reply](ErrorOr<SignatureResult>&& output) {
             if (output.has_error()) {
               reply(WrapError(output.error()));
               return;
@@ -1677,17 +1701,19 @@ void BiometricSignatureApi::SetUp(
             return;
           }
           const auto& payload_arg = std::get<std::string>(encodable_payload_arg);
-          const auto& encodable_payload_format_arg = args.at(1);
+          const auto& encodable_key_alias_arg = args.at(1);
+          const auto* key_alias_arg = std::get_if<std::string>(&encodable_key_alias_arg);
+          const auto& encodable_payload_format_arg = args.at(2);
           if (encodable_payload_format_arg.IsNull()) {
             reply(WrapError("payload_format_arg unexpectedly null."));
             return;
           }
           const auto& payload_format_arg = std::any_cast<const PayloadFormat&>(std::get<CustomEncodableValue>(encodable_payload_format_arg));
-          const auto& encodable_config_arg = args.at(2);
+          const auto& encodable_config_arg = args.at(3);
           const auto* config_arg = encodable_config_arg.IsNull() ? nullptr : &(std::any_cast<const DecryptConfig&>(std::get<CustomEncodableValue>(encodable_config_arg)));
-          const auto& encodable_prompt_message_arg = args.at(3);
+          const auto& encodable_prompt_message_arg = args.at(4);
           const auto* prompt_message_arg = std::get_if<std::string>(&encodable_prompt_message_arg);
-          api->Decrypt(payload_arg, payload_format_arg, config_arg, prompt_message_arg, [reply](ErrorOr<DecryptResult>&& output) {
+          api->Decrypt(payload_arg, key_alias_arg, payload_format_arg, config_arg, prompt_message_arg, [reply](ErrorOr<DecryptResult>&& output) {
             if (output.has_error()) {
               reply(WrapError(output.error()));
               return;
@@ -1709,7 +1735,32 @@ void BiometricSignatureApi::SetUp(
     if (api != nullptr) {
       channel.SetMessageHandler([api](const EncodableValue& message, const flutter::MessageReply<EncodableValue>& reply) {
         try {
-          api->DeleteKeys([reply](ErrorOr<bool>&& output) {
+          const auto& args = std::get<EncodableList>(message);
+          const auto& encodable_key_alias_arg = args.at(0);
+          const auto* key_alias_arg = std::get_if<std::string>(&encodable_key_alias_arg);
+          api->DeleteKeys(key_alias_arg, [reply](ErrorOr<bool>&& output) {
+            if (output.has_error()) {
+              reply(WrapError(output.error()));
+              return;
+            }
+            EncodableList wrapped;
+            wrapped.push_back(EncodableValue(std::move(output).TakeValue()));
+            reply(EncodableValue(std::move(wrapped)));
+          });
+        } catch (const std::exception& exception) {
+          reply(WrapError(exception.what()));
+        }
+      });
+    } else {
+      channel.SetMessageHandler(nullptr);
+    }
+  }
+  {
+    BasicMessageChannel<> channel(binary_messenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.deleteAllKeys" + prepended_suffix, &GetCodec());
+    if (api != nullptr) {
+      channel.SetMessageHandler([api](const EncodableValue& message, const flutter::MessageReply<EncodableValue>& reply) {
+        try {
+          api->DeleteAllKeys([reply](ErrorOr<bool>&& output) {
             if (output.has_error()) {
               reply(WrapError(output.error()));
               return;
@@ -1732,19 +1783,21 @@ void BiometricSignatureApi::SetUp(
       channel.SetMessageHandler([api](const EncodableValue& message, const flutter::MessageReply<EncodableValue>& reply) {
         try {
           const auto& args = std::get<EncodableList>(message);
-          const auto& encodable_check_validity_arg = args.at(0);
+          const auto& encodable_key_alias_arg = args.at(0);
+          const auto* key_alias_arg = std::get_if<std::string>(&encodable_key_alias_arg);
+          const auto& encodable_check_validity_arg = args.at(1);
           if (encodable_check_validity_arg.IsNull()) {
             reply(WrapError("check_validity_arg unexpectedly null."));
             return;
           }
           const auto& check_validity_arg = std::get<bool>(encodable_check_validity_arg);
-          const auto& encodable_key_format_arg = args.at(1);
+          const auto& encodable_key_format_arg = args.at(2);
           if (encodable_key_format_arg.IsNull()) {
             reply(WrapError("key_format_arg unexpectedly null."));
             return;
           }
           const auto& key_format_arg = std::any_cast<const KeyFormat&>(std::get<CustomEncodableValue>(encodable_key_format_arg));
-          api->GetKeyInfo(check_validity_arg, key_format_arg, [reply](ErrorOr<KeyInfo>&& output) {
+          api->GetKeyInfo(key_alias_arg, check_validity_arg, key_format_arg, [reply](ErrorOr<KeyInfo>&& output) {
             if (output.has_error()) {
               reply(WrapError(output.error()));
               return;

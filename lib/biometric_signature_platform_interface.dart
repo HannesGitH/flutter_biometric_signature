@@ -34,6 +34,7 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
 
   /// Creates a new key pair.
   Future<KeyCreationResult> createKeys(
+    String? keyAlias,
     CreateKeysConfig? config,
     KeyFormat keyFormat,
     String? promptMessage,
@@ -44,6 +45,7 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
   /// Creates a signature.
   Future<SignatureResult> createSignature(
     String payload,
+    String? keyAlias,
     CreateSignatureConfig? config,
     SignatureFormat signatureFormat,
     KeyFormat keyFormat,
@@ -55,6 +57,7 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
   /// Decrypts data.
   Future<DecryptResult> decrypt(
     String payload,
+    String? keyAlias,
     PayloadFormat payloadFormat,
     DecryptConfig? config,
     String? promptMessage,
@@ -62,13 +65,22 @@ abstract class BiometricSignaturePlatform extends PlatformInterface {
     throw UnimplementedError('decrypt() has not been implemented.');
   }
 
-  /// Deletes keys.
-  Future<bool> deleteKeys() {
+  /// Deletes keys for a specific alias.
+  Future<bool> deleteKeys(String? keyAlias) {
     throw UnimplementedError('deleteKeys() has not been implemented.');
   }
 
+  /// Deletes all biometric keys across all aliases.
+  Future<bool> deleteAllKeys() {
+    throw UnimplementedError('deleteAllKeys() has not been implemented.');
+  }
+
   /// Gets detailed information about existing biometric keys.
-  Future<KeyInfo> getKeyInfo(bool checkValidity, KeyFormat keyFormat) {
+  Future<KeyInfo> getKeyInfo(
+    String? keyAlias,
+    bool checkValidity,
+    KeyFormat keyFormat,
+  ) {
     throw UnimplementedError('getKeyInfo() has not been implemented.');
   }
 
@@ -91,16 +103,18 @@ class _PigeonBiometricSignature extends BiometricSignaturePlatform {
 
   @override
   Future<KeyCreationResult> createKeys(
+    String? keyAlias,
     CreateKeysConfig? config,
     KeyFormat keyFormat,
     String? promptMessage,
   ) {
-    return _api.createKeys(config, keyFormat, promptMessage);
+    return _api.createKeys(keyAlias, config, keyFormat, promptMessage);
   }
 
   @override
   Future<SignatureResult> createSignature(
     String payload,
+    String? keyAlias,
     CreateSignatureConfig? config,
     SignatureFormat signatureFormat,
     KeyFormat keyFormat,
@@ -108,6 +122,7 @@ class _PigeonBiometricSignature extends BiometricSignaturePlatform {
   ) {
     return _api.createSignature(
       payload,
+      keyAlias,
       config,
       signatureFormat,
       keyFormat,
@@ -118,21 +133,31 @@ class _PigeonBiometricSignature extends BiometricSignaturePlatform {
   @override
   Future<DecryptResult> decrypt(
     String payload,
+    String? keyAlias,
     PayloadFormat payloadFormat,
     DecryptConfig? config,
     String? promptMessage,
   ) {
-    return _api.decrypt(payload, payloadFormat, config, promptMessage);
+    return _api.decrypt(payload, keyAlias, payloadFormat, config, promptMessage);
   }
 
   @override
-  Future<bool> deleteKeys() {
-    return _api.deleteKeys();
+  Future<bool> deleteKeys(String? keyAlias) {
+    return _api.deleteKeys(keyAlias);
   }
 
   @override
-  Future<KeyInfo> getKeyInfo(bool checkValidity, KeyFormat keyFormat) {
-    return _api.getKeyInfo(checkValidity, keyFormat);
+  Future<bool> deleteAllKeys() {
+    return _api.deleteAllKeys();
+  }
+
+  @override
+  Future<KeyInfo> getKeyInfo(
+    String? keyAlias,
+    bool checkValidity,
+    KeyFormat keyFormat,
+  ) {
+    return _api.getKeyInfo(keyAlias, checkValidity, keyFormat);
   }
 
   @override
