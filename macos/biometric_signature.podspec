@@ -20,7 +20,7 @@ Create cryptographic signatures using Secure Enclave, StrongBox, and Windows Hel
   # data, update the PrivacyInfo.xcprivacy file to describe your plugin's
   # privacy impact, and then uncomment this line. For more information,
   # see https://developer.apple.com/documentation/bundleresources/privacy_manifest_files
-  s.resource_bundles = {'biometric_signature_privacy' => ['biometric_signature/Sources/biometric_signature/PrivacyInfo.xcprivacy']}
+  s.resource_bundles = {'biometric_signature_privacy' => ['../ios/biometric_signature/Sources/biometric_signature/PrivacyInfo.xcprivacy']}
 
   s.dependency 'FlutterMacOS'
 

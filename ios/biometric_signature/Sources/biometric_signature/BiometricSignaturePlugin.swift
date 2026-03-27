@@ -1,12 +1,24 @@
+#if os(macOS)
+import FlutterMacOS
+import Cocoa
+#else
 import Flutter
 import UIKit
+#endif
 import LocalAuthentication
 import Security
 
 private enum Constants {
+#if os(macOS)
+    private static var appPrefix: String { Bundle.main.bundleIdentifier ?? "com.visionflutter.biometric_signature" }
+    static var biometricKeyAlias: String { "\(appPrefix).biometric_key" }
+    static var ecKeyAlias: Data { "\(appPrefix).eckey".data(using: .utf8)! }
+    static var invalidationSettingKey: String { "\(appPrefix).invalidation_setting" }
+#else
     static let biometricKeyAlias = "biometric_key"
     static let ecKeyAlias = "com.visionflutter.eckey".data(using: .utf8)!
     static let invalidationSettingKey = "com.visionflutter.biometric_signature.invalidation_setting"
+#endif
 }
 
 // MARK: - Domain State (biometry change detection)
@@ -124,7 +136,11 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     
     public static func register(with registrar: FlutterPluginRegistrar) {
         let instance = BiometricSignaturePlugin()
+#if os(macOS)
+        BiometricSignatureApiSetup.setUp(binaryMessenger: registrar.messenger, api: instance)
+#else
         BiometricSignatureApiSetup.setUp(binaryMessenger: registrar.messenger(), api: instance)
+#endif
     }
 
 
@@ -137,7 +153,14 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         
         var availableBiometrics: [BiometricType?] = []
         if canEvaluate {
-             // Basic detection based on biometryType
+#if os(macOS)
+             if #available(macOS 10.15, *) {
+                 switch context.biometryType {
+                 case .touchID: availableBiometrics.append(.fingerprint)
+                 default: break
+                 }
+             }
+#else
              if #available(iOS 11.0, *) {
                  switch context.biometryType {
                  case .faceID: availableBiometrics.append(.face)
@@ -145,6 +168,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
                  default: break
                  }
              }
+#endif
         }
         
         let hasEnrolled = error?.code != LAError.biometryNotEnrolled.rawValue
@@ -218,8 +242,15 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         }
         
         let prompt = promptMessage ?? "Authenticate"
-        let shouldMigrate = config?.shouldMigrate ?? false
 
+#if os(macOS)
+        if hasRsaKey() {
+             performRsaSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
+        } else {
+             performEcSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
+        }
+#else
+        let shouldMigrate = config?.shouldMigrate ?? false
         if hasRsaKey() {
              performRsaSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
         } else if shouldMigrate {
@@ -237,8 +268,10 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
              // Fallback to EC signing
              performEcSigning(dataToSign: dataToSign, prompt: prompt, signatureFormat: signatureFormat, keyFormat: keyFormat, completion: completion)
         }
+#endif
     }
 
+#if os(iOS)
     private func migrateToSecureEnclave(prompt: String, completion: @escaping (Result<Void, Error>) -> Void) {
         // Generate EC key pair in Secure Enclave
         let ecAccessControl = SecAccessControlCreateWithFlags(
@@ -335,6 +368,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
 
         completion(.success(()))
     }
+#endif
 
     func decrypt(
         payload: String,
@@ -344,6 +378,13 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         completion: @escaping (Result<DecryptResult, Error>) -> Void
     ) {
         let prompt = promptMessage ?? "Authenticate"
+#if os(macOS)
+        if hasRsaKey() {
+             performRsaDecryption(payload: payload, payloadFormat: payloadFormat, prompt: prompt, completion: completion)
+        } else {
+             performEcDecryption(payload: payload, payloadFormat: payloadFormat, prompt: prompt, completion: completion)
+        }
+#else
         let shouldMigrate = config?.shouldMigrate ?? false
         
         if hasRsaKey() {
@@ -361,6 +402,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         } else {
              performEcDecryption(payload: payload, payloadFormat: payloadFormat, prompt: prompt, completion: completion)
         }
+#endif
     }
 
     func deleteKeys(completion: @escaping (Result<Bool, Error>) -> Void) {
