@@ -19,6 +19,8 @@ object ErrorMapper {
             BiometricError.NOT_SUPPORTED -> "Operation not supported on this device"
             BiometricError.INVALID_INPUT -> "Invalid input provided"
             BiometricError.PROMPT_ERROR -> "Biometric prompt error"
+            BiometricError.KEY_ALREADY_EXISTS -> "Key already exists"
+            BiometricError.FALLBACK_SELECTED -> "Fallback option selected"
             else -> "Biometric operation failed"
         }
     }

@@ -28,6 +28,63 @@ FlutterError CreateConnectionError(const std::string channel_name) {
       EncodableValue(""));
 }
 
+// BiometricFallbackOption
+
+BiometricFallbackOption::BiometricFallbackOption() {}
+
+BiometricFallbackOption::BiometricFallbackOption(
+  const std::string* text,
+  const std::string* icon_name)
+ : text_(text ? std::optional<std::string>(*text) : std::nullopt),
+    icon_name_(icon_name ? std::optional<std::string>(*icon_name) : std::nullopt) {}
+
+const std::string* BiometricFallbackOption::text() const {
+  return text_ ? &(*text_) : nullptr;
+}
+
+void BiometricFallbackOption::set_text(const std::string_view* value_arg) {
+  text_ = value_arg ? std::optional<std::string>(*value_arg) : std::nullopt;
+}
+
+void BiometricFallbackOption::set_text(std::string_view value_arg) {
+  text_ = value_arg;
+}
+
+
+const std::string* BiometricFallbackOption::icon_name() const {
+  return icon_name_ ? &(*icon_name_) : nullptr;
+}
+
+void BiometricFallbackOption::set_icon_name(const std::string_view* value_arg) {
+  icon_name_ = value_arg ? std::optional<std::string>(*value_arg) : std::nullopt;
+}
+
+void BiometricFallbackOption::set_icon_name(std::string_view value_arg) {
+  icon_name_ = value_arg;
+}
+
+
+EncodableList BiometricFallbackOption::ToEncodableList() const {
+  EncodableList list;
+  list.reserve(2);
+  list.push_back(text_ ? EncodableValue(*text_) : EncodableValue());
+  list.push_back(icon_name_ ? EncodableValue(*icon_name_) : EncodableValue());
+  return list;
+}
+
+BiometricFallbackOption BiometricFallbackOption::FromEncodableList(const EncodableList& list) {
+  BiometricFallbackOption decoded;
+  auto& encodable_text = list[0];
+  if (!encodable_text.IsNull()) {
+    decoded.set_text(std::get<std::string>(encodable_text));
+  }
+  auto& encodable_icon_name = list[1];
+  if (!encodable_icon_name.IsNull()) {
+    decoded.set_icon_name(std::get<std::string>(encodable_icon_name));
+  }
+  return decoded;
+}
+
 // BiometricAvailability
 
 BiometricAvailability::BiometricAvailability() {}
@@ -353,14 +410,18 @@ SignatureResult::SignatureResult(
   const std::string* error,
   const BiometricError* code,
   const std::string* algorithm,
-  const int64_t* key_size)
+  const int64_t* key_size,
+  const int64_t* selected_fallback_index,
+  const std::string* selected_fallback_text)
  : signature_(signature ? std::optional<std::string>(*signature) : std::nullopt),
     signature_bytes_(signature_bytes ? std::optional<std::vector<uint8_t>>(*signature_bytes) : std::nullopt),
     public_key_(public_key ? std::optional<std::string>(*public_key) : std::nullopt),
     error_(error ? std::optional<std::string>(*error) : std::nullopt),
     code_(code ? std::optional<BiometricError>(*code) : std::nullopt),
     algorithm_(algorithm ? std::optional<std::string>(*algorithm) : std::nullopt),
-    key_size_(key_size ? std::optional<int64_t>(*key_size) : std::nullopt) {}
+    key_size_(key_size ? std::optional<int64_t>(*key_size) : std::nullopt),
+    selected_fallback_index_(selected_fallback_index ? std::optional<int64_t>(*selected_fallback_index) : std::nullopt),
+    selected_fallback_text_(selected_fallback_text ? std::optional<std::string>(*selected_fallback_text) : std::nullopt) {}
 
 const std::string* SignatureResult::signature() const {
   return signature_ ? &(*signature_) : nullptr;
@@ -453,9 +514,35 @@ void SignatureResult::set_key_size(int64_t value_arg) {
 }
 
 
+const int64_t* SignatureResult::selected_fallback_index() const {
+  return selected_fallback_index_ ? &(*selected_fallback_index_) : nullptr;
+}
+
+void SignatureResult::set_selected_fallback_index(const int64_t* value_arg) {
+  selected_fallback_index_ = value_arg ? std::optional<int64_t>(*value_arg) : std::nullopt;
+}
+
+void SignatureResult::set_selected_fallback_index(int64_t value_arg) {
+  selected_fallback_index_ = value_arg;
+}
+
+
+const std::string* SignatureResult::selected_fallback_text() const {
+  return selected_fallback_text_ ? &(*selected_fallback_text_) : nullptr;
+}
+
+void SignatureResult::set_selected_fallback_text(const std::string_view* value_arg) {
+  selected_fallback_text_ = value_arg ? std::optional<std::string>(*value_arg) : std::nullopt;
+}
+
+void SignatureResult::set_selected_fallback_text(std::string_view value_arg) {
+  selected_fallback_text_ = value_arg;
+}
+
+
 EncodableList SignatureResult::ToEncodableList() const {
   EncodableList list;
-  list.reserve(7);
+  list.reserve(9);
   list.push_back(signature_ ? EncodableValue(*signature_) : EncodableValue());
   list.push_back(signature_bytes_ ? EncodableValue(*signature_bytes_) : EncodableValue());
   list.push_back(public_key_ ? EncodableValue(*public_key_) : EncodableValue());
@@ -463,6 +550,8 @@ EncodableList SignatureResult::ToEncodableList() const {
   list.push_back(code_ ? CustomEncodableValue(*code_) : EncodableValue());
   list.push_back(algorithm_ ? EncodableValue(*algorithm_) : EncodableValue());
   list.push_back(key_size_ ? EncodableValue(*key_size_) : EncodableValue());
+  list.push_back(selected_fallback_index_ ? EncodableValue(*selected_fallback_index_) : EncodableValue());
+  list.push_back(selected_fallback_text_ ? EncodableValue(*selected_fallback_text_) : EncodableValue());
   return list;
 }
 
@@ -496,6 +585,14 @@ SignatureResult SignatureResult::FromEncodableList(const EncodableList& list) {
   if (!encodable_key_size.IsNull()) {
     decoded.set_key_size(std::get<int64_t>(encodable_key_size));
   }
+  auto& encodable_selected_fallback_index = list[7];
+  if (!encodable_selected_fallback_index.IsNull()) {
+    decoded.set_selected_fallback_index(std::get<int64_t>(encodable_selected_fallback_index));
+  }
+  auto& encodable_selected_fallback_text = list[8];
+  if (!encodable_selected_fallback_text.IsNull()) {
+    decoded.set_selected_fallback_text(std::get<std::string>(encodable_selected_fallback_text));
+  }
   return decoded;
 }
 
@@ -506,10 +603,14 @@ DecryptResult::DecryptResult() {}
 DecryptResult::DecryptResult(
   const std::string* decrypted_data,
   const std::string* error,
-  const BiometricError* code)
+  const BiometricError* code,
+  const int64_t* selected_fallback_index,
+  const std::string* selected_fallback_text)
  : decrypted_data_(decrypted_data ? std::optional<std::string>(*decrypted_data) : std::nullopt),
     error_(error ? std::optional<std::string>(*error) : std::nullopt),
-    code_(code ? std::optional<BiometricError>(*code) : std::nullopt) {}
+    code_(code ? std::optional<BiometricError>(*code) : std::nullopt),
+    selected_fallback_index_(selected_fallback_index ? std::optional<int64_t>(*selected_fallback_index) : std::nullopt),
+    selected_fallback_text_(selected_fallback_text ? std::optional<std::string>(*selected_fallback_text) : std::nullopt) {}
 
 const std::string* DecryptResult::decrypted_data() const {
   return decrypted_data_ ? &(*decrypted_data_) : nullptr;
@@ -550,12 +651,40 @@ void DecryptResult::set_code(const BiometricError& value_arg) {
 }
 
 
+const int64_t* DecryptResult::selected_fallback_index() const {
+  return selected_fallback_index_ ? &(*selected_fallback_index_) : nullptr;
+}
+
+void DecryptResult::set_selected_fallback_index(const int64_t* value_arg) {
+  selected_fallback_index_ = value_arg ? std::optional<int64_t>(*value_arg) : std::nullopt;
+}
+
+void DecryptResult::set_selected_fallback_index(int64_t value_arg) {
+  selected_fallback_index_ = value_arg;
+}
+
+
+const std::string* DecryptResult::selected_fallback_text() const {
+  return selected_fallback_text_ ? &(*selected_fallback_text_) : nullptr;
+}
+
+void DecryptResult::set_selected_fallback_text(const std::string_view* value_arg) {
+  selected_fallback_text_ = value_arg ? std::optional<std::string>(*value_arg) : std::nullopt;
+}
+
+void DecryptResult::set_selected_fallback_text(std::string_view value_arg) {
+  selected_fallback_text_ = value_arg;
+}
+
+
 EncodableList DecryptResult::ToEncodableList() const {
   EncodableList list;
-  list.reserve(3);
+  list.reserve(5);
   list.push_back(decrypted_data_ ? EncodableValue(*decrypted_data_) : EncodableValue());
   list.push_back(error_ ? EncodableValue(*error_) : EncodableValue());
   list.push_back(code_ ? CustomEncodableValue(*code_) : EncodableValue());
+  list.push_back(selected_fallback_index_ ? EncodableValue(*selected_fallback_index_) : EncodableValue());
+  list.push_back(selected_fallback_text_ ? EncodableValue(*selected_fallback_text_) : EncodableValue());
   return list;
 }
 
@@ -572,6 +701,14 @@ DecryptResult DecryptResult::FromEncodableList(const EncodableList& list) {
   auto& encodable_code = list[2];
   if (!encodable_code.IsNull()) {
     decoded.set_code(std::any_cast<const BiometricError&>(std::get<CustomEncodableValue>(encodable_code)));
+  }
+  auto& encodable_selected_fallback_index = list[3];
+  if (!encodable_selected_fallback_index.IsNull()) {
+    decoded.set_selected_fallback_index(std::get<int64_t>(encodable_selected_fallback_index));
+  }
+  auto& encodable_selected_fallback_text = list[4];
+  if (!encodable_selected_fallback_text.IsNull()) {
+    decoded.set_selected_fallback_text(std::get<std::string>(encodable_selected_fallback_text));
   }
   return decoded;
 }
@@ -786,7 +923,8 @@ CreateKeysConfig::CreateKeysConfig(
   const std::string* prompt_subtitle,
   const std::string* prompt_description,
   const std::string* cancel_button_text,
-  const bool* fail_if_exists)
+  const bool* fail_if_exists,
+  const EncodableList* fallback_options)
  : signature_type_(signature_type ? std::optional<SignatureType>(*signature_type) : std::nullopt),
     enforce_biometric_(enforce_biometric ? std::optional<bool>(*enforce_biometric) : std::nullopt),
     set_invalidated_by_biometric_enrollment_(set_invalidated_by_biometric_enrollment ? std::optional<bool>(*set_invalidated_by_biometric_enrollment) : std::nullopt),
@@ -795,7 +933,8 @@ CreateKeysConfig::CreateKeysConfig(
     prompt_subtitle_(prompt_subtitle ? std::optional<std::string>(*prompt_subtitle) : std::nullopt),
     prompt_description_(prompt_description ? std::optional<std::string>(*prompt_description) : std::nullopt),
     cancel_button_text_(cancel_button_text ? std::optional<std::string>(*cancel_button_text) : std::nullopt),
-    fail_if_exists_(fail_if_exists ? std::optional<bool>(*fail_if_exists) : std::nullopt) {}
+    fail_if_exists_(fail_if_exists ? std::optional<bool>(*fail_if_exists) : std::nullopt),
+    fallback_options_(fallback_options ? std::optional<EncodableList>(*fallback_options) : std::nullopt) {}
 
 const SignatureType* CreateKeysConfig::signature_type() const {
   return signature_type_ ? &(*signature_type_) : nullptr;
@@ -914,9 +1053,22 @@ void CreateKeysConfig::set_fail_if_exists(bool value_arg) {
 }
 
 
+const EncodableList* CreateKeysConfig::fallback_options() const {
+  return fallback_options_ ? &(*fallback_options_) : nullptr;
+}
+
+void CreateKeysConfig::set_fallback_options(const EncodableList* value_arg) {
+  fallback_options_ = value_arg ? std::optional<EncodableList>(*value_arg) : std::nullopt;
+}
+
+void CreateKeysConfig::set_fallback_options(const EncodableList& value_arg) {
+  fallback_options_ = value_arg;
+}
+
+
 EncodableList CreateKeysConfig::ToEncodableList() const {
   EncodableList list;
-  list.reserve(9);
+  list.reserve(10);
   list.push_back(signature_type_ ? CustomEncodableValue(*signature_type_) : EncodableValue());
   list.push_back(enforce_biometric_ ? EncodableValue(*enforce_biometric_) : EncodableValue());
   list.push_back(set_invalidated_by_biometric_enrollment_ ? EncodableValue(*set_invalidated_by_biometric_enrollment_) : EncodableValue());
@@ -926,6 +1078,7 @@ EncodableList CreateKeysConfig::ToEncodableList() const {
   list.push_back(prompt_description_ ? EncodableValue(*prompt_description_) : EncodableValue());
   list.push_back(cancel_button_text_ ? EncodableValue(*cancel_button_text_) : EncodableValue());
   list.push_back(fail_if_exists_ ? EncodableValue(*fail_if_exists_) : EncodableValue());
+  list.push_back(fallback_options_ ? EncodableValue(*fallback_options_) : EncodableValue());
   return list;
 }
 
@@ -967,6 +1120,10 @@ CreateKeysConfig CreateKeysConfig::FromEncodableList(const EncodableList& list) 
   if (!encodable_fail_if_exists.IsNull()) {
     decoded.set_fail_if_exists(std::get<bool>(encodable_fail_if_exists));
   }
+  auto& encodable_fallback_options = list[9];
+  if (!encodable_fallback_options.IsNull()) {
+    decoded.set_fallback_options(std::get<EncodableList>(encodable_fallback_options));
+  }
   return decoded;
 }
 
@@ -979,12 +1136,14 @@ CreateSignatureConfig::CreateSignatureConfig(
   const std::string* prompt_description,
   const std::string* cancel_button_text,
   const bool* allow_device_credentials,
-  const bool* should_migrate)
+  const bool* should_migrate,
+  const EncodableList* fallback_options)
  : prompt_subtitle_(prompt_subtitle ? std::optional<std::string>(*prompt_subtitle) : std::nullopt),
     prompt_description_(prompt_description ? std::optional<std::string>(*prompt_description) : std::nullopt),
     cancel_button_text_(cancel_button_text ? std::optional<std::string>(*cancel_button_text) : std::nullopt),
     allow_device_credentials_(allow_device_credentials ? std::optional<bool>(*allow_device_credentials) : std::nullopt),
-    should_migrate_(should_migrate ? std::optional<bool>(*should_migrate) : std::nullopt) {}
+    should_migrate_(should_migrate ? std::optional<bool>(*should_migrate) : std::nullopt),
+    fallback_options_(fallback_options ? std::optional<EncodableList>(*fallback_options) : std::nullopt) {}
 
 const std::string* CreateSignatureConfig::prompt_subtitle() const {
   return prompt_subtitle_ ? &(*prompt_subtitle_) : nullptr;
@@ -1051,14 +1210,28 @@ void CreateSignatureConfig::set_should_migrate(bool value_arg) {
 }
 
 
+const EncodableList* CreateSignatureConfig::fallback_options() const {
+  return fallback_options_ ? &(*fallback_options_) : nullptr;
+}
+
+void CreateSignatureConfig::set_fallback_options(const EncodableList* value_arg) {
+  fallback_options_ = value_arg ? std::optional<EncodableList>(*value_arg) : std::nullopt;
+}
+
+void CreateSignatureConfig::set_fallback_options(const EncodableList& value_arg) {
+  fallback_options_ = value_arg;
+}
+
+
 EncodableList CreateSignatureConfig::ToEncodableList() const {
   EncodableList list;
-  list.reserve(5);
+  list.reserve(6);
   list.push_back(prompt_subtitle_ ? EncodableValue(*prompt_subtitle_) : EncodableValue());
   list.push_back(prompt_description_ ? EncodableValue(*prompt_description_) : EncodableValue());
   list.push_back(cancel_button_text_ ? EncodableValue(*cancel_button_text_) : EncodableValue());
   list.push_back(allow_device_credentials_ ? EncodableValue(*allow_device_credentials_) : EncodableValue());
   list.push_back(should_migrate_ ? EncodableValue(*should_migrate_) : EncodableValue());
+  list.push_back(fallback_options_ ? EncodableValue(*fallback_options_) : EncodableValue());
   return list;
 }
 
@@ -1084,6 +1257,10 @@ CreateSignatureConfig CreateSignatureConfig::FromEncodableList(const EncodableLi
   if (!encodable_should_migrate.IsNull()) {
     decoded.set_should_migrate(std::get<bool>(encodable_should_migrate));
   }
+  auto& encodable_fallback_options = list[5];
+  if (!encodable_fallback_options.IsNull()) {
+    decoded.set_fallback_options(std::get<EncodableList>(encodable_fallback_options));
+  }
   return decoded;
 }
 
@@ -1096,12 +1273,14 @@ DecryptConfig::DecryptConfig(
   const std::string* prompt_description,
   const std::string* cancel_button_text,
   const bool* allow_device_credentials,
-  const bool* should_migrate)
+  const bool* should_migrate,
+  const EncodableList* fallback_options)
  : prompt_subtitle_(prompt_subtitle ? std::optional<std::string>(*prompt_subtitle) : std::nullopt),
     prompt_description_(prompt_description ? std::optional<std::string>(*prompt_description) : std::nullopt),
     cancel_button_text_(cancel_button_text ? std::optional<std::string>(*cancel_button_text) : std::nullopt),
     allow_device_credentials_(allow_device_credentials ? std::optional<bool>(*allow_device_credentials) : std::nullopt),
-    should_migrate_(should_migrate ? std::optional<bool>(*should_migrate) : std::nullopt) {}
+    should_migrate_(should_migrate ? std::optional<bool>(*should_migrate) : std::nullopt),
+    fallback_options_(fallback_options ? std::optional<EncodableList>(*fallback_options) : std::nullopt) {}
 
 const std::string* DecryptConfig::prompt_subtitle() const {
   return prompt_subtitle_ ? &(*prompt_subtitle_) : nullptr;
@@ -1168,14 +1347,28 @@ void DecryptConfig::set_should_migrate(bool value_arg) {
 }
 
 
+const EncodableList* DecryptConfig::fallback_options() const {
+  return fallback_options_ ? &(*fallback_options_) : nullptr;
+}
+
+void DecryptConfig::set_fallback_options(const EncodableList* value_arg) {
+  fallback_options_ = value_arg ? std::optional<EncodableList>(*value_arg) : std::nullopt;
+}
+
+void DecryptConfig::set_fallback_options(const EncodableList& value_arg) {
+  fallback_options_ = value_arg;
+}
+
+
 EncodableList DecryptConfig::ToEncodableList() const {
   EncodableList list;
-  list.reserve(5);
+  list.reserve(6);
   list.push_back(prompt_subtitle_ ? EncodableValue(*prompt_subtitle_) : EncodableValue());
   list.push_back(prompt_description_ ? EncodableValue(*prompt_description_) : EncodableValue());
   list.push_back(cancel_button_text_ ? EncodableValue(*cancel_button_text_) : EncodableValue());
   list.push_back(allow_device_credentials_ ? EncodableValue(*allow_device_credentials_) : EncodableValue());
   list.push_back(should_migrate_ ? EncodableValue(*should_migrate_) : EncodableValue());
+  list.push_back(fallback_options_ ? EncodableValue(*fallback_options_) : EncodableValue());
   return list;
 }
 
@@ -1201,6 +1394,10 @@ DecryptConfig DecryptConfig::FromEncodableList(const EncodableList& list) {
   if (!encodable_should_migrate.IsNull()) {
     decoded.set_should_migrate(std::get<bool>(encodable_should_migrate));
   }
+  auto& encodable_fallback_options = list[5];
+  if (!encodable_fallback_options.IsNull()) {
+    decoded.set_fallback_options(std::get<EncodableList>(encodable_fallback_options));
+  }
   return decoded;
 }
 
@@ -1213,12 +1410,14 @@ SimplePromptConfig::SimplePromptConfig(
   const std::string* description,
   const std::string* cancel_button_text,
   const bool* allow_device_credentials,
-  const BiometricStrength* biometric_strength)
+  const BiometricStrength* biometric_strength,
+  const EncodableList* fallback_options)
  : subtitle_(subtitle ? std::optional<std::string>(*subtitle) : std::nullopt),
     description_(description ? std::optional<std::string>(*description) : std::nullopt),
     cancel_button_text_(cancel_button_text ? std::optional<std::string>(*cancel_button_text) : std::nullopt),
     allow_device_credentials_(allow_device_credentials ? std::optional<bool>(*allow_device_credentials) : std::nullopt),
-    biometric_strength_(biometric_strength ? std::optional<BiometricStrength>(*biometric_strength) : std::nullopt) {}
+    biometric_strength_(biometric_strength ? std::optional<BiometricStrength>(*biometric_strength) : std::nullopt),
+    fallback_options_(fallback_options ? std::optional<EncodableList>(*fallback_options) : std::nullopt) {}
 
 const std::string* SimplePromptConfig::subtitle() const {
   return subtitle_ ? &(*subtitle_) : nullptr;
@@ -1285,14 +1484,28 @@ void SimplePromptConfig::set_biometric_strength(const BiometricStrength& value_a
 }
 
 
+const EncodableList* SimplePromptConfig::fallback_options() const {
+  return fallback_options_ ? &(*fallback_options_) : nullptr;
+}
+
+void SimplePromptConfig::set_fallback_options(const EncodableList* value_arg) {
+  fallback_options_ = value_arg ? std::optional<EncodableList>(*value_arg) : std::nullopt;
+}
+
+void SimplePromptConfig::set_fallback_options(const EncodableList& value_arg) {
+  fallback_options_ = value_arg;
+}
+
+
 EncodableList SimplePromptConfig::ToEncodableList() const {
   EncodableList list;
-  list.reserve(5);
+  list.reserve(6);
   list.push_back(subtitle_ ? EncodableValue(*subtitle_) : EncodableValue());
   list.push_back(description_ ? EncodableValue(*description_) : EncodableValue());
   list.push_back(cancel_button_text_ ? EncodableValue(*cancel_button_text_) : EncodableValue());
   list.push_back(allow_device_credentials_ ? EncodableValue(*allow_device_credentials_) : EncodableValue());
   list.push_back(biometric_strength_ ? CustomEncodableValue(*biometric_strength_) : EncodableValue());
+  list.push_back(fallback_options_ ? EncodableValue(*fallback_options_) : EncodableValue());
   return list;
 }
 
@@ -1318,6 +1531,10 @@ SimplePromptConfig SimplePromptConfig::FromEncodableList(const EncodableList& li
   if (!encodable_biometric_strength.IsNull()) {
     decoded.set_biometric_strength(std::any_cast<const BiometricStrength&>(std::get<CustomEncodableValue>(encodable_biometric_strength)));
   }
+  auto& encodable_fallback_options = list[5];
+  if (!encodable_fallback_options.IsNull()) {
+    decoded.set_fallback_options(std::get<EncodableList>(encodable_fallback_options));
+  }
   return decoded;
 }
 
@@ -1328,10 +1545,14 @@ SimplePromptResult::SimplePromptResult() {}
 SimplePromptResult::SimplePromptResult(
   const bool* success,
   const std::string* error,
-  const BiometricError* code)
+  const BiometricError* code,
+  const int64_t* selected_fallback_index,
+  const std::string* selected_fallback_text)
  : success_(success ? std::optional<bool>(*success) : std::nullopt),
     error_(error ? std::optional<std::string>(*error) : std::nullopt),
-    code_(code ? std::optional<BiometricError>(*code) : std::nullopt) {}
+    code_(code ? std::optional<BiometricError>(*code) : std::nullopt),
+    selected_fallback_index_(selected_fallback_index ? std::optional<int64_t>(*selected_fallback_index) : std::nullopt),
+    selected_fallback_text_(selected_fallback_text ? std::optional<std::string>(*selected_fallback_text) : std::nullopt) {}
 
 const bool* SimplePromptResult::success() const {
   return success_ ? &(*success_) : nullptr;
@@ -1372,12 +1593,40 @@ void SimplePromptResult::set_code(const BiometricError& value_arg) {
 }
 
 
+const int64_t* SimplePromptResult::selected_fallback_index() const {
+  return selected_fallback_index_ ? &(*selected_fallback_index_) : nullptr;
+}
+
+void SimplePromptResult::set_selected_fallback_index(const int64_t* value_arg) {
+  selected_fallback_index_ = value_arg ? std::optional<int64_t>(*value_arg) : std::nullopt;
+}
+
+void SimplePromptResult::set_selected_fallback_index(int64_t value_arg) {
+  selected_fallback_index_ = value_arg;
+}
+
+
+const std::string* SimplePromptResult::selected_fallback_text() const {
+  return selected_fallback_text_ ? &(*selected_fallback_text_) : nullptr;
+}
+
+void SimplePromptResult::set_selected_fallback_text(const std::string_view* value_arg) {
+  selected_fallback_text_ = value_arg ? std::optional<std::string>(*value_arg) : std::nullopt;
+}
+
+void SimplePromptResult::set_selected_fallback_text(std::string_view value_arg) {
+  selected_fallback_text_ = value_arg;
+}
+
+
 EncodableList SimplePromptResult::ToEncodableList() const {
   EncodableList list;
-  list.reserve(3);
+  list.reserve(5);
   list.push_back(success_ ? EncodableValue(*success_) : EncodableValue());
   list.push_back(error_ ? EncodableValue(*error_) : EncodableValue());
   list.push_back(code_ ? CustomEncodableValue(*code_) : EncodableValue());
+  list.push_back(selected_fallback_index_ ? EncodableValue(*selected_fallback_index_) : EncodableValue());
+  list.push_back(selected_fallback_text_ ? EncodableValue(*selected_fallback_text_) : EncodableValue());
   return list;
 }
 
@@ -1394,6 +1643,14 @@ SimplePromptResult SimplePromptResult::FromEncodableList(const EncodableList& li
   auto& encodable_code = list[2];
   if (!encodable_code.IsNull()) {
     decoded.set_code(std::any_cast<const BiometricError&>(std::get<CustomEncodableValue>(encodable_code)));
+  }
+  auto& encodable_selected_fallback_index = list[3];
+  if (!encodable_selected_fallback_index.IsNull()) {
+    decoded.set_selected_fallback_index(std::get<int64_t>(encodable_selected_fallback_index));
+  }
+  auto& encodable_selected_fallback_text = list[4];
+  if (!encodable_selected_fallback_text.IsNull()) {
+    decoded.set_selected_fallback_text(std::get<std::string>(encodable_selected_fallback_text));
   }
   return decoded;
 }
@@ -1441,33 +1698,36 @@ EncodableValue PigeonInternalCodecSerializer::ReadValueOfType(
         return encodable_enum_arg.IsNull() ? EncodableValue() : CustomEncodableValue(static_cast<PayloadFormat>(enum_arg_value));
       }
     case 136: {
-        return CustomEncodableValue(BiometricAvailability::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(BiometricFallbackOption::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 137: {
-        return CustomEncodableValue(KeyCreationResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(BiometricAvailability::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 138: {
-        return CustomEncodableValue(SignatureResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(KeyCreationResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 139: {
-        return CustomEncodableValue(DecryptResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(SignatureResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 140: {
-        return CustomEncodableValue(KeyInfo::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(DecryptResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 141: {
-        return CustomEncodableValue(CreateKeysConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(KeyInfo::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 142: {
-        return CustomEncodableValue(CreateSignatureConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(CreateKeysConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 143: {
-        return CustomEncodableValue(DecryptConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(CreateSignatureConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 144: {
-        return CustomEncodableValue(SimplePromptConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+        return CustomEncodableValue(DecryptConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     case 145: {
+        return CustomEncodableValue(SimplePromptConfig::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
+      }
+    case 146: {
         return CustomEncodableValue(SimplePromptResult::FromEncodableList(std::get<EncodableList>(ReadValue(stream))));
       }
     default:
@@ -1514,53 +1774,58 @@ void PigeonInternalCodecSerializer::WriteValue(
       WriteValue(EncodableValue(static_cast<int>(std::any_cast<PayloadFormat>(*custom_value))), stream);
       return;
     }
-    if (custom_value->type() == typeid(BiometricAvailability)) {
+    if (custom_value->type() == typeid(BiometricFallbackOption)) {
       stream->WriteByte(136);
+      WriteValue(EncodableValue(std::any_cast<BiometricFallbackOption>(*custom_value).ToEncodableList()), stream);
+      return;
+    }
+    if (custom_value->type() == typeid(BiometricAvailability)) {
+      stream->WriteByte(137);
       WriteValue(EncodableValue(std::any_cast<BiometricAvailability>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(KeyCreationResult)) {
-      stream->WriteByte(137);
+      stream->WriteByte(138);
       WriteValue(EncodableValue(std::any_cast<KeyCreationResult>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(SignatureResult)) {
-      stream->WriteByte(138);
+      stream->WriteByte(139);
       WriteValue(EncodableValue(std::any_cast<SignatureResult>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(DecryptResult)) {
-      stream->WriteByte(139);
+      stream->WriteByte(140);
       WriteValue(EncodableValue(std::any_cast<DecryptResult>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(KeyInfo)) {
-      stream->WriteByte(140);
+      stream->WriteByte(141);
       WriteValue(EncodableValue(std::any_cast<KeyInfo>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(CreateKeysConfig)) {
-      stream->WriteByte(141);
+      stream->WriteByte(142);
       WriteValue(EncodableValue(std::any_cast<CreateKeysConfig>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(CreateSignatureConfig)) {
-      stream->WriteByte(142);
+      stream->WriteByte(143);
       WriteValue(EncodableValue(std::any_cast<CreateSignatureConfig>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(DecryptConfig)) {
-      stream->WriteByte(143);
+      stream->WriteByte(144);
       WriteValue(EncodableValue(std::any_cast<DecryptConfig>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(SimplePromptConfig)) {
-      stream->WriteByte(144);
+      stream->WriteByte(145);
       WriteValue(EncodableValue(std::any_cast<SimplePromptConfig>(*custom_value).ToEncodableList()), stream);
       return;
     }
     if (custom_value->type() == typeid(SimplePromptResult)) {
-      stream->WriteByte(145);
+      stream->WriteByte(146);
       WriteValue(EncodableValue(std::any_cast<SimplePromptResult>(*custom_value).ToEncodableList()), stream);
       return;
     }

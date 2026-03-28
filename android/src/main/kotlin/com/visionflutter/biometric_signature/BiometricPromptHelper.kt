@@ -4,15 +4,49 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.content.res.Resources
 import android.os.Build
+import androidx.activity.ComponentActivity
+import androidx.biometric.AuthenticationRequest
+import androidx.biometric.AuthenticationResult
+import androidx.biometric.AuthenticationResultLauncher
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
+import androidx.biometric.registerForAuthenticationResult
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+sealed interface AuthenticationOutcome {
+    data class Success(
+        val cryptoObject: BiometricPrompt.CryptoObject?
+    ) : AuthenticationOutcome
+
+    data class FallbackSelected(
+        val index: Long?,
+        val text: String
+    ) : AuthenticationOutcome
+}
+
 class BiometricPromptHelper(private val appContext: Context) {
+
+    @Volatile
+    private var authLauncher: AuthenticationResultLauncher? = null
+
+    @Volatile
+    private var pendingAuthCallback: ((AuthenticationResult) -> Unit)? = null
+
+    fun registerAuthLauncher(activity: ComponentActivity) {
+        authLauncher = activity.registerForAuthenticationResult { result ->
+            pendingAuthCallback?.invoke(result)
+            pendingAuthCallback = null
+        }
+    }
+
+    fun clearAuthLauncher() {
+        pendingAuthCallback = null
+        authLauncher = null
+    }
 
     fun detectBiometricTypes(): List<BiometricType> {
         val pm = appContext.packageManager
@@ -198,6 +232,107 @@ class BiometricPromptHelper(private val appContext: Context) {
                     .filter { it.length >= 3 }
                     .any { word -> buttonLabel.contains(word, ignoreCase = true) }
             }
+        }
+    }
+
+    suspend fun authenticateWithFallback(
+        activity: FragmentActivity,
+        title: String,
+        subtitle: String?,
+        description: String?,
+        fallbackOptions: List<BiometricFallbackOption?>,
+        cryptoObject: BiometricPrompt.CryptoObject?,
+        biometricStrength: BiometricStrength = BiometricStrength.STRONG
+    ): AuthenticationOutcome = suspendCancellableCoroutine { cont ->
+        val launcher = authLauncher
+            ?: run {
+                if (cont.isActive) {
+                    cont.resumeWithException(
+                        IllegalStateException("Auth launcher not registered. Ensure the plugin is attached to an activity.")
+                    )
+                }
+                return@suspendCancellableCoroutine
+            }
+
+        pendingAuthCallback = { result ->
+            when (result) {
+                is AuthenticationResult.Success -> {
+                    if (cont.isActive) cont.resume(AuthenticationOutcome.Success(result.crypto))
+                }
+                is AuthenticationResult.Error -> {
+                    if (cont.isActive) {
+                        cont.resumeWithException(
+                            SecurityException(
+                                result.errString.toString(),
+                                Throwable(result.errorCode.toString())
+                            )
+                        )
+                    }
+                }
+                is AuthenticationResult.CustomFallbackSelected -> {
+                    val selected = result.fallback
+                    val rawIndex = fallbackOptions.indexOfFirst { it?.text == selected.text }
+                    if (cont.isActive) {
+                        cont.resume(
+                            AuthenticationOutcome.FallbackSelected(
+                                index = if (rawIndex >= 0) rawIndex.toLong() else null,
+                                text = selected.text
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        val fallbacks = fallbackOptions.mapNotNull { option ->
+            val text = option?.text ?: return@mapNotNull null
+            AuthenticationRequest.Biometric.Fallback.CustomOption(
+                text = text,
+                iconType = resolveIconType(option.iconName)
+            )
+        }.toTypedArray()
+
+        val strength = if (cryptoObject != null) {
+            AuthenticationRequest.Biometric.Strength.Class3(cryptoObject)
+        } else {
+            when (biometricStrength) {
+                BiometricStrength.STRONG -> AuthenticationRequest.Biometric.Strength.Class3()
+                BiometricStrength.WEAK -> AuthenticationRequest.Biometric.Strength.Class2
+            }
+        }
+
+        val request = AuthenticationRequest.Biometric.Builder(title, *fallbacks)
+            .setMinStrength(strength)
+            .apply {
+                if (!subtitle.isNullOrBlank()) setSubtitle(subtitle)
+                if (!description.isNullOrBlank()) {
+                    setContent(AuthenticationRequest.BodyContent.PlainText(description))
+                }
+            }
+            .build()
+
+        runCatching {
+            activity.setTheme(androidx.appcompat.R.style.Theme_AppCompat_Light_DarkActionBar)
+            launcher.launch(request)
+        }.onFailure { e ->
+            pendingAuthCallback = null
+            if (cont.isActive) cont.resumeWithException(e)
+        }
+
+        cont.invokeOnCancellation {
+            launcher.cancel()
+            pendingAuthCallback = null
+        }
+    }
+
+    private fun resolveIconType(iconName: String?): Int {
+        if (iconName == null) return AuthenticationRequest.Biometric.Fallback.ICON_TYPE_GENERIC
+        return when (iconName.lowercase().replace("_", "")) {
+            "password" -> AuthenticationRequest.Biometric.Fallback.ICON_TYPE_PASSWORD
+            "qrcode" -> AuthenticationRequest.Biometric.Fallback.ICON_TYPE_QR_CODE
+            "account" -> AuthenticationRequest.Biometric.Fallback.ICON_TYPE_ACCOUNT
+            "generic" -> AuthenticationRequest.Biometric.Fallback.ICON_TYPE_GENERIC
+            else -> AuthenticationRequest.Biometric.Fallback.ICON_TYPE_GENERIC
         }
     }
 

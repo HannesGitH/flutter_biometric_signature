@@ -14,31 +14,39 @@ PlatformException _createConnectionError(String channelName) {
     message: 'Unable to establish connection on channel: "$channelName".',
   );
 }
+
 bool _deepEquals(Object? a, Object? b) {
   if (a is List && b is List) {
     return a.length == b.length &&
-        a.indexed
-        .every(((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]));
+        a.indexed.every(
+          ((int, dynamic) item) => _deepEquals(item.$2, b[item.$1]),
+        );
   }
   if (a is Map && b is Map) {
-    return a.length == b.length && a.entries.every((MapEntry<Object?, Object?> entry) =>
-        (b as Map<Object?, Object?>).containsKey(entry.key) &&
-        _deepEquals(entry.value, b[entry.key]));
+    return a.length == b.length &&
+        a.entries.every(
+          (MapEntry<Object?, Object?> entry) =>
+              (b as Map<Object?, Object?>).containsKey(entry.key) &&
+              _deepEquals(entry.value, b[entry.key]),
+        );
   }
   return a == b;
 }
-
 
 /// Types of biometric authentication supported by the device.
 enum BiometricType {
   /// Face recognition (Face ID on iOS, face unlock on Android).
   face,
+
   /// Fingerprint recognition (Touch ID on iOS/macOS, fingerprint on Android).
   fingerprint,
+
   /// Iris scanner (Android only, rare on consumer devices).
   iris,
+
   /// Multiple biometric types are available on the device.
   multiple,
+
   /// No biometric hardware available or biometrics are disabled.
   unavailable,
 }
@@ -52,6 +60,7 @@ enum BiometricStrength {
   /// Strong biometrics only (e.g., fingerprint, face recognition with depth sensing).
   /// This is the most secure option and is required for cryptographic operations.
   strong,
+
   /// Weak biometrics allowed (e.g., face recognition without depth sensing).
   /// This option provides more device compatibility but lower security.
   weak,
@@ -61,40 +70,60 @@ enum BiometricStrength {
 enum BiometricError {
   /// The operation was successful.
   success,
+
   /// The user canceled the operation.
   userCanceled,
+
   /// Biometric authentication is not available on this device.
   notAvailable,
+
   /// No biometrics are enrolled.
   notEnrolled,
+
   /// The user is temporarily locked out due to too many failed attempts.
   lockedOut,
+
   /// The user is permanently locked out until they log in with a strong method.
   lockedOutPermanent,
+
   /// The requested key was not found.
   keyNotFound,
+
   /// The key has been invalidated (e.g. by new biometric enrollment).
   keyInvalidated,
+
   /// An unknown error occurred.
   unknown,
+
   /// The input payload was invalid (e.g. not valid Base64).
   invalidInput,
+
   /// A security update is required before biometrics can be used.
   securityUpdateRequired,
+
   /// Biometric authentication is not supported on this device/OS version.
   notSupported,
+
   /// The system canceled the operation (e.g., app went to background).
   systemCanceled,
+
   /// Failed to show the biometric prompt (e.g., activity not available).
   promptError,
+
   /// A key with the specified alias already exists and failIfExists was set.
   keyAlreadyExists,
+
+  /// The user selected a custom fallback option instead of authenticating.
+  /// [Android 15+ only] Check `selectedFallbackIndex` and `selectedFallbackText`
+  /// on the result object to determine which option was selected.
+  fallbackSelected,
 }
 
 /// The cryptographic algorithm to use for key generation.
 enum SignatureType {
   /// RSA-2048 (Android: native, iOS/macOS: hybrid mode with Secure Enclave EC).
   rsa,
+
   /// ECDSA P-256 (hardware-backed on all platforms).
   ecdsa,
 }
@@ -103,10 +132,13 @@ enum SignatureType {
 enum KeyFormat {
   /// Base64-encoded DER (SubjectPublicKeyInfo).
   base64,
+
   /// PEM format with BEGIN/END PUBLIC KEY headers.
   pem,
+
   /// Hexadecimal-encoded DER.
   hex,
+
   /// Raw DER bytes (returned via `publicKeyBytes`).
   raw,
 }
@@ -115,8 +147,10 @@ enum KeyFormat {
 enum SignatureFormat {
   /// Base64-encoded signature bytes.
   base64,
+
   /// Hexadecimal-encoded signature bytes.
   hex,
+
   /// Raw signature bytes (returned via `signatureBytes`).
   raw,
 }
@@ -125,10 +159,65 @@ enum SignatureFormat {
 enum PayloadFormat {
   /// Base64-encoded ciphertext.
   base64,
+
   /// Hexadecimal-encoded ciphertext.
   hex,
+
   /// Raw UTF-8 string (not recommended for binary data).
   raw,
+}
+
+/// A custom fallback option shown on the biometric prompt.
+///
+/// [Android 15+ only] When provided in a config's `fallbackOptions` list,
+/// these appear as alternative buttons on the biometric prompt dialog.
+/// If the user taps one, the result will have code [BiometricError.fallbackSelected]
+/// with the selected option's index and text.
+///
+/// On iOS, macOS, and Windows this class is ignored.
+class BiometricFallbackOption {
+  BiometricFallbackOption({this.text, this.iconName});
+
+  /// The text label displayed on the fallback button.
+  String? text;
+
+  /// [Android] Optional icon type name for the fallback button.
+  /// Valid values: `"password"`, `"qr_code"`, `"account"`, `"generic"`.
+  /// Maps to `AuthenticationRequest.Biometric.Fallback.ICON_TYPE_*` constants.
+  /// When null, defaults to `"generic"`.
+  String? iconName;
+
+  List<Object?> _toList() {
+    return <Object?>[text, iconName];
+  }
+
+  Object encode() {
+    return _toList();
+  }
+
+  static BiometricFallbackOption decode(Object result) {
+    result as List<Object?>;
+    return BiometricFallbackOption(
+      text: result[0] as String?,
+      iconName: result[1] as String?,
+    );
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  bool operator ==(Object other) {
+    if (other is! BiometricFallbackOption || other.runtimeType != runtimeType) {
+      return false;
+    }
+    if (identical(this, other)) {
+      return true;
+    }
+    return _deepEquals(encode(), other.encode());
+  }
+
+  @override
+  // ignore: avoid_equals_and_hash_code_on_mutable_classes
+  int get hashCode => Object.hashAll(_toList());
 }
 
 class BiometricAvailability {
@@ -157,14 +246,16 @@ class BiometricAvailability {
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static BiometricAvailability decode(Object result) {
     result as List<Object?>;
     return BiometricAvailability(
       canAuthenticate: result[0] as bool?,
       hasEnrolledBiometrics: result[1] as bool?,
-      availableBiometrics: (result[2] as List<Object?>?)?.cast<BiometricType?>(),
+      availableBiometrics: (result[2] as List<Object?>?)
+          ?.cast<BiometricType?>(),
       reason: result[3] as String?,
     );
   }
@@ -183,8 +274,7 @@ class BiometricAvailability {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList())
-;
+  int get hashCode => Object.hashAll(_toList());
 }
 
 class KeyCreationResult {
@@ -237,7 +327,8 @@ class KeyCreationResult {
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static KeyCreationResult decode(Object result) {
     result as List<Object?>;
@@ -269,8 +360,7 @@ class KeyCreationResult {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList())
-;
+  int get hashCode => Object.hashAll(_toList());
 }
 
 class SignatureResult {
@@ -282,6 +372,8 @@ class SignatureResult {
     this.code,
     this.algorithm,
     this.keySize,
+    this.selectedFallbackIndex,
+    this.selectedFallbackText,
   });
 
   String? signature;
@@ -298,6 +390,14 @@ class SignatureResult {
 
   int? keySize;
 
+  /// [Android 15+] Index of the selected fallback option in the original list.
+  /// Only populated when `code == BiometricError.fallbackSelected`.
+  int? selectedFallbackIndex;
+
+  /// [Android 15+] Text of the selected fallback option.
+  /// Only populated when `code == BiometricError.fallbackSelected`.
+  String? selectedFallbackText;
+
   List<Object?> _toList() {
     return <Object?>[
       signature,
@@ -307,11 +407,14 @@ class SignatureResult {
       code,
       algorithm,
       keySize,
+      selectedFallbackIndex,
+      selectedFallbackText,
     ];
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static SignatureResult decode(Object result) {
     result as List<Object?>;
@@ -323,6 +426,8 @@ class SignatureResult {
       code: result[4] as BiometricError?,
       algorithm: result[5] as String?,
       keySize: result[6] as int?,
+      selectedFallbackIndex: result[7] as int?,
+      selectedFallbackText: result[8] as String?,
     );
   }
 
@@ -340,8 +445,7 @@ class SignatureResult {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList())
-;
+  int get hashCode => Object.hashAll(_toList());
 }
 
 class DecryptResult {
@@ -349,6 +453,8 @@ class DecryptResult {
     this.decryptedData,
     this.error,
     this.code,
+    this.selectedFallbackIndex,
+    this.selectedFallbackText,
   });
 
   String? decryptedData;
@@ -357,16 +463,27 @@ class DecryptResult {
 
   BiometricError? code;
 
+  /// [Android 15+] Index of the selected fallback option in the original list.
+  /// Only populated when `code == BiometricError.fallbackSelected`.
+  int? selectedFallbackIndex;
+
+  /// [Android 15+] Text of the selected fallback option.
+  /// Only populated when `code == BiometricError.fallbackSelected`.
+  String? selectedFallbackText;
+
   List<Object?> _toList() {
     return <Object?>[
       decryptedData,
       error,
       code,
+      selectedFallbackIndex,
+      selectedFallbackText,
     ];
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static DecryptResult decode(Object result) {
     result as List<Object?>;
@@ -374,6 +491,8 @@ class DecryptResult {
       decryptedData: result[0] as String?,
       error: result[1] as String?,
       code: result[2] as BiometricError?,
+      selectedFallbackIndex: result[3] as int?,
+      selectedFallbackText: result[4] as String?,
     );
   }
 
@@ -391,8 +510,7 @@ class DecryptResult {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList())
-;
+  int get hashCode => Object.hashAll(_toList());
 }
 
 /// Detailed information about existing biometric keys.
@@ -452,7 +570,8 @@ class KeyInfo {
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static KeyInfo decode(Object result) {
     result as List<Object?>;
@@ -483,8 +602,7 @@ class KeyInfo {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList())
-;
+  int get hashCode => Object.hashAll(_toList());
 }
 
 /// Configuration for key creation (all platforms).
@@ -503,6 +621,7 @@ class CreateKeysConfig {
     this.promptDescription,
     this.cancelButtonText,
     this.failIfExists,
+    this.fallbackOptions,
   });
 
   /// [Android/iOS/macOS] The cryptographic algorithm to use.
@@ -545,6 +664,13 @@ class CreateKeysConfig {
   /// When `false` (default), existing keys are silently replaced.
   bool? failIfExists;
 
+  /// [Android 15+] Custom fallback buttons shown on the biometric prompt.
+  /// When provided, these replace the default cancel button.
+  /// If the user taps a fallback option, the result will have
+  /// `code == BiometricError.fallbackSelected` with the selected option's
+  /// index and text. On other platforms, this field is ignored.
+  List<BiometricFallbackOption?>? fallbackOptions;
+
   List<Object?> _toList() {
     return <Object?>[
       signatureType,
@@ -556,11 +682,13 @@ class CreateKeysConfig {
       promptDescription,
       cancelButtonText,
       failIfExists,
+      fallbackOptions,
     ];
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static CreateKeysConfig decode(Object result) {
     result as List<Object?>;
@@ -574,6 +702,8 @@ class CreateKeysConfig {
       promptDescription: result[6] as String?,
       cancelButtonText: result[7] as String?,
       failIfExists: result[8] as bool?,
+      fallbackOptions: (result[9] as List<Object?>?)
+          ?.cast<BiometricFallbackOption?>(),
     );
   }
 
@@ -591,8 +721,7 @@ class CreateKeysConfig {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList())
-;
+  int get hashCode => Object.hashAll(_toList());
 }
 
 /// Configuration for signature creation (all platforms).
@@ -605,6 +734,7 @@ class CreateSignatureConfig {
     this.cancelButtonText,
     this.allowDeviceCredentials,
     this.shouldMigrate,
+    this.fallbackOptions,
   });
 
   /// [Android] Subtitle text for the biometric prompt.
@@ -622,6 +752,13 @@ class CreateSignatureConfig {
   /// [iOS] Whether to migrate from legacy keychain storage.
   bool? shouldMigrate;
 
+  /// [Android 15+] Custom fallback buttons shown on the biometric prompt.
+  /// When provided, these replace the default cancel button.
+  /// If the user taps a fallback option, the result will have
+  /// `code == BiometricError.fallbackSelected` with the selected option's
+  /// index and text. On other platforms, this field is ignored.
+  List<BiometricFallbackOption?>? fallbackOptions;
+
   List<Object?> _toList() {
     return <Object?>[
       promptSubtitle,
@@ -629,11 +766,13 @@ class CreateSignatureConfig {
       cancelButtonText,
       allowDeviceCredentials,
       shouldMigrate,
+      fallbackOptions,
     ];
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static CreateSignatureConfig decode(Object result) {
     result as List<Object?>;
@@ -643,6 +782,8 @@ class CreateSignatureConfig {
       cancelButtonText: result[2] as String?,
       allowDeviceCredentials: result[3] as bool?,
       shouldMigrate: result[4] as bool?,
+      fallbackOptions: (result[5] as List<Object?>?)
+          ?.cast<BiometricFallbackOption?>(),
     );
   }
 
@@ -660,8 +801,7 @@ class CreateSignatureConfig {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList())
-;
+  int get hashCode => Object.hashAll(_toList());
 }
 
 /// Configuration for decryption (all platforms).
@@ -675,6 +815,7 @@ class DecryptConfig {
     this.cancelButtonText,
     this.allowDeviceCredentials,
     this.shouldMigrate,
+    this.fallbackOptions,
   });
 
   /// [Android] Subtitle text for the biometric prompt.
@@ -692,6 +833,13 @@ class DecryptConfig {
   /// [iOS] Whether to migrate from legacy keychain storage.
   bool? shouldMigrate;
 
+  /// [Android 15+] Custom fallback buttons shown on the biometric prompt.
+  /// When provided, these replace the default cancel button.
+  /// If the user taps a fallback option, the result will have
+  /// `code == BiometricError.fallbackSelected` with the selected option's
+  /// index and text. On other platforms, this field is ignored.
+  List<BiometricFallbackOption?>? fallbackOptions;
+
   List<Object?> _toList() {
     return <Object?>[
       promptSubtitle,
@@ -699,11 +847,13 @@ class DecryptConfig {
       cancelButtonText,
       allowDeviceCredentials,
       shouldMigrate,
+      fallbackOptions,
     ];
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static DecryptConfig decode(Object result) {
     result as List<Object?>;
@@ -713,6 +863,8 @@ class DecryptConfig {
       cancelButtonText: result[2] as String?,
       allowDeviceCredentials: result[3] as bool?,
       shouldMigrate: result[4] as bool?,
+      fallbackOptions: (result[5] as List<Object?>?)
+          ?.cast<BiometricFallbackOption?>(),
     );
   }
 
@@ -730,8 +882,7 @@ class DecryptConfig {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList())
-;
+  int get hashCode => Object.hashAll(_toList());
 }
 
 /// Configuration for simple biometric prompt (authentication without crypto ops).
@@ -744,6 +895,7 @@ class SimplePromptConfig {
     this.cancelButtonText,
     this.allowDeviceCredentials,
     this.biometricStrength,
+    this.fallbackOptions,
   });
 
   /// [Android] Subtitle text displayed below the title in the biometric prompt.
@@ -779,6 +931,13 @@ class SimplePromptConfig {
   /// Default: strong
   BiometricStrength? biometricStrength;
 
+  /// [Android 15+] Custom fallback buttons shown on the biometric prompt.
+  /// When provided, these replace the default cancel button.
+  /// If the user taps a fallback option, the result will have
+  /// `code == BiometricError.fallbackSelected` with the selected option's
+  /// index and text. On other platforms, this field is ignored.
+  List<BiometricFallbackOption?>? fallbackOptions;
+
   List<Object?> _toList() {
     return <Object?>[
       subtitle,
@@ -786,11 +945,13 @@ class SimplePromptConfig {
       cancelButtonText,
       allowDeviceCredentials,
       biometricStrength,
+      fallbackOptions,
     ];
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static SimplePromptConfig decode(Object result) {
     result as List<Object?>;
@@ -800,6 +961,8 @@ class SimplePromptConfig {
       cancelButtonText: result[2] as String?,
       allowDeviceCredentials: result[3] as bool?,
       biometricStrength: result[4] as BiometricStrength?,
+      fallbackOptions: (result[5] as List<Object?>?)
+          ?.cast<BiometricFallbackOption?>(),
     );
   }
 
@@ -817,8 +980,7 @@ class SimplePromptConfig {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList())
-;
+  int get hashCode => Object.hashAll(_toList());
 }
 
 /// Result from simple biometric prompt authentication.
@@ -827,6 +989,8 @@ class SimplePromptResult {
     this.success,
     this.error,
     this.code,
+    this.selectedFallbackIndex,
+    this.selectedFallbackText,
   });
 
   /// Whether authentication was successful.
@@ -840,16 +1004,27 @@ class SimplePromptResult {
   /// Use this for programmatic error handling.
   BiometricError? code;
 
+  /// [Android 15+] Index of the selected fallback option in the original list.
+  /// Only populated when `code == BiometricError.fallbackSelected`.
+  int? selectedFallbackIndex;
+
+  /// [Android 15+] Text of the selected fallback option.
+  /// Only populated when `code == BiometricError.fallbackSelected`.
+  String? selectedFallbackText;
+
   List<Object?> _toList() {
     return <Object?>[
       success,
       error,
       code,
+      selectedFallbackIndex,
+      selectedFallbackText,
     ];
   }
 
   Object encode() {
-    return _toList();  }
+    return _toList();
+  }
 
   static SimplePromptResult decode(Object result) {
     result as List<Object?>;
@@ -857,6 +1032,8 @@ class SimplePromptResult {
       success: result[0] as bool?,
       error: result[1] as String?,
       code: result[2] as BiometricError?,
+      selectedFallbackIndex: result[3] as int?,
+      selectedFallbackText: result[4] as String?,
     );
   }
 
@@ -874,10 +1051,8 @@ class SimplePromptResult {
 
   @override
   // ignore: avoid_equals_and_hash_code_on_mutable_classes
-  int get hashCode => Object.hashAll(_toList())
-;
+  int get hashCode => Object.hashAll(_toList());
 }
-
 
 class _PigeonCodec extends StandardMessageCodec {
   const _PigeonCodec();
@@ -886,56 +1061,59 @@ class _PigeonCodec extends StandardMessageCodec {
     if (value is int) {
       buffer.putUint8(4);
       buffer.putInt64(value);
-    }    else if (value is BiometricType) {
+    } else if (value is BiometricType) {
       buffer.putUint8(129);
       writeValue(buffer, value.index);
-    }    else if (value is BiometricStrength) {
+    } else if (value is BiometricStrength) {
       buffer.putUint8(130);
       writeValue(buffer, value.index);
-    }    else if (value is BiometricError) {
+    } else if (value is BiometricError) {
       buffer.putUint8(131);
       writeValue(buffer, value.index);
-    }    else if (value is SignatureType) {
+    } else if (value is SignatureType) {
       buffer.putUint8(132);
       writeValue(buffer, value.index);
-    }    else if (value is KeyFormat) {
+    } else if (value is KeyFormat) {
       buffer.putUint8(133);
       writeValue(buffer, value.index);
-    }    else if (value is SignatureFormat) {
+    } else if (value is SignatureFormat) {
       buffer.putUint8(134);
       writeValue(buffer, value.index);
-    }    else if (value is PayloadFormat) {
+    } else if (value is PayloadFormat) {
       buffer.putUint8(135);
       writeValue(buffer, value.index);
-    }    else if (value is BiometricAvailability) {
+    } else if (value is BiometricFallbackOption) {
       buffer.putUint8(136);
       writeValue(buffer, value.encode());
-    }    else if (value is KeyCreationResult) {
+    } else if (value is BiometricAvailability) {
       buffer.putUint8(137);
       writeValue(buffer, value.encode());
-    }    else if (value is SignatureResult) {
+    } else if (value is KeyCreationResult) {
       buffer.putUint8(138);
       writeValue(buffer, value.encode());
-    }    else if (value is DecryptResult) {
+    } else if (value is SignatureResult) {
       buffer.putUint8(139);
       writeValue(buffer, value.encode());
-    }    else if (value is KeyInfo) {
+    } else if (value is DecryptResult) {
       buffer.putUint8(140);
       writeValue(buffer, value.encode());
-    }    else if (value is CreateKeysConfig) {
+    } else if (value is KeyInfo) {
       buffer.putUint8(141);
       writeValue(buffer, value.encode());
-    }    else if (value is CreateSignatureConfig) {
+    } else if (value is CreateKeysConfig) {
       buffer.putUint8(142);
       writeValue(buffer, value.encode());
-    }    else if (value is DecryptConfig) {
+    } else if (value is CreateSignatureConfig) {
       buffer.putUint8(143);
       writeValue(buffer, value.encode());
-    }    else if (value is SimplePromptConfig) {
+    } else if (value is DecryptConfig) {
       buffer.putUint8(144);
       writeValue(buffer, value.encode());
-    }    else if (value is SimplePromptResult) {
+    } else if (value is SimplePromptConfig) {
       buffer.putUint8(145);
+      writeValue(buffer, value.encode());
+    } else if (value is SimplePromptResult) {
+      buffer.putUint8(146);
       writeValue(buffer, value.encode());
     } else {
       super.writeValue(buffer, value);
@@ -945,46 +1123,48 @@ class _PigeonCodec extends StandardMessageCodec {
   @override
   Object? readValueOfType(int type, ReadBuffer buffer) {
     switch (type) {
-      case 129: 
+      case 129:
         final value = readValue(buffer) as int?;
         return value == null ? null : BiometricType.values[value];
-      case 130: 
+      case 130:
         final value = readValue(buffer) as int?;
         return value == null ? null : BiometricStrength.values[value];
-      case 131: 
+      case 131:
         final value = readValue(buffer) as int?;
         return value == null ? null : BiometricError.values[value];
-      case 132: 
+      case 132:
         final value = readValue(buffer) as int?;
         return value == null ? null : SignatureType.values[value];
-      case 133: 
+      case 133:
         final value = readValue(buffer) as int?;
         return value == null ? null : KeyFormat.values[value];
-      case 134: 
+      case 134:
         final value = readValue(buffer) as int?;
         return value == null ? null : SignatureFormat.values[value];
-      case 135: 
+      case 135:
         final value = readValue(buffer) as int?;
         return value == null ? null : PayloadFormat.values[value];
-      case 136: 
+      case 136:
+        return BiometricFallbackOption.decode(readValue(buffer)!);
+      case 137:
         return BiometricAvailability.decode(readValue(buffer)!);
-      case 137: 
+      case 138:
         return KeyCreationResult.decode(readValue(buffer)!);
-      case 138: 
+      case 139:
         return SignatureResult.decode(readValue(buffer)!);
-      case 139: 
+      case 140:
         return DecryptResult.decode(readValue(buffer)!);
-      case 140: 
+      case 141:
         return KeyInfo.decode(readValue(buffer)!);
-      case 141: 
+      case 142:
         return CreateKeysConfig.decode(readValue(buffer)!);
-      case 142: 
+      case 143:
         return CreateSignatureConfig.decode(readValue(buffer)!);
-      case 143: 
+      case 144:
         return DecryptConfig.decode(readValue(buffer)!);
-      case 144: 
+      case 145:
         return SimplePromptConfig.decode(readValue(buffer)!);
-      case 145: 
+      case 146:
         return SimplePromptResult.decode(readValue(buffer)!);
       default:
         return super.readValueOfType(type, buffer);
@@ -996,9 +1176,13 @@ class BiometricSignatureApi {
   /// Constructor for [BiometricSignatureApi].  The [binaryMessenger] named argument is
   /// available for dependency injection.  If it is left null, the default
   /// BinaryMessenger will be used which routes to the host platform.
-  BiometricSignatureApi({BinaryMessenger? binaryMessenger, String messageChannelSuffix = ''})
-      : pigeonVar_binaryMessenger = binaryMessenger,
-        pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty ? '.$messageChannelSuffix' : '';
+  BiometricSignatureApi({
+    BinaryMessenger? binaryMessenger,
+    String messageChannelSuffix = '',
+  }) : pigeonVar_binaryMessenger = binaryMessenger,
+       pigeonVar_messageChannelSuffix = messageChannelSuffix.isNotEmpty
+           ? '.$messageChannelSuffix'
+           : '';
   final BinaryMessenger? pigeonVar_binaryMessenger;
 
   static const MessageCodec<Object?> pigeonChannelCodec = _PigeonCodec();
@@ -1007,7 +1191,8 @@ class BiometricSignatureApi {
 
   /// Checks if biometric authentication is available.
   Future<BiometricAvailability> biometricAuthAvailable() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.biometricAuthAvailable$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.biometricAuthAvailable$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -1040,14 +1225,22 @@ class BiometricSignatureApi {
   /// [config] contains platform-specific options. See [CreateKeysConfig].
   /// [keyFormat] specifies the output format for the public key.
   /// [promptMessage] is the message shown to the user during authentication.
-  Future<KeyCreationResult> createKeys(String? keyAlias, CreateKeysConfig? config, KeyFormat keyFormat, String? promptMessage) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.createKeys$pigeonVar_messageChannelSuffix';
+  Future<KeyCreationResult> createKeys(
+    String? keyAlias,
+    CreateKeysConfig? config,
+    KeyFormat keyFormat,
+    String? promptMessage,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.createKeys$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[keyAlias, config, keyFormat, promptMessage]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[keyAlias, config, keyFormat, promptMessage],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);
@@ -1075,14 +1268,31 @@ class BiometricSignatureApi {
   /// [signatureFormat] specifies the output format for the signature.
   /// [keyFormat] specifies the output format for the public key.
   /// [promptMessage] is the message shown to the user during authentication.
-  Future<SignatureResult> createSignature(String payload, String? keyAlias, CreateSignatureConfig? config, SignatureFormat signatureFormat, KeyFormat keyFormat, String? promptMessage) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.createSignature$pigeonVar_messageChannelSuffix';
+  Future<SignatureResult> createSignature(
+    String payload,
+    String? keyAlias,
+    CreateSignatureConfig? config,
+    SignatureFormat signatureFormat,
+    KeyFormat keyFormat,
+    String? promptMessage,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.createSignature$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[payload, keyAlias, config, signatureFormat, keyFormat, promptMessage]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[
+        payload,
+        keyAlias,
+        config,
+        signatureFormat,
+        keyFormat,
+        promptMessage,
+      ],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);
@@ -1110,14 +1320,23 @@ class BiometricSignatureApi {
   /// [payloadFormat] specifies the format of the encrypted data.
   /// [config] contains platform-specific options. See [DecryptConfig].
   /// [promptMessage] is the message shown to the user during authentication.
-  Future<DecryptResult> decrypt(String payload, String? keyAlias, PayloadFormat payloadFormat, DecryptConfig? config, String? promptMessage) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.decrypt$pigeonVar_messageChannelSuffix';
+  Future<DecryptResult> decrypt(
+    String payload,
+    String? keyAlias,
+    PayloadFormat payloadFormat,
+    DecryptConfig? config,
+    String? promptMessage,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.decrypt$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[payload, keyAlias, payloadFormat, config, promptMessage]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[payload, keyAlias, payloadFormat, config, promptMessage],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);
@@ -1142,13 +1361,16 @@ class BiometricSignatureApi {
   /// [keyAlias] specifies which key to delete. When null, deletes the
   /// default alias only. Other aliases are not affected.
   Future<bool> deleteKeys(String? keyAlias) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.deleteKeys$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.deleteKeys$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[keyAlias]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[keyAlias],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);
@@ -1173,7 +1395,8 @@ class BiometricSignatureApi {
   /// This is a destructive operation that removes every key managed by
   /// this plugin. Use [deleteKeys] for targeted deletion.
   Future<bool> deleteAllKeys() async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.deleteAllKeys$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.deleteAllKeys$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
@@ -1203,14 +1426,21 @@ class BiometricSignatureApi {
   ///
   /// [keyAlias] specifies which key to query. Defaults to the default alias.
   /// Returns key metadata including algorithm, size, validity, and public keys.
-  Future<KeyInfo> getKeyInfo(String? keyAlias, bool checkValidity, KeyFormat keyFormat) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.getKeyInfo$pigeonVar_messageChannelSuffix';
+  Future<KeyInfo> getKeyInfo(
+    String? keyAlias,
+    bool checkValidity,
+    KeyFormat keyFormat,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.getKeyInfo$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[keyAlias, checkValidity, keyFormat]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[keyAlias, checkValidity, keyFormat],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);
@@ -1241,14 +1471,20 @@ class BiometricSignatureApi {
   /// [config] contains optional platform-specific configuration.
   ///
   /// Returns a [SimplePromptResult] indicating success or failure.
-  Future<SimplePromptResult> simplePrompt(String promptMessage, SimplePromptConfig? config) async {
-    final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.simplePrompt$pigeonVar_messageChannelSuffix';
+  Future<SimplePromptResult> simplePrompt(
+    String promptMessage,
+    SimplePromptConfig? config,
+  ) async {
+    final pigeonVar_channelName =
+        'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.simplePrompt$pigeonVar_messageChannelSuffix';
     final pigeonVar_channel = BasicMessageChannel<Object?>(
       pigeonVar_channelName,
       pigeonChannelCodec,
       binaryMessenger: pigeonVar_binaryMessenger,
     );
-    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(<Object?>[promptMessage, config]);
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(
+      <Object?>[promptMessage, config],
+    );
     final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
     if (pigeonVar_replyList == null) {
       throw _createConnectionError(pigeonVar_channelName);

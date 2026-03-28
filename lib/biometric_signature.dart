@@ -2,6 +2,7 @@ import 'biometric_signature_platform_interface.dart';
 
 export 'biometric_signature_platform_interface.dart'
     show
+        BiometricFallbackOption,
         CreateKeysConfig,
         CreateSignatureConfig,
         DecryptConfig,

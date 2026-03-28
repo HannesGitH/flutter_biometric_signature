@@ -138,7 +138,13 @@ class _PigeonBiometricSignature extends BiometricSignaturePlatform {
     DecryptConfig? config,
     String? promptMessage,
   ) {
-    return _api.decrypt(payload, keyAlias, payloadFormat, config, promptMessage);
+    return _api.decrypt(
+      payload,
+      keyAlias,
+      payloadFormat,
+      config,
+      promptMessage,
+    );
   }
 
   @override
