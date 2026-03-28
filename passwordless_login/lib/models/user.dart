@@ -9,6 +9,10 @@ class User {
   final bool keyInvalidatedOnEnrollmentChange;
   final DateTime? lastReEnrollment;
 
+  /// Whether the user has registered a backup password.
+  /// Used to offer the "Use Password" fallback button on Android 15+.
+  final bool hasPasswordBackup;
+
   User({
     required this.id,
     required this.username,
@@ -19,6 +23,7 @@ class User {
     this.allowDeviceCredentials = false,
     this.keyInvalidatedOnEnrollmentChange = true,
     this.lastReEnrollment,
+    this.hasPasswordBackup = false,
   });
 
   User copyWith({
@@ -31,6 +36,7 @@ class User {
     bool? allowDeviceCredentials,
     bool? keyInvalidatedOnEnrollmentChange,
     DateTime? lastReEnrollment,
+    bool? hasPasswordBackup,
   }) {
     return User(
       id: id ?? this.id,
@@ -44,6 +50,7 @@ class User {
       keyInvalidatedOnEnrollmentChange: keyInvalidatedOnEnrollmentChange ??
           this.keyInvalidatedOnEnrollmentChange,
       lastReEnrollment: lastReEnrollment ?? this.lastReEnrollment,
+      hasPasswordBackup: hasPasswordBackup ?? this.hasPasswordBackup,
     );
   }
 
@@ -58,6 +65,7 @@ class User {
       'allowDeviceCredentials': allowDeviceCredentials,
       'keyInvalidatedOnEnrollmentChange': keyInvalidatedOnEnrollmentChange,
       'lastReEnrollment': lastReEnrollment?.toIso8601String(),
+      'hasPasswordBackup': hasPasswordBackup,
     };
   }
 
@@ -76,6 +84,7 @@ class User {
       lastReEnrollment: json['lastReEnrollment'] != null
           ? DateTime.parse(json['lastReEnrollment'])
           : null,
+      hasPasswordBackup: json['hasPasswordBackup'] ?? false,
     );
   }
 }
