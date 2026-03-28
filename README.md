@@ -20,6 +20,9 @@ Even if an attacker bypasses or hooks biometric APIs, your backend will still re
 - **Hybrid Architectures:**
   - **Android Hybrid EC:** Hardware EC signing + software ECIES decryption. Software EC private key is AES-wrapped using a Keystore/StrongBox AES-256 master key that requires biometric authentication for every unwrap.
   - **iOS/macOS Hybrid RSA:** Software RSA key for **both signing and decryption**, wrapped using ECIES with Secure Enclave EC public key. Hardware EC is only used for wrapping/unwrapping.
+- **Named Key Aliases:** Manage multiple independent key pairs per app (e.g., one for auth, one for payment signing) via optional `keyAlias` parameter.
+- **Key Overwrite Protection:** Prevent accidental key replacement with `failIfExists` option.
+- **Custom Fallback Options (Android 15+):** Show custom buttons (password, QR code, etc.) on the biometric prompt via `fallbackOptions`.
 - **Key Invalidation:** Keys can be bound to biometric enrollment state (fingerprint/Face ID changes).
 - **Device Credentials:** Optional PIN/Pattern/Password fallback on Android.
 - **Simple Prompt (No Crypto):** Verify user presence without key operations. Supports device-credential fallback and Android biometric strength selection.
@@ -168,7 +171,7 @@ To get started with Biometric Signature, follow these steps:
 
 ```yaml
 dependencies:
-  biometric_signature: ^10.2.0
+  biometric_signature: ^11.0.0
 ```
 
 |             | Android | iOS   | macOS  | Windows |
@@ -295,18 +298,19 @@ The plugin also supports secure decryption, ensuring that sensitive data transmi
 
 This class provides methods to manage and utilize biometric authentication for secure server interactions. It supports both Android and iOS platforms.
 
-### `createKeys({ config, keyFormat, promptMessage })`
+### `createKeys({ keyAlias, config, keyFormat, promptMessage })`
 
 Generates a new key pair (RSA 2048 or EC) for biometric authentication. The private key is securely stored on the device.
 
 - **Parameters**:
+  - `keyAlias`: Optional name for this key pair. Different aliases create independent key pairs. When `null`, the default alias is used.
   - `config`: `CreateKeysConfig` with platform options (see below)
   - `keyFormat`: Output format (`KeyFormat.base64`, `pem`, `hex`)
   - `promptMessage`: Custom authentication prompt message
 
 - **Returns**: `Future<KeyCreationResult>`.
   - `publicKey`: The formatted public key string (Base64 or PEM).
-  - `code`: `BiometricError` code (e.g., `success`, `userCanceled`).
+  - `code`: `BiometricError` code (e.g., `success`, `userCanceled`, `keyAlreadyExists`).
   - `error`: Descriptive error message.
 
 #### CreateKeysConfig Options
@@ -318,12 +322,15 @@ Generates a new key pair (RSA 2048 or EC) for biometric authentication. The priv
 | `setInvalidatedByBiometricEnrollment` | Android/iOS/macOS | Invalidate key on biometric changes |
 | `useDeviceCredentials` | Android/iOS/macOS | Allow PIN/passcode fallback |
 | `enableDecryption` | Android | Enable decryption capability |
+| `failIfExists` | All | Fail with `keyAlreadyExists` if key already exists |
+| `fallbackOptions` | Android 15+ | Custom fallback buttons on biometric prompt (see [Custom Fallback Options](#custom-fallback-options-android-15)) |
 | `promptSubtitle` | Android | Subtitle for biometric prompt |
 | `promptDescription` | Android | Description for biometric prompt |
 | `cancelButtonText` | Android | Cancel button text |
 
 ```dart
 final result = await biometricSignature.createKeys(
+  keyAlias: 'payment_key',  // Optional: named alias
   keyFormat: KeyFormat.pem,
   promptMessage: 'Authenticate to create keys',
   config: CreateKeysConfig(
@@ -332,20 +339,24 @@ final result = await biometricSignature.createKeys(
     setInvalidatedByBiometricEnrollment: true,
     useDeviceCredentials: false,
     enableDecryption: true, // Android only
+    failIfExists: true,     // Prevent overwriting existing key
   ),
 );
 
 if (result.code == BiometricError.success) {
    print('Public Key: ${result.publicKey}');
+} else if (result.code == BiometricError.keyAlreadyExists) {
+   print('Key already exists for this alias');
 }
 ```
 
-### `createSignature({ payload, config, signatureFormat, keyFormat, promptMessage })`
+### `createSignature({ payload, keyAlias, config, signatureFormat, keyFormat, promptMessage })`
 
 Prompts the user for biometric authentication and generates a cryptographic signature.
 
 - **Parameters**:
   - `payload`: The data to sign
+  - `keyAlias`: Which key to sign with. Defaults to the default alias.
   - `config`: `CreateSignatureConfig` with platform options
   - `signatureFormat`: Output format for signature
   - `keyFormat`: Output format for public key
@@ -356,6 +367,7 @@ Prompts the user for biometric authentication and generates a cryptographic sign
 | Option | Platforms | Description |
 |--------|-----------|-------------|
 | `allowDeviceCredentials` | Android | Allow PIN/pattern fallback |
+| `fallbackOptions` | Android 15+ | Custom fallback buttons on biometric prompt (see [Custom Fallback Options](#custom-fallback-options-android-15)) |
 | `promptSubtitle` | Android | Subtitle for biometric prompt |
 | `promptDescription` | Android | Description for biometric prompt |
 | `cancelButtonText` | Android | Cancel button text |
@@ -365,10 +377,12 @@ Prompts the user for biometric authentication and generates a cryptographic sign
   - `signature`: The signed payload.
   - `publicKey`: The public key.
   - `code`: `BiometricError` code.
+  - `selectedFallbackIndex` / `selectedFallbackText`: Populated when `code == BiometricError.fallbackSelected`.
 
 ```dart
 final result = await biometricSignature.createSignature(
   payload: 'Data to sign',
+  keyAlias: 'payment_key',  // Optional: use named key
   promptMessage: 'Please authenticate',
   signatureFormat: SignatureFormat.base64,
   keyFormat: KeyFormat.base64,
@@ -378,13 +392,14 @@ final result = await biometricSignature.createSignature(
 );
 ```
 
-### `decrypt({ payload, payloadFormat, config, promptMessage })`
+### `decrypt({ payload, payloadFormat, keyAlias, config, promptMessage })`
 
 Decrypts the given payload using the private key and biometrics.
 
 - **Parameters**:
   - `payload`: The encrypted data
   - `payloadFormat`: Format of encrypted data (`PayloadFormat.base64`, `hex`)
+  - `keyAlias`: Which key to decrypt with. Defaults to the default alias.
   - `config`: `DecryptConfig` with platform options
   - `promptMessage`: Custom authentication prompt
 
@@ -393,6 +408,7 @@ Decrypts the given payload using the private key and biometrics.
 | Option | Platforms | Description |
 |--------|-----------|-------------|
 | `allowDeviceCredentials` | Android | Allow PIN/pattern fallback |
+| `fallbackOptions` | Android 15+ | Custom fallback buttons on biometric prompt (see [Custom Fallback Options](#custom-fallback-options-android-15)) |
 | `promptSubtitle` | Android | Subtitle for biometric prompt |
 | `promptDescription` | Android | Description for biometric prompt |
 | `cancelButtonText` | Android | Cancel button text |
@@ -403,11 +419,13 @@ Decrypts the given payload using the private key and biometrics.
 - **Returns**: `Future<DecryptResult>`.
   - `decryptedData`: The plaintext string.
   - `code`: `BiometricError` code.
+  - `selectedFallbackIndex` / `selectedFallbackText`: Populated when `code == BiometricError.fallbackSelected`.
 
 ```dart
 final result = await biometricSignature.decrypt(
   payload: encryptedBase64,
   payloadFormat: PayloadFormat.base64,
+  keyAlias: 'payment_key',  // Optional: use named key
   promptMessage: 'Authenticate to decrypt',
   config: DecryptConfig(
     allowDeviceCredentials: false,
@@ -415,9 +433,12 @@ final result = await biometricSignature.decrypt(
 );
 ```
 
-### `deleteKeys()`
+### `deleteKeys({ keyAlias })`
 
-Deletes all biometric key material (signing and decryption keys) from the device's secure storage.
+Deletes biometric key material for a specific alias from the device's secure storage.
+
+- **Parameters**:
+  - `keyAlias`: Which key to delete. When `null`, deletes the default alias only. Other aliases are not affected.
 
 - **Returns**: `Future<bool>`.
   - `true`: Keys were successfully deleted, or no keys existed (idempotent).
@@ -426,9 +447,25 @@ Deletes all biometric key material (signing and decryption keys) from the device
 > **Note**: This operation is idempotent—calling `deleteKeys()` when no keys exist will still return `true`. This allows safe "logout" or "reset" flows without checking key existence first.
 
 ```dart
-final deleted = await biometricSignature.deleteKeys();
+// Delete a specific named key
+final deleted = await biometricSignature.deleteKeys(keyAlias: 'payment_key');
+
+// Delete the default key
+final defaultDeleted = await biometricSignature.deleteKeys();
+```
+
+### `deleteAllKeys()`
+
+Deletes all biometric key material across all aliases. This is a destructive operation — use `deleteKeys()` with a specific alias for targeted deletion.
+
+- **Returns**: `Future<bool>`.
+  - `true`: All keys were successfully deleted.
+  - `false`: Deletion failed due to a system error.
+
+```dart
+final deleted = await biometricSignature.deleteAllKeys();
 if (deleted) {
-  print('All biometric keys removed');
+  print('All biometric keys removed across all aliases');
 }
 ```
 
@@ -452,11 +489,12 @@ if (availability.canAuthenticate) {
 }
 ```
 
-### `getKeyInfo({ checkValidity, keyFormat })`
+### `getKeyInfo({ keyAlias, checkValidity, keyFormat })`
 
 Retrieves detailed information about existing biometric keys without prompting for authentication.
 
 - **Parameters**:
+  - `keyAlias`: Which key to query. Defaults to the default alias.
   - `checkValidity`: Whether to verify the key hasn't been invalidated by biometric changes. Default is `false`.
   - `keyFormat`: Output format for public keys (`KeyFormat.base64`, `pem`, `hex`). Default is `base64`.
 - **Returns**: `Future<KeyInfo>`.
@@ -470,6 +508,7 @@ Retrieves detailed information about existing biometric keys without prompting f
 
 ```dart
 final info = await biometricSignature.getKeyInfo(
+  keyAlias: 'payment_key',  // Optional: query named key
   checkValidity: true,
   keyFormat: KeyFormat.pem,
 );
@@ -480,16 +519,20 @@ if (info.exists && (info.isValid ?? true)) {
 }
 ```
 
-### `biometricKeyExists({ checkValidity })`
+### `biometricKeyExists({ keyAlias, checkValidity })`
 
 Convenience method that wraps `getKeyInfo()` and returns a simple boolean.
 
 - **Parameters**:
+  - `keyAlias`: Which key to check. Defaults to the default alias.
   - `checkValidity`: Whether to check key validity. Default is `false`.
 - **Returns**: `Future<bool>` - `true` if key exists and is valid.
 
 ```dart
-final exists = await biometricSignature.biometricKeyExists(checkValidity: true);
+final exists = await biometricSignature.biometricKeyExists(
+  keyAlias: 'payment_key',
+  checkValidity: true,
+);
 ```
 
 ### `simplePrompt({ promptMessage, config })`
@@ -505,6 +548,7 @@ Performs biometric authentication without performing any cryptographic operation
 | `cancelButtonText` | Android | Cancel button text |
 | `allowDeviceCredentials` | Android/iOS/macOS | Allow PIN/pattern/passcode fallback |
 | `biometricStrength` | Android | `BiometricStrength.strong` or `BiometricStrength.weak` |
+| `fallbackOptions` | Android 15+ | Custom fallback buttons on biometric prompt (see [Custom Fallback Options](#custom-fallback-options-android-15)) |
 
 ```dart
 final result = await biometricSignature.simplePrompt(
@@ -518,10 +562,58 @@ final result = await biometricSignature.simplePrompt(
 
 if (result.success == true) {
   // Authenticated
+} else if (result.code == BiometricError.fallbackSelected) {
+  print('User chose: ${result.selectedFallbackText}');
 } else {
   print('Failed: ${result.code} - ${result.error}');
 }
 ```
+
+---
+
+## Custom Fallback Options (Android 15+)
+
+On Android 15 and later, you can display custom fallback buttons on the biometric prompt using `BiometricFallbackOption`. These replace the default cancel button and allow users to choose alternative authentication methods.
+
+### `BiometricFallbackOption`
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `text` | `String?` | The label displayed on the fallback button |
+| `iconName` | `String?` | Icon type: `"password"`, `"qr_code"`, `"account"`, or `"generic"` (default) |
+
+### Usage
+
+```dart
+import 'dart:io' show Platform;
+
+// Define fallback options (Android only)
+final fallbackOptions = Platform.isAndroid
+    ? [
+        BiometricFallbackOption(text: 'Use Password', iconName: 'password'),
+        BiometricFallbackOption(text: 'Scan QR Code', iconName: 'qr_code'),
+      ]
+    : null;
+
+// Pass to any config class
+final result = await biometricSignature.createSignature(
+  payload: 'Data to sign',
+  promptMessage: 'Authenticate',
+  config: CreateSignatureConfig(
+    fallbackOptions: fallbackOptions,
+  ),
+);
+
+// Handle the result
+if (result.code == BiometricError.success) {
+  print('Signature: ${result.signature}');
+} else if (result.code == BiometricError.fallbackSelected) {
+  print('Fallback selected: ${result.selectedFallbackText} '
+      '(index: ${result.selectedFallbackIndex})');
+}
+```
+
+> **Note**: On iOS, macOS, and Windows, `fallbackOptions` is ignored. On Android versions below 15, the standard biometric prompt is shown instead.
 
 ---
 
@@ -858,3 +950,54 @@ import 'package:biometric_signature/biometric_signature.dart';
 #### New Feature: `simplePrompt()`
 
 v10 adds `simplePrompt()` for scenarios where you only need to verify the user's presence without cryptographic operations. See the [Usage](#usage) section for details.
+
+---
+
+### Migrating from v10 to v11
+
+**v11.0.0** adds named key aliases, key overwrite protection, custom fallback options, and internal architecture improvements.
+
+#### New: Named Key Aliases
+
+All key operations now accept an optional `keyAlias` parameter:
+
+```dart
+// Before (v10.2) — single default key
+final result = await biometricSignature.createKeys(...);
+
+// After (v10.3) — multiple named keys
+final authKey = await biometricSignature.createKeys(keyAlias: 'auth', ...);
+final paymentKey = await biometricSignature.createKeys(keyAlias: 'payment', ...);
+```
+
+Methods updated: `createKeys`, `createSignature`, `decrypt`, `deleteKeys`, `getKeyInfo`, `biometricKeyExists`.
+
+#### New: Key Overwrite Protection
+
+```dart
+final result = await biometricSignature.createKeys(
+  keyAlias: 'payment',
+  config: CreateKeysConfig(failIfExists: true),
+);
+
+if (result.code == BiometricError.keyAlreadyExists) {
+  // Key already exists — handle accordingly
+}
+```
+
+#### New: `deleteAllKeys()`
+
+```dart
+// Delete all keys across all aliases
+await biometricSignature.deleteAllKeys();
+```
+
+#### New: Custom Fallback Options (Android 15+)
+
+All config classes now support `fallbackOptions`. See [Custom Fallback Options](#custom-fallback-options-android-15) for details.
+
+#### New Breaking: `BiometricError` Values
+
+- `BiometricError.keyAlreadyExists` — returned when `failIfExists: true` and key exists.
+- `BiometricError.fallbackSelected` — returned when user taps a custom fallback button. Check `selectedFallbackIndex` and `selectedFallbackText` on the result object.
+- **Impact**: If you use exhaustive switch statements (e.g., in Dart 3.0+), you must add cases for these new values.

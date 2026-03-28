@@ -1,3 +1,24 @@
+## [11.0.0] - 2026-03-28
+
+### Added
+* **Named Key Aliases:** All key operations (`createKeys`, `createSignature`, `decrypt`, `deleteKeys`, `getKeyInfo`, `biometricKeyExists`) now accept an optional `keyAlias` parameter, allowing apps to manage multiple independent key pairs (e.g., one for auth, one for payment signing).
+* **Key Overwrite Protection:** `CreateKeysConfig.failIfExists` prevents accidental key replacement. When `true`, `createKeys()` fails with `BiometricError.keyAlreadyExists` if a key with the specified alias already exists.
+* **Delete All Keys:** New `deleteAllKeys()` method removes all plugin-managed keys across all aliases.
+* **Custom Fallback Options (Android 15+):** All config classes (`CreateKeysConfig`, `CreateSignatureConfig`, `DecryptConfig`, `SimplePromptConfig`) now support `fallbackOptions` — a list of `BiometricFallbackOption` items that appear as custom buttons on the biometric prompt. When the user taps a fallback option, the result contains `BiometricError.fallbackSelected` with `selectedFallbackIndex` and `selectedFallbackText`.
+* **OAEP Padding for RSA:** RSA encryption now uses OAEP padding with PKCS#1 v1.5 fallback for improved security.
+* **Atomic File Writing:** Sensitive key material writes use atomic file operations to prevent data corruption.
+
+### Fixed
+* **`KEY_INVALIDATED` Error Mapping:** `BiometricError.keyInvalidated` is now correctly returned when keys have been invalidated by biometric enrollment changes on Android.
+* **Android Coroutine Dispatching:** Key management operations now use proper coroutine dispatchers (IO for file/crypto operations).
+* **CancellationException Handling:** Structured concurrency is preserved — `CancellationException` is always rethrown, preventing callbacks to a detached Flutter engine.
+* **Hybrid Key Cleanup:** If the second biometric authentication fails during hybrid key creation, partially-created keys are now cleaned up.
+
+### Changed
+* **Modularized Android Architecture:** Extracted Android plugin into focused helper classes (`BiometricPromptHelper`, `CryptoOperations`, `ErrorMapper`, `FileIOHelper`, `FormatUtils`, `KeyManager`).
+* **Unified macOS/iOS Plugin:** Consolidated Swift plugin code using conditional compilation (`#if os(macOS)`) to support both platforms from a single source file.
+* **Refined ProGuard Rules:** Updated Android ProGuard/R8 rules for better compatibility.
+
 ## [10.2.0] - 2026-03-03
 
 * Enhance biometric key security on iOS/macOS.
