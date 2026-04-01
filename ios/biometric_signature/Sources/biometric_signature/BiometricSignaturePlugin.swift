@@ -975,7 +975,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         }
     }
 
-    private func deleteGenericPasswords(withServicePrefix prefix: String) {
+    private func deleteGenericPasswords(withServicePrefix prefix: String, requireMatchingAccount: Bool) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecReturnAttributes as String: true,
@@ -995,12 +995,17 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
                 continue
             }
 
+            let account = item[kSecAttrAccount as String] as? String
+            if requireMatchingAccount && account != service {
+                continue
+            }
+
             var deleteQuery: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: service
             ]
 
-            if let account = item[kSecAttrAccount as String] as? String {
+            if let account {
                 deleteQuery[kSecAttrAccount as String] = account
             }
 
