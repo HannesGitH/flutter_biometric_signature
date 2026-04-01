@@ -1,12 +1,13 @@
 #include "biometric_signature_plugin.h"
 
 #include <objbase.h>
-#include <ppltasks.h>
 #include <windows.h>
+
 
 
 // C++/WinRT Windows Hello APIs
 #include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Security.Credentials.h>
 #include <winrt/Windows.Storage.h>
 #include <winrt/Windows.Storage.Streams.h>
@@ -481,24 +482,39 @@ void BiometricSignaturePlugin::DeleteKeys(
   });
 }
 
+// Helper: recursively delete keys one at a time, then call the completion.
+static void DeleteKeysRecursive(
+    std::shared_ptr<std::vector<std::wstring>> key_names,
+    size_t index,
+    std::function<void(ErrorOr<bool> reply)> result) {
+
+  if (index >= key_names->size()) {
+    // All keys deleted
+    ClearTrackedAliasMarkers();
+    result(true);
+    return;
+  }
+
+  auto op = winrt::Windows::Security::Credentials::KeyCredentialManager::DeleteAsync(
+          (*key_names)[index]);
+
+  op.Completed([key_names, index, result](auto const& /*op*/, auto /*status*/) {
+    DeleteKeysRecursive(key_names, index + 1, result);
+  });
+}
+
 void BiometricSignaturePlugin::DeleteAllKeys(
     std::function<void(ErrorOr<bool> reply)> result) {
 
-  auto key_names = TrackedKeyNames();
-  std::vector<concurrency::task<void>> delete_tasks;
-  delete_tasks.reserve(key_names.size());
+  auto key_names = std::make_shared<std::vector<std::wstring>>(TrackedKeyNames());
 
-  for (const auto& key_name : key_names) {
-    auto op = winrt::Windows::Security::Credentials::KeyCredentialManager::DeleteAsync(
-            key_name);
-    delete_tasks.push_back(concurrency::create_task(op));
+  if (key_names->empty()) {
+    ClearTrackedAliasMarkers();
+    result(true);
+    return;
   }
 
-  concurrency::when_all(begin(delete_tasks), end(delete_tasks))
-      .then([result](auto) {
-          ClearTrackedAliasMarkers();
-          result(true);
-      });
+  DeleteKeysRecursive(key_names, 0, result);
 }
 
 void BiometricSignaturePlugin::GetKeyInfo(
