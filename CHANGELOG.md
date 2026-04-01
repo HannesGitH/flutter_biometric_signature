@@ -1,6 +1,7 @@
 ## [11.0.2] - 2026-04-01
 
 * Documentation updates.
+* Bug fixes.
 
 ## [11.0.1] - 2026-03-28
 
