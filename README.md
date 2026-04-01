@@ -171,7 +171,7 @@ To get started with Biometric Signature, follow these steps:
 
 ```yaml
 dependencies:
-  biometric_signature: ^11.0.1
+  biometric_signature: ^11.0.2
 ```
 
 |             | Android | iOS   | macOS  | Windows |
@@ -965,7 +965,7 @@ All key operations now accept an optional `keyAlias` parameter:
 // Before (v10.2) — single default key
 final result = await biometricSignature.createKeys(...);
 
-// After (v10.3) — multiple named keys
+// After (v11.0) — multiple named keys
 final authKey = await biometricSignature.createKeys(keyAlias: 'auth', ...);
 final paymentKey = await biometricSignature.createKeys(keyAlias: 'payment', ...);
 ```

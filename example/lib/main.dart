@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       theme: ThemeData(useMaterial3: true, colorSchemeSeed: Colors.blue),
       home: Scaffold(
-        appBar: AppBar(title: const Text('Biometric Signature v11.0.1')),
+        appBar: AppBar(title: const Text('Biometric Signature v11.0.2')),
         body: const ExampleAppBody(),
       ),
     );

@@ -1,7 +1,11 @@
+## [11.0.2] - 2026-04-01
+
+* Documentation updates.
+
 ## [11.0.1] - 2026-03-28
 
-###Fixed
-* Fixed MacOS SPM issue.
+### Fixed
+* Fixed macOS SPM issue.
 
 ## [11.0.0] - 2026-03-28
 
