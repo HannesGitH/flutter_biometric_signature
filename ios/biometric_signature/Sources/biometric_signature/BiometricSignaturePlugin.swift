@@ -483,21 +483,13 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     }
 
     func deleteAllKeys(completion: @escaping (Result<Bool, Error>) -> Void) {
-        // Delete all EC keys with the plugin prefix
-        let ecQuery: [String: Any] = [
-            kSecClass as String: kSecClassKey,
-            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom
-        ]
-        SecItemDelete(ecQuery as CFDictionary)
+        // Delete only plugin-owned EC and wrapped RSA records.
+        deleteEcKeys(withTagPrefix: Constants.ecKeyPrefix)
+        deleteGenericPasswords(withServicePrefix: Constants.biometricKeyPrefix)
 
-        // Delete all wrapped RSA keys (stored as generic passwords with biometric_key prefix)
-        let rsaQuery: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword
-        ]
-        SecItemDelete(rsaQuery as CFDictionary)
-
-        // Delete all domain state and invalidation settings
+        // Delete all plugin-owned domain state and invalidation settings.
         DomainState.deleteAll()
+        deleteGenericPasswords(withServicePrefix: Constants.invalidationSettingPrefix)
 
         completion(.success(true))
     }
@@ -949,6 +941,71 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
 
         _ = DomainState.deleteSaved(keyAlias)
         _ = InvalidationSetting.delete(keyAlias)
+    }
+
+
+    private func deleteEcKeys(withTagPrefix prefix: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassKey,
+            kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll
+        ]
+
+        var items: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &items)
+        guard status == errSecSuccess,
+              let attributes = items as? [[String: Any]] else {
+            return
+        }
+
+        for item in attributes {
+            guard let tagData = item[kSecAttrApplicationTag as String] as? Data,
+                  let tag = String(data: tagData, encoding: .utf8),
+                  tag.hasPrefix(prefix) else {
+                continue
+            }
+
+            let deleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassKey,
+                kSecAttrApplicationTag as String: tagData,
+                kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom
+            ]
+            SecItemDelete(deleteQuery as CFDictionary)
+        }
+    }
+
+    private func deleteGenericPasswords(withServicePrefix prefix: String) {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll
+        ]
+
+        var items: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &items)
+        guard status == errSecSuccess,
+              let attributes = items as? [[String: Any]] else {
+            return
+        }
+
+        for item in attributes {
+            guard let service = item[kSecAttrService as String] as? String,
+                  service.hasPrefix(prefix) else {
+                continue
+            }
+
+            var deleteQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service
+            ]
+
+            if let account = item[kSecAttrAccount as String] as? String {
+                deleteQuery[kSecAttrAccount as String] = account
+            }
+
+            SecItemDelete(deleteQuery as CFDictionary)
+        }
     }
 
     private func hasRsaKey(_ keyAlias: String?) -> Bool {
