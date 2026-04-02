@@ -1,4 +1,4 @@
-## [11.0.2] - 2026-04-01
+## [11.0.2] - 2026-04-02
 
 * Documentation updates.
 * Bug fixes.
