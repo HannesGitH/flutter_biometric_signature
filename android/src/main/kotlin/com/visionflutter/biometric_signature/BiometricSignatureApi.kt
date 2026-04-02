@@ -153,7 +153,15 @@ enum class BiometricError(val raw: Int) {
   /** The system canceled the operation (e.g., app went to background). */
   SYSTEM_CANCELED(12),
   /** Failed to show the biometric prompt (e.g., activity not available). */
-  PROMPT_ERROR(13);
+  PROMPT_ERROR(13),
+  /** A key with the specified alias already exists and failIfExists was set. */
+  KEY_ALREADY_EXISTS(14),
+  /**
+   * The user selected a custom fallback option instead of authenticating.
+   * [Android 15+ only] Check `selectedFallbackIndex` and `selectedFallbackText`
+   * on the result object to determine which option was selected.
+   */
+  FALLBACK_SELECTED(15);
 
   companion object {
     fun ofRaw(raw: Int): BiometricError? {
@@ -224,6 +232,55 @@ enum class PayloadFormat(val raw: Int) {
       return values().firstOrNull { it.raw == raw }
     }
   }
+}
+
+/**
+ * A custom fallback option shown on the biometric prompt.
+ *
+ * [Android 15+ only] When provided in a config's `fallbackOptions` list,
+ * these appear as alternative buttons on the biometric prompt dialog.
+ * If the user taps one, the result will have code [BiometricError.fallbackSelected]
+ * with the selected option's index and text.
+ *
+ * On iOS, macOS, and Windows this class is ignored.
+ *
+ * Generated class from Pigeon that represents data sent in messages.
+ */
+data class BiometricFallbackOption (
+  /** The text label displayed on the fallback button. */
+  val text: String? = null,
+  /**
+   * [Android] Optional icon type name for the fallback button.
+   * Valid values: `"password"`, `"qr_code"`, `"account"`, `"generic"`.
+   * Maps to `AuthenticationRequest.Biometric.Fallback.ICON_TYPE_*` constants.
+   * When null, defaults to `"generic"`.
+   */
+  val iconName: String? = null
+)
+ {
+  companion object {
+    fun fromList(pigeonVar_list: List<Any?>): BiometricFallbackOption {
+      val text = pigeonVar_list[0] as String?
+      val iconName = pigeonVar_list[1] as String?
+      return BiometricFallbackOption(text, iconName)
+    }
+  }
+  fun toList(): List<Any?> {
+    return listOf(
+      text,
+      iconName,
+    )
+  }
+  override fun equals(other: Any?): Boolean {
+    if (other !is BiometricFallbackOption) {
+      return false
+    }
+    if (this === other) {
+      return true
+    }
+    return BiometricSignatureApiPigeonUtils.deepEquals(toList(), other.toList())  }
+
+  override fun hashCode(): Int = toList().hashCode()
 }
 
 /** Generated class from Pigeon that represents data sent in messages. */
@@ -326,7 +383,17 @@ data class SignatureResult (
   val error: String? = null,
   val code: BiometricError? = null,
   val algorithm: String? = null,
-  val keySize: Long? = null
+  val keySize: Long? = null,
+  /**
+   * [Android 15+] Index of the selected fallback option in the original list.
+   * Only populated when `code == BiometricError.fallbackSelected`.
+   */
+  val selectedFallbackIndex: Long? = null,
+  /**
+   * [Android 15+] Text of the selected fallback option.
+   * Only populated when `code == BiometricError.fallbackSelected`.
+   */
+  val selectedFallbackText: String? = null
 )
  {
   companion object {
@@ -338,7 +405,9 @@ data class SignatureResult (
       val code = pigeonVar_list[4] as BiometricError?
       val algorithm = pigeonVar_list[5] as String?
       val keySize = pigeonVar_list[6] as Long?
-      return SignatureResult(signature, signatureBytes, publicKey, error, code, algorithm, keySize)
+      val selectedFallbackIndex = pigeonVar_list[7] as Long?
+      val selectedFallbackText = pigeonVar_list[8] as String?
+      return SignatureResult(signature, signatureBytes, publicKey, error, code, algorithm, keySize, selectedFallbackIndex, selectedFallbackText)
     }
   }
   fun toList(): List<Any?> {
@@ -350,6 +419,8 @@ data class SignatureResult (
       code,
       algorithm,
       keySize,
+      selectedFallbackIndex,
+      selectedFallbackText,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -368,7 +439,17 @@ data class SignatureResult (
 data class DecryptResult (
   val decryptedData: String? = null,
   val error: String? = null,
-  val code: BiometricError? = null
+  val code: BiometricError? = null,
+  /**
+   * [Android 15+] Index of the selected fallback option in the original list.
+   * Only populated when `code == BiometricError.fallbackSelected`.
+   */
+  val selectedFallbackIndex: Long? = null,
+  /**
+   * [Android 15+] Text of the selected fallback option.
+   * Only populated when `code == BiometricError.fallbackSelected`.
+   */
+  val selectedFallbackText: String? = null
 )
  {
   companion object {
@@ -376,7 +457,9 @@ data class DecryptResult (
       val decryptedData = pigeonVar_list[0] as String?
       val error = pigeonVar_list[1] as String?
       val code = pigeonVar_list[2] as BiometricError?
-      return DecryptResult(decryptedData, error, code)
+      val selectedFallbackIndex = pigeonVar_list[3] as Long?
+      val selectedFallbackText = pigeonVar_list[4] as String?
+      return DecryptResult(decryptedData, error, code, selectedFallbackIndex, selectedFallbackText)
     }
   }
   fun toList(): List<Any?> {
@@ -384,6 +467,8 @@ data class DecryptResult (
       decryptedData,
       error,
       code,
+      selectedFallbackIndex,
+      selectedFallbackText,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -510,7 +595,23 @@ data class CreateKeysConfig (
   /** [Android] Description text for the biometric prompt. */
   val promptDescription: String? = null,
   /** [Android] Text for the cancel button in the biometric prompt. */
-  val cancelButtonText: String? = null
+  val cancelButtonText: String? = null,
+  /**
+   * [All platforms] When `true`, key creation will fail with
+   * [BiometricError.keyAlreadyExists] if a key with the specified alias
+   * (or the default alias) already exists.
+   *
+   * When `false` (default), existing keys are silently replaced.
+   */
+  val failIfExists: Boolean? = null,
+  /**
+   * [Android 15+] Custom fallback buttons shown on the biometric prompt.
+   * When provided, these replace the default cancel button.
+   * If the user taps a fallback option, the result will have
+   * `code == BiometricError.fallbackSelected` with the selected option's
+   * index and text. On other platforms, this field is ignored.
+   */
+  val fallbackOptions: List<BiometricFallbackOption?>? = null
 )
  {
   companion object {
@@ -523,7 +624,9 @@ data class CreateKeysConfig (
       val promptSubtitle = pigeonVar_list[5] as String?
       val promptDescription = pigeonVar_list[6] as String?
       val cancelButtonText = pigeonVar_list[7] as String?
-      return CreateKeysConfig(signatureType, enforceBiometric, setInvalidatedByBiometricEnrollment, useDeviceCredentials, enableDecryption, promptSubtitle, promptDescription, cancelButtonText)
+      val failIfExists = pigeonVar_list[8] as Boolean?
+      val fallbackOptions = pigeonVar_list[9] as List<BiometricFallbackOption?>?
+      return CreateKeysConfig(signatureType, enforceBiometric, setInvalidatedByBiometricEnrollment, useDeviceCredentials, enableDecryption, promptSubtitle, promptDescription, cancelButtonText, failIfExists, fallbackOptions)
     }
   }
   fun toList(): List<Any?> {
@@ -536,6 +639,8 @@ data class CreateKeysConfig (
       promptSubtitle,
       promptDescription,
       cancelButtonText,
+      failIfExists,
+      fallbackOptions,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -567,7 +672,15 @@ data class CreateSignatureConfig (
   /** [Android] Whether to allow device credentials (PIN/pattern) as fallback. */
   val allowDeviceCredentials: Boolean? = null,
   /** [iOS] Whether to migrate from legacy keychain storage. */
-  val shouldMigrate: Boolean? = null
+  val shouldMigrate: Boolean? = null,
+  /**
+   * [Android 15+] Custom fallback buttons shown on the biometric prompt.
+   * When provided, these replace the default cancel button.
+   * If the user taps a fallback option, the result will have
+   * `code == BiometricError.fallbackSelected` with the selected option's
+   * index and text. On other platforms, this field is ignored.
+   */
+  val fallbackOptions: List<BiometricFallbackOption?>? = null
 )
  {
   companion object {
@@ -577,7 +690,8 @@ data class CreateSignatureConfig (
       val cancelButtonText = pigeonVar_list[2] as String?
       val allowDeviceCredentials = pigeonVar_list[3] as Boolean?
       val shouldMigrate = pigeonVar_list[4] as Boolean?
-      return CreateSignatureConfig(promptSubtitle, promptDescription, cancelButtonText, allowDeviceCredentials, shouldMigrate)
+      val fallbackOptions = pigeonVar_list[5] as List<BiometricFallbackOption?>?
+      return CreateSignatureConfig(promptSubtitle, promptDescription, cancelButtonText, allowDeviceCredentials, shouldMigrate, fallbackOptions)
     }
   }
   fun toList(): List<Any?> {
@@ -587,6 +701,7 @@ data class CreateSignatureConfig (
       cancelButtonText,
       allowDeviceCredentials,
       shouldMigrate,
+      fallbackOptions,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -619,7 +734,15 @@ data class DecryptConfig (
   /** [Android] Whether to allow device credentials (PIN/pattern) as fallback. */
   val allowDeviceCredentials: Boolean? = null,
   /** [iOS] Whether to migrate from legacy keychain storage. */
-  val shouldMigrate: Boolean? = null
+  val shouldMigrate: Boolean? = null,
+  /**
+   * [Android 15+] Custom fallback buttons shown on the biometric prompt.
+   * When provided, these replace the default cancel button.
+   * If the user taps a fallback option, the result will have
+   * `code == BiometricError.fallbackSelected` with the selected option's
+   * index and text. On other platforms, this field is ignored.
+   */
+  val fallbackOptions: List<BiometricFallbackOption?>? = null
 )
  {
   companion object {
@@ -629,7 +752,8 @@ data class DecryptConfig (
       val cancelButtonText = pigeonVar_list[2] as String?
       val allowDeviceCredentials = pigeonVar_list[3] as Boolean?
       val shouldMigrate = pigeonVar_list[4] as Boolean?
-      return DecryptConfig(promptSubtitle, promptDescription, cancelButtonText, allowDeviceCredentials, shouldMigrate)
+      val fallbackOptions = pigeonVar_list[5] as List<BiometricFallbackOption?>?
+      return DecryptConfig(promptSubtitle, promptDescription, cancelButtonText, allowDeviceCredentials, shouldMigrate, fallbackOptions)
     }
   }
   fun toList(): List<Any?> {
@@ -639,6 +763,7 @@ data class DecryptConfig (
       cancelButtonText,
       allowDeviceCredentials,
       shouldMigrate,
+      fallbackOptions,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -694,7 +819,15 @@ data class SimplePromptConfig (
    *
    * Default: strong
    */
-  val biometricStrength: BiometricStrength? = null
+  val biometricStrength: BiometricStrength? = null,
+  /**
+   * [Android 15+] Custom fallback buttons shown on the biometric prompt.
+   * When provided, these replace the default cancel button.
+   * If the user taps a fallback option, the result will have
+   * `code == BiometricError.fallbackSelected` with the selected option's
+   * index and text. On other platforms, this field is ignored.
+   */
+  val fallbackOptions: List<BiometricFallbackOption?>? = null
 )
  {
   companion object {
@@ -704,7 +837,8 @@ data class SimplePromptConfig (
       val cancelButtonText = pigeonVar_list[2] as String?
       val allowDeviceCredentials = pigeonVar_list[3] as Boolean?
       val biometricStrength = pigeonVar_list[4] as BiometricStrength?
-      return SimplePromptConfig(subtitle, description, cancelButtonText, allowDeviceCredentials, biometricStrength)
+      val fallbackOptions = pigeonVar_list[5] as List<BiometricFallbackOption?>?
+      return SimplePromptConfig(subtitle, description, cancelButtonText, allowDeviceCredentials, biometricStrength, fallbackOptions)
     }
   }
   fun toList(): List<Any?> {
@@ -714,6 +848,7 @@ data class SimplePromptConfig (
       cancelButtonText,
       allowDeviceCredentials,
       biometricStrength,
+      fallbackOptions,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -745,7 +880,17 @@ data class SimplePromptResult (
    * Standardized error code if authentication failed.
    * Use this for programmatic error handling.
    */
-  val code: BiometricError? = null
+  val code: BiometricError? = null,
+  /**
+   * [Android 15+] Index of the selected fallback option in the original list.
+   * Only populated when `code == BiometricError.fallbackSelected`.
+   */
+  val selectedFallbackIndex: Long? = null,
+  /**
+   * [Android 15+] Text of the selected fallback option.
+   * Only populated when `code == BiometricError.fallbackSelected`.
+   */
+  val selectedFallbackText: String? = null
 )
  {
   companion object {
@@ -753,7 +898,9 @@ data class SimplePromptResult (
       val success = pigeonVar_list[0] as Boolean?
       val error = pigeonVar_list[1] as String?
       val code = pigeonVar_list[2] as BiometricError?
-      return SimplePromptResult(success, error, code)
+      val selectedFallbackIndex = pigeonVar_list[3] as Long?
+      val selectedFallbackText = pigeonVar_list[4] as String?
+      return SimplePromptResult(success, error, code, selectedFallbackIndex, selectedFallbackText)
     }
   }
   fun toList(): List<Any?> {
@@ -761,6 +908,8 @@ data class SimplePromptResult (
       success,
       error,
       code,
+      selectedFallbackIndex,
+      selectedFallbackText,
     )
   }
   override fun equals(other: Any?): Boolean {
@@ -814,50 +963,55 @@ private open class BiometricSignatureApiPigeonCodec : StandardMessageCodec() {
       }
       136.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          BiometricAvailability.fromList(it)
+          BiometricFallbackOption.fromList(it)
         }
       }
       137.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          KeyCreationResult.fromList(it)
+          BiometricAvailability.fromList(it)
         }
       }
       138.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          SignatureResult.fromList(it)
+          KeyCreationResult.fromList(it)
         }
       }
       139.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          DecryptResult.fromList(it)
+          SignatureResult.fromList(it)
         }
       }
       140.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          KeyInfo.fromList(it)
+          DecryptResult.fromList(it)
         }
       }
       141.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          CreateKeysConfig.fromList(it)
+          KeyInfo.fromList(it)
         }
       }
       142.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          CreateSignatureConfig.fromList(it)
+          CreateKeysConfig.fromList(it)
         }
       }
       143.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          DecryptConfig.fromList(it)
+          CreateSignatureConfig.fromList(it)
         }
       }
       144.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
-          SimplePromptConfig.fromList(it)
+          DecryptConfig.fromList(it)
         }
       }
       145.toByte() -> {
+        return (readValue(buffer) as? List<Any?>)?.let {
+          SimplePromptConfig.fromList(it)
+        }
+      }
+      146.toByte() -> {
         return (readValue(buffer) as? List<Any?>)?.let {
           SimplePromptResult.fromList(it)
         }
@@ -895,44 +1049,48 @@ private open class BiometricSignatureApiPigeonCodec : StandardMessageCodec() {
         stream.write(135)
         writeValue(stream, value.raw.toLong())
       }
-      is BiometricAvailability -> {
+      is BiometricFallbackOption -> {
         stream.write(136)
         writeValue(stream, value.toList())
       }
-      is KeyCreationResult -> {
+      is BiometricAvailability -> {
         stream.write(137)
         writeValue(stream, value.toList())
       }
-      is SignatureResult -> {
+      is KeyCreationResult -> {
         stream.write(138)
         writeValue(stream, value.toList())
       }
-      is DecryptResult -> {
+      is SignatureResult -> {
         stream.write(139)
         writeValue(stream, value.toList())
       }
-      is KeyInfo -> {
+      is DecryptResult -> {
         stream.write(140)
         writeValue(stream, value.toList())
       }
-      is CreateKeysConfig -> {
+      is KeyInfo -> {
         stream.write(141)
         writeValue(stream, value.toList())
       }
-      is CreateSignatureConfig -> {
+      is CreateKeysConfig -> {
         stream.write(142)
         writeValue(stream, value.toList())
       }
-      is DecryptConfig -> {
+      is CreateSignatureConfig -> {
         stream.write(143)
         writeValue(stream, value.toList())
       }
-      is SimplePromptConfig -> {
+      is DecryptConfig -> {
         stream.write(144)
         writeValue(stream, value.toList())
       }
-      is SimplePromptResult -> {
+      is SimplePromptConfig -> {
         stream.write(145)
+        writeValue(stream, value.toList())
+      }
+      is SimplePromptResult -> {
+        stream.write(146)
         writeValue(stream, value.toList())
       }
       else -> super.writeValue(stream, value)
@@ -948,39 +1106,56 @@ interface BiometricSignatureApi {
   /**
    * Creates a new key pair.
    *
+   * [keyAlias] is an optional alias for the key. When null, the default
+   * alias is used. Different aliases create independent key pairs.
    * [config] contains platform-specific options. See [CreateKeysConfig].
    * [keyFormat] specifies the output format for the public key.
    * [promptMessage] is the message shown to the user during authentication.
    */
-  fun createKeys(config: CreateKeysConfig?, keyFormat: KeyFormat, promptMessage: String?, callback: (Result<KeyCreationResult>) -> Unit)
+  fun createKeys(keyAlias: String?, config: CreateKeysConfig?, keyFormat: KeyFormat, promptMessage: String?, callback: (Result<KeyCreationResult>) -> Unit)
   /**
    * Creates a signature.
    *
    * [payload] is the data to sign.
+   * [keyAlias] specifies which key to sign with. Defaults to the default alias.
    * [config] contains platform-specific options. See [CreateSignatureConfig].
    * [signatureFormat] specifies the output format for the signature.
    * [keyFormat] specifies the output format for the public key.
    * [promptMessage] is the message shown to the user during authentication.
    */
-  fun createSignature(payload: String, config: CreateSignatureConfig?, signatureFormat: SignatureFormat, keyFormat: KeyFormat, promptMessage: String?, callback: (Result<SignatureResult>) -> Unit)
+  fun createSignature(payload: String, keyAlias: String?, config: CreateSignatureConfig?, signatureFormat: SignatureFormat, keyFormat: KeyFormat, promptMessage: String?, callback: (Result<SignatureResult>) -> Unit)
   /**
    * Decrypts data.
    *
    * Note: Not supported on Windows.
    * [payload] is the encrypted data.
+   * [keyAlias] specifies which key to decrypt with. Defaults to the default alias.
    * [payloadFormat] specifies the format of the encrypted data.
    * [config] contains platform-specific options. See [DecryptConfig].
    * [promptMessage] is the message shown to the user during authentication.
    */
-  fun decrypt(payload: String, payloadFormat: PayloadFormat, config: DecryptConfig?, promptMessage: String?, callback: (Result<DecryptResult>) -> Unit)
-  /** Deletes keys. */
-  fun deleteKeys(callback: (Result<Boolean>) -> Unit)
+  fun decrypt(payload: String, keyAlias: String?, payloadFormat: PayloadFormat, config: DecryptConfig?, promptMessage: String?, callback: (Result<DecryptResult>) -> Unit)
+  /**
+   * Deletes keys for a specific alias.
+   *
+   * [keyAlias] specifies which key to delete. When null, deletes the
+   * default alias only. Other aliases are not affected.
+   */
+  fun deleteKeys(keyAlias: String?, callback: (Result<Boolean>) -> Unit)
+  /**
+   * Deletes all biometric keys across all aliases.
+   *
+   * This is a destructive operation that removes every key managed by
+   * this plugin. Use [deleteKeys] for targeted deletion.
+   */
+  fun deleteAllKeys(callback: (Result<Boolean>) -> Unit)
   /**
    * Gets detailed information about existing biometric keys.
    *
+   * [keyAlias] specifies which key to query. Defaults to the default alias.
    * Returns key metadata including algorithm, size, validity, and public keys.
    */
-  fun getKeyInfo(checkValidity: Boolean, keyFormat: KeyFormat, callback: (Result<KeyInfo>) -> Unit)
+  fun getKeyInfo(keyAlias: String?, checkValidity: Boolean, keyFormat: KeyFormat, callback: (Result<KeyInfo>) -> Unit)
   /**
    * Performs simple biometric authentication without cryptographic operations.
    *
@@ -1028,10 +1203,11 @@ interface BiometricSignatureApi {
         if (api != null) {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
-            val configArg = args[0] as CreateKeysConfig?
-            val keyFormatArg = args[1] as KeyFormat
-            val promptMessageArg = args[2] as String?
-            api.createKeys(configArg, keyFormatArg, promptMessageArg) { result: Result<KeyCreationResult> ->
+            val keyAliasArg = args[0] as String?
+            val configArg = args[1] as CreateKeysConfig?
+            val keyFormatArg = args[2] as KeyFormat
+            val promptMessageArg = args[3] as String?
+            api.createKeys(keyAliasArg, configArg, keyFormatArg, promptMessageArg) { result: Result<KeyCreationResult> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
@@ -1051,11 +1227,12 @@ interface BiometricSignatureApi {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
             val payloadArg = args[0] as String
-            val configArg = args[1] as CreateSignatureConfig?
-            val signatureFormatArg = args[2] as SignatureFormat
-            val keyFormatArg = args[3] as KeyFormat
-            val promptMessageArg = args[4] as String?
-            api.createSignature(payloadArg, configArg, signatureFormatArg, keyFormatArg, promptMessageArg) { result: Result<SignatureResult> ->
+            val keyAliasArg = args[1] as String?
+            val configArg = args[2] as CreateSignatureConfig?
+            val signatureFormatArg = args[3] as SignatureFormat
+            val keyFormatArg = args[4] as KeyFormat
+            val promptMessageArg = args[5] as String?
+            api.createSignature(payloadArg, keyAliasArg, configArg, signatureFormatArg, keyFormatArg, promptMessageArg) { result: Result<SignatureResult> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
@@ -1075,10 +1252,11 @@ interface BiometricSignatureApi {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
             val payloadArg = args[0] as String
-            val payloadFormatArg = args[1] as PayloadFormat
-            val configArg = args[2] as DecryptConfig?
-            val promptMessageArg = args[3] as String?
-            api.decrypt(payloadArg, payloadFormatArg, configArg, promptMessageArg) { result: Result<DecryptResult> ->
+            val keyAliasArg = args[1] as String?
+            val payloadFormatArg = args[2] as PayloadFormat
+            val configArg = args[3] as DecryptConfig?
+            val promptMessageArg = args[4] as String?
+            api.decrypt(payloadArg, keyAliasArg, payloadFormatArg, configArg, promptMessageArg) { result: Result<DecryptResult> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
@@ -1095,8 +1273,28 @@ interface BiometricSignatureApi {
       run {
         val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.deleteKeys$separatedMessageChannelSuffix", codec)
         if (api != null) {
+          channel.setMessageHandler { message, reply ->
+            val args = message as List<Any?>
+            val keyAliasArg = args[0] as String?
+            api.deleteKeys(keyAliasArg) { result: Result<Boolean> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(BiometricSignatureApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.deleteAllKeys$separatedMessageChannelSuffix", codec)
+        if (api != null) {
           channel.setMessageHandler { _, reply ->
-            api.deleteKeys{ result: Result<Boolean> ->
+            api.deleteAllKeys{ result: Result<Boolean> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
@@ -1115,9 +1313,10 @@ interface BiometricSignatureApi {
         if (api != null) {
           channel.setMessageHandler { message, reply ->
             val args = message as List<Any?>
-            val checkValidityArg = args[0] as Boolean
-            val keyFormatArg = args[1] as KeyFormat
-            api.getKeyInfo(checkValidityArg, keyFormatArg) { result: Result<KeyInfo> ->
+            val keyAliasArg = args[0] as String?
+            val checkValidityArg = args[1] as Boolean
+            val keyFormatArg = args[2] as KeyFormat
+            api.getKeyInfo(keyAliasArg, checkValidityArg, keyFormatArg) { result: Result<KeyInfo> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))

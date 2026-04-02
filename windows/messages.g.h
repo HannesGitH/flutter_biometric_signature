@@ -113,7 +113,13 @@ enum class BiometricError {
   // The system canceled the operation (e.g., app went to background).
   kSystemCanceled = 12,
   // Failed to show the biometric prompt (e.g., activity not available).
-  kPromptError = 13
+  kPromptError = 13,
+  // A key with the specified alias already exists and failIfExists was set.
+  kKeyAlreadyExists = 14,
+  // The user selected a custom fallback option instead of authenticating.
+  // [Android 15+ only] Check `selectedFallbackIndex` and `selectedFallbackText`
+  // on the result object to determine which option was selected.
+  kFallbackSelected = 15
 };
 
 // The cryptographic algorithm to use for key generation.
@@ -154,6 +160,49 @@ enum class PayloadFormat {
   kHex = 1,
   // Raw UTF-8 string (not recommended for binary data).
   kRaw = 2
+};
+
+
+// A custom fallback option shown on the biometric prompt.
+//
+// [Android 15+ only] When provided in a config's `fallbackOptions` list,
+// these appear as alternative buttons on the biometric prompt dialog.
+// If the user taps one, the result will have code [BiometricError.fallbackSelected]
+// with the selected option's index and text.
+//
+// On iOS, macOS, and Windows this class is ignored.
+//
+// Generated class from Pigeon that represents data sent in messages.
+class BiometricFallbackOption {
+ public:
+  // Constructs an object setting all non-nullable fields.
+  BiometricFallbackOption();
+
+  // Constructs an object setting all fields.
+  explicit BiometricFallbackOption(
+    const std::string* text,
+    const std::string* icon_name);
+
+  // The text label displayed on the fallback button.
+  const std::string* text() const;
+  void set_text(const std::string_view* value_arg);
+  void set_text(std::string_view value_arg);
+
+  // [Android] Optional icon type name for the fallback button.
+  // Valid values: `"password"`, `"qr_code"`, `"account"`, `"generic"`.
+  // Maps to `AuthenticationRequest.Biometric.Fallback.ICON_TYPE_*` constants.
+  // When null, defaults to `"generic"`.
+  const std::string* icon_name() const;
+  void set_icon_name(const std::string_view* value_arg);
+  void set_icon_name(std::string_view value_arg);
+
+ private:
+  static BiometricFallbackOption FromEncodableList(const flutter::EncodableList& list);
+  flutter::EncodableList ToEncodableList() const;
+  friend class BiometricSignatureApi;
+  friend class PigeonInternalCodecSerializer;
+  std::optional<std::string> text_;
+  std::optional<std::string> icon_name_;
 };
 
 
@@ -289,7 +338,9 @@ class SignatureResult {
     const std::string* error,
     const BiometricError* code,
     const std::string* algorithm,
-    const int64_t* key_size);
+    const int64_t* key_size,
+    const int64_t* selected_fallback_index,
+    const std::string* selected_fallback_text);
 
   const std::string* signature() const;
   void set_signature(const std::string_view* value_arg);
@@ -319,6 +370,18 @@ class SignatureResult {
   void set_key_size(const int64_t* value_arg);
   void set_key_size(int64_t value_arg);
 
+  // [Android 15+] Index of the selected fallback option in the original list.
+  // Only populated when `code == BiometricError.fallbackSelected`.
+  const int64_t* selected_fallback_index() const;
+  void set_selected_fallback_index(const int64_t* value_arg);
+  void set_selected_fallback_index(int64_t value_arg);
+
+  // [Android 15+] Text of the selected fallback option.
+  // Only populated when `code == BiometricError.fallbackSelected`.
+  const std::string* selected_fallback_text() const;
+  void set_selected_fallback_text(const std::string_view* value_arg);
+  void set_selected_fallback_text(std::string_view value_arg);
+
  private:
   static SignatureResult FromEncodableList(const flutter::EncodableList& list);
   flutter::EncodableList ToEncodableList() const;
@@ -331,6 +394,8 @@ class SignatureResult {
   std::optional<BiometricError> code_;
   std::optional<std::string> algorithm_;
   std::optional<int64_t> key_size_;
+  std::optional<int64_t> selected_fallback_index_;
+  std::optional<std::string> selected_fallback_text_;
 };
 
 
@@ -344,7 +409,9 @@ class DecryptResult {
   explicit DecryptResult(
     const std::string* decrypted_data,
     const std::string* error,
-    const BiometricError* code);
+    const BiometricError* code,
+    const int64_t* selected_fallback_index,
+    const std::string* selected_fallback_text);
 
   const std::string* decrypted_data() const;
   void set_decrypted_data(const std::string_view* value_arg);
@@ -358,6 +425,18 @@ class DecryptResult {
   void set_code(const BiometricError* value_arg);
   void set_code(const BiometricError& value_arg);
 
+  // [Android 15+] Index of the selected fallback option in the original list.
+  // Only populated when `code == BiometricError.fallbackSelected`.
+  const int64_t* selected_fallback_index() const;
+  void set_selected_fallback_index(const int64_t* value_arg);
+  void set_selected_fallback_index(int64_t value_arg);
+
+  // [Android 15+] Text of the selected fallback option.
+  // Only populated when `code == BiometricError.fallbackSelected`.
+  const std::string* selected_fallback_text() const;
+  void set_selected_fallback_text(const std::string_view* value_arg);
+  void set_selected_fallback_text(std::string_view value_arg);
+
  private:
   static DecryptResult FromEncodableList(const flutter::EncodableList& list);
   flutter::EncodableList ToEncodableList() const;
@@ -366,6 +445,8 @@ class DecryptResult {
   std::optional<std::string> decrypted_data_;
   std::optional<std::string> error_;
   std::optional<BiometricError> code_;
+  std::optional<int64_t> selected_fallback_index_;
+  std::optional<std::string> selected_fallback_text_;
 };
 
 
@@ -473,7 +554,9 @@ class CreateKeysConfig {
     const bool* enable_decryption,
     const std::string* prompt_subtitle,
     const std::string* prompt_description,
-    const std::string* cancel_button_text);
+    const std::string* cancel_button_text,
+    const bool* fail_if_exists,
+    const flutter::EncodableList* fallback_options);
 
   // [Android/iOS/macOS] The cryptographic algorithm to use.
   // Windows only supports RSA and ignores this field.
@@ -524,6 +607,24 @@ class CreateKeysConfig {
   void set_cancel_button_text(const std::string_view* value_arg);
   void set_cancel_button_text(std::string_view value_arg);
 
+  // [All platforms] When `true`, key creation will fail with
+  // [BiometricError.keyAlreadyExists] if a key with the specified alias
+  // (or the default alias) already exists.
+  //
+  // When `false` (default), existing keys are silently replaced.
+  const bool* fail_if_exists() const;
+  void set_fail_if_exists(const bool* value_arg);
+  void set_fail_if_exists(bool value_arg);
+
+  // [Android 15+] Custom fallback buttons shown on the biometric prompt.
+  // When provided, these replace the default cancel button.
+  // If the user taps a fallback option, the result will have
+  // `code == BiometricError.fallbackSelected` with the selected option's
+  // index and text. On other platforms, this field is ignored.
+  const flutter::EncodableList* fallback_options() const;
+  void set_fallback_options(const flutter::EncodableList* value_arg);
+  void set_fallback_options(const flutter::EncodableList& value_arg);
+
  private:
   static CreateKeysConfig FromEncodableList(const flutter::EncodableList& list);
   flutter::EncodableList ToEncodableList() const;
@@ -537,6 +638,8 @@ class CreateKeysConfig {
   std::optional<std::string> prompt_subtitle_;
   std::optional<std::string> prompt_description_;
   std::optional<std::string> cancel_button_text_;
+  std::optional<bool> fail_if_exists_;
+  std::optional<flutter::EncodableList> fallback_options_;
 };
 
 
@@ -556,7 +659,8 @@ class CreateSignatureConfig {
     const std::string* prompt_description,
     const std::string* cancel_button_text,
     const bool* allow_device_credentials,
-    const bool* should_migrate);
+    const bool* should_migrate,
+    const flutter::EncodableList* fallback_options);
 
   // [Android] Subtitle text for the biometric prompt.
   const std::string* prompt_subtitle() const;
@@ -583,6 +687,15 @@ class CreateSignatureConfig {
   void set_should_migrate(const bool* value_arg);
   void set_should_migrate(bool value_arg);
 
+  // [Android 15+] Custom fallback buttons shown on the biometric prompt.
+  // When provided, these replace the default cancel button.
+  // If the user taps a fallback option, the result will have
+  // `code == BiometricError.fallbackSelected` with the selected option's
+  // index and text. On other platforms, this field is ignored.
+  const flutter::EncodableList* fallback_options() const;
+  void set_fallback_options(const flutter::EncodableList* value_arg);
+  void set_fallback_options(const flutter::EncodableList& value_arg);
+
  private:
   static CreateSignatureConfig FromEncodableList(const flutter::EncodableList& list);
   flutter::EncodableList ToEncodableList() const;
@@ -593,6 +706,7 @@ class CreateSignatureConfig {
   std::optional<std::string> cancel_button_text_;
   std::optional<bool> allow_device_credentials_;
   std::optional<bool> should_migrate_;
+  std::optional<flutter::EncodableList> fallback_options_;
 };
 
 
@@ -613,7 +727,8 @@ class DecryptConfig {
     const std::string* prompt_description,
     const std::string* cancel_button_text,
     const bool* allow_device_credentials,
-    const bool* should_migrate);
+    const bool* should_migrate,
+    const flutter::EncodableList* fallback_options);
 
   // [Android] Subtitle text for the biometric prompt.
   const std::string* prompt_subtitle() const;
@@ -640,6 +755,15 @@ class DecryptConfig {
   void set_should_migrate(const bool* value_arg);
   void set_should_migrate(bool value_arg);
 
+  // [Android 15+] Custom fallback buttons shown on the biometric prompt.
+  // When provided, these replace the default cancel button.
+  // If the user taps a fallback option, the result will have
+  // `code == BiometricError.fallbackSelected` with the selected option's
+  // index and text. On other platforms, this field is ignored.
+  const flutter::EncodableList* fallback_options() const;
+  void set_fallback_options(const flutter::EncodableList* value_arg);
+  void set_fallback_options(const flutter::EncodableList& value_arg);
+
  private:
   static DecryptConfig FromEncodableList(const flutter::EncodableList& list);
   flutter::EncodableList ToEncodableList() const;
@@ -650,6 +774,7 @@ class DecryptConfig {
   std::optional<std::string> cancel_button_text_;
   std::optional<bool> allow_device_credentials_;
   std::optional<bool> should_migrate_;
+  std::optional<flutter::EncodableList> fallback_options_;
 };
 
 
@@ -669,7 +794,8 @@ class SimplePromptConfig {
     const std::string* description,
     const std::string* cancel_button_text,
     const bool* allow_device_credentials,
-    const BiometricStrength* biometric_strength);
+    const BiometricStrength* biometric_strength,
+    const flutter::EncodableList* fallback_options);
 
   // [Android] Subtitle text displayed below the title in the biometric prompt.
   const std::string* subtitle() const;
@@ -714,6 +840,15 @@ class SimplePromptConfig {
   void set_biometric_strength(const BiometricStrength* value_arg);
   void set_biometric_strength(const BiometricStrength& value_arg);
 
+  // [Android 15+] Custom fallback buttons shown on the biometric prompt.
+  // When provided, these replace the default cancel button.
+  // If the user taps a fallback option, the result will have
+  // `code == BiometricError.fallbackSelected` with the selected option's
+  // index and text. On other platforms, this field is ignored.
+  const flutter::EncodableList* fallback_options() const;
+  void set_fallback_options(const flutter::EncodableList* value_arg);
+  void set_fallback_options(const flutter::EncodableList& value_arg);
+
  private:
   static SimplePromptConfig FromEncodableList(const flutter::EncodableList& list);
   flutter::EncodableList ToEncodableList() const;
@@ -724,6 +859,7 @@ class SimplePromptConfig {
   std::optional<std::string> cancel_button_text_;
   std::optional<bool> allow_device_credentials_;
   std::optional<BiometricStrength> biometric_strength_;
+  std::optional<flutter::EncodableList> fallback_options_;
 };
 
 
@@ -739,7 +875,9 @@ class SimplePromptResult {
   explicit SimplePromptResult(
     const bool* success,
     const std::string* error,
-    const BiometricError* code);
+    const BiometricError* code,
+    const int64_t* selected_fallback_index,
+    const std::string* selected_fallback_text);
 
   // Whether authentication was successful.
   const bool* success() const;
@@ -758,6 +896,18 @@ class SimplePromptResult {
   void set_code(const BiometricError* value_arg);
   void set_code(const BiometricError& value_arg);
 
+  // [Android 15+] Index of the selected fallback option in the original list.
+  // Only populated when `code == BiometricError.fallbackSelected`.
+  const int64_t* selected_fallback_index() const;
+  void set_selected_fallback_index(const int64_t* value_arg);
+  void set_selected_fallback_index(int64_t value_arg);
+
+  // [Android 15+] Text of the selected fallback option.
+  // Only populated when `code == BiometricError.fallbackSelected`.
+  const std::string* selected_fallback_text() const;
+  void set_selected_fallback_text(const std::string_view* value_arg);
+  void set_selected_fallback_text(std::string_view value_arg);
+
  private:
   static SimplePromptResult FromEncodableList(const flutter::EncodableList& list);
   flutter::EncodableList ToEncodableList() const;
@@ -766,6 +916,8 @@ class SimplePromptResult {
   std::optional<bool> success_;
   std::optional<std::string> error_;
   std::optional<BiometricError> code_;
+  std::optional<int64_t> selected_fallback_index_;
+  std::optional<std::string> selected_fallback_text_;
 };
 
 
@@ -796,10 +948,13 @@ class BiometricSignatureApi {
   virtual void BiometricAuthAvailable(std::function<void(ErrorOr<BiometricAvailability> reply)> result) = 0;
   // Creates a new key pair.
   //
+  // [keyAlias] is an optional alias for the key. When null, the default
+  // alias is used. Different aliases create independent key pairs.
   // [config] contains platform-specific options. See [CreateKeysConfig].
   // [keyFormat] specifies the output format for the public key.
   // [promptMessage] is the message shown to the user during authentication.
   virtual void CreateKeys(
+    const std::string* key_alias,
     const CreateKeysConfig* config,
     const KeyFormat& key_format,
     const std::string* prompt_message,
@@ -807,12 +962,14 @@ class BiometricSignatureApi {
   // Creates a signature.
   //
   // [payload] is the data to sign.
+  // [keyAlias] specifies which key to sign with. Defaults to the default alias.
   // [config] contains platform-specific options. See [CreateSignatureConfig].
   // [signatureFormat] specifies the output format for the signature.
   // [keyFormat] specifies the output format for the public key.
   // [promptMessage] is the message shown to the user during authentication.
   virtual void CreateSignature(
     const std::string& payload,
+    const std::string* key_alias,
     const CreateSignatureConfig* config,
     const SignatureFormat& signature_format,
     const KeyFormat& key_format,
@@ -822,21 +979,35 @@ class BiometricSignatureApi {
   //
   // Note: Not supported on Windows.
   // [payload] is the encrypted data.
+  // [keyAlias] specifies which key to decrypt with. Defaults to the default alias.
   // [payloadFormat] specifies the format of the encrypted data.
   // [config] contains platform-specific options. See [DecryptConfig].
   // [promptMessage] is the message shown to the user during authentication.
   virtual void Decrypt(
     const std::string& payload,
+    const std::string* key_alias,
     const PayloadFormat& payload_format,
     const DecryptConfig* config,
     const std::string* prompt_message,
     std::function<void(ErrorOr<DecryptResult> reply)> result) = 0;
-  // Deletes keys.
-  virtual void DeleteKeys(std::function<void(ErrorOr<bool> reply)> result) = 0;
+  // Deletes keys for a specific alias.
+  //
+  // [keyAlias] specifies which key to delete. When null, deletes the
+  // default alias only. Other aliases are not affected.
+  virtual void DeleteKeys(
+    const std::string* key_alias,
+    std::function<void(ErrorOr<bool> reply)> result) = 0;
+  // Deletes all biometric keys across all aliases.
+  //
+  // This is a destructive operation that removes every key managed by
+  // this plugin. Use [deleteKeys] for targeted deletion.
+  virtual void DeleteAllKeys(std::function<void(ErrorOr<bool> reply)> result) = 0;
   // Gets detailed information about existing biometric keys.
   //
+  // [keyAlias] specifies which key to query. Defaults to the default alias.
   // Returns key metadata including algorithm, size, validity, and public keys.
   virtual void GetKeyInfo(
+    const std::string* key_alias,
     bool check_validity,
     const KeyFormat& key_format,
     std::function<void(ErrorOr<KeyInfo> reply)> result) = 0;

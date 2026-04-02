@@ -27,6 +27,7 @@ class BiometricSignaturePlugin : public flutter::Plugin,
       std::function<void(ErrorOr<BiometricAvailability> reply)> result) override;
 
   void CreateKeys(
+      const std::string* key_alias,
       const CreateKeysConfig* config,
       const KeyFormat& key_format,
       const std::string* prompt_message,
@@ -34,6 +35,7 @@ class BiometricSignaturePlugin : public flutter::Plugin,
 
   void CreateSignature(
       const std::string& payload,
+      const std::string* key_alias,
       const CreateSignatureConfig* config,
       const SignatureFormat& signature_format,
       const KeyFormat& key_format,
@@ -42,15 +44,21 @@ class BiometricSignaturePlugin : public flutter::Plugin,
 
   void Decrypt(
       const std::string& payload,
+      const std::string* key_alias,
       const PayloadFormat& payload_format,
       const DecryptConfig* config,
       const std::string* prompt_message,
       std::function<void(ErrorOr<DecryptResult> reply)> result) override;
 
   void DeleteKeys(
+      const std::string* key_alias,
+      std::function<void(ErrorOr<bool> reply)> result) override;
+
+  void DeleteAllKeys(
       std::function<void(ErrorOr<bool> reply)> result) override;
 
   void GetKeyInfo(
+      const std::string* key_alias,
       bool check_validity,
       const KeyFormat& key_format,
       std::function<void(ErrorOr<KeyInfo> reply)> result) override;

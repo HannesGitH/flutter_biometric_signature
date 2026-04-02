@@ -1,13 +1,15 @@
 #include "biometric_signature_plugin.h"
 
 #include <objbase.h>
-#include <ppltasks.h>
 #include <windows.h>
+
 
 
 // C++/WinRT Windows Hello APIs
 #include <winrt/Windows.Foundation.h>
+#include <winrt/Windows.Foundation.Collections.h>
 #include <winrt/Windows.Security.Credentials.h>
+#include <winrt/Windows.Storage.h>
 #include <winrt/Windows.Storage.Streams.h>
 
 #include <flutter/plugin_registrar_windows.h>
@@ -15,6 +17,7 @@
 #include <functional>
 #include <iomanip>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -28,8 +31,85 @@ namespace biometric_signature {
 
 namespace {
 
-// Key identifier for Windows Hello credential
-const std::wstring kKeyName = L"BiometricSignatureKey";
+// Default key name for Windows Hello credential
+const std::wstring kDefaultKeyName = L"BiometricSignatureKey";
+const std::wstring kAliasMarkerPrefix = L"BiometricSignatureAlias::";
+const std::wstring kDefaultAliasMarker = L"__default__";
+
+// Compute the Windows Hello key name from an optional alias
+std::wstring KeyNameForAlias(const std::string* key_alias) {
+  if (key_alias == nullptr || key_alias->empty()) {
+    return kDefaultKeyName;
+  }
+  std::wstring wide_alias(key_alias->begin(), key_alias->end());
+  return L"BiometricSignatureKey_" + wide_alias;
+}
+
+std::wstring AliasMarkerFromOptionalAlias(const std::string* key_alias) {
+  if (key_alias == nullptr || key_alias->empty()) {
+    return kDefaultAliasMarker;
+  }
+  return std::wstring(key_alias->begin(), key_alias->end());
+}
+
+std::wstring KeyNameFromAliasMarker(const std::wstring& marker) {
+  if (marker == kDefaultAliasMarker) {
+    return kDefaultKeyName;
+  }
+  return L"BiometricSignatureKey_" + marker;
+}
+
+void TrackAliasMarker(const std::wstring& marker) {
+  auto values = winrt::Windows::Storage::ApplicationData::Current()
+          .LocalSettings()
+          .Values();
+  values.Insert(winrt::hstring(kAliasMarkerPrefix + marker), winrt::box_value(true));
+}
+
+void UntrackAliasMarker(const std::wstring& marker) {
+  auto values = winrt::Windows::Storage::ApplicationData::Current()
+          .LocalSettings()
+          .Values();
+  values.TryRemove(winrt::hstring(kAliasMarkerPrefix + marker));
+}
+
+std::vector<std::wstring> TrackedKeyNames() {
+  std::set<std::wstring> key_names;
+  key_names.insert(kDefaultKeyName);
+
+  auto values = winrt::Windows::Storage::ApplicationData::Current()
+          .LocalSettings()
+          .Values();
+
+  for (auto const& entry : values) {
+    std::wstring key(entry.Key().c_str());
+    if (key.rfind(kAliasMarkerPrefix, 0) != 0) {
+      continue;
+    }
+    std::wstring marker = key.substr(kAliasMarkerPrefix.size());
+    key_names.insert(KeyNameFromAliasMarker(marker));
+  }
+
+  return std::vector<std::wstring>(key_names.begin(), key_names.end());
+}
+
+void ClearTrackedAliasMarkers() {
+  auto values = winrt::Windows::Storage::ApplicationData::Current()
+          .LocalSettings()
+          .Values();
+
+  std::vector<winrt::hstring> keys_to_remove;
+  for (auto const& entry : values) {
+    std::wstring key(entry.Key().c_str());
+    if (key.rfind(kAliasMarkerPrefix, 0) == 0) {
+      keys_to_remove.push_back(entry.Key());
+    }
+  }
+
+  for (auto const& key : keys_to_remove) {
+    values.TryRemove(key);
+  }
+}
 
 // Base64 encode bytes
 std::string Base64Encode(const std::vector<uint8_t> &data) {
@@ -191,19 +271,27 @@ void BiometricSignaturePlugin::BiometricAuthAvailable(
 }
 
 void BiometricSignaturePlugin::CreateKeys(
-    const CreateKeysConfig *config, const KeyFormat &key_format,
-    const std::string *prompt_message,
+    const std::string *key_alias, const CreateKeysConfig *config,
+    const KeyFormat &key_format, const std::string *prompt_message,
     std::function<void(ErrorOr<KeyCreationResult> reply)> result) {
 
   // Bring Flutter window to foreground so Windows Hello dialog appears properly
   BringWindowToForeground();
 
-  auto async_op = winrt::Windows::Security::Credentials::KeyCredentialManager::
-      RequestCreateAsync(kKeyName,
-                         winrt::Windows::Security::Credentials::
-                             KeyCredentialCreationOption::ReplaceExisting);
+  std::wstring key_name = KeyNameForAlias(key_alias);
+  std::wstring alias_marker = AliasMarkerFromOptionalAlias(key_alias);
 
-  async_op.Completed([result, key_format](auto const &op, auto status) {
+  // Determine creation option based on failIfExists
+  bool fail_if_exists = (config != nullptr && config->fail_if_exists() != nullptr && *config->fail_if_exists());
+
+  auto creation_option = fail_if_exists
+      ? winrt::Windows::Security::Credentials::KeyCredentialCreationOption::FailIfExists
+      : winrt::Windows::Security::Credentials::KeyCredentialCreationOption::ReplaceExisting;
+
+  auto async_op = winrt::Windows::Security::Credentials::KeyCredentialManager::
+      RequestCreateAsync(key_name, creation_option);
+
+  async_op.Completed([result, key_format, fail_if_exists, alias_marker](auto const &op, auto status) {
     KeyCreationResult response;
 
     if (status == winrt::Windows::Foundation::AsyncStatus::Completed) {
@@ -224,11 +312,17 @@ void BiometricSignaturePlugin::CreateKeys(
         response.set_key_size(static_cast<int64_t>(2048));
         response.set_code(BiometricError::kSuccess);
         response.set_is_hybrid_mode(false);
+        TrackAliasMarker(alias_marker);
       } else {
         std::string error_msg = "Failed to create key";
         BiometricError error_code = BiometricError::kUnknown;
 
         switch (create_result.Status()) {
+        case winrt::Windows::Security::Credentials::KeyCredentialStatus::
+            CredentialAlreadyExists:
+          error_msg = "A key with the specified alias already exists";
+          error_code = BiometricError::kKeyAlreadyExists;
+          break;
         case winrt::Windows::Security::Credentials::KeyCredentialStatus::
             UserCanceled:
           error_msg = "User canceled the operation";
@@ -261,7 +355,8 @@ void BiometricSignaturePlugin::CreateKeys(
 }
 
 void BiometricSignaturePlugin::CreateSignature(
-    const std::string &payload, const CreateSignatureConfig *config,
+    const std::string &payload, const std::string *key_alias,
+    const CreateSignatureConfig *config,
     const SignatureFormat &signature_format, const KeyFormat &key_format,
     const std::string *prompt_message,
     std::function<void(ErrorOr<SignatureResult> reply)> result) {
@@ -278,10 +373,11 @@ void BiometricSignaturePlugin::CreateSignature(
   BringWindowToForeground();
 
   std::string payload_copy = payload;
+  std::wstring key_name = KeyNameForAlias(key_alias);
 
   auto async_op =
       winrt::Windows::Security::Credentials::KeyCredentialManager::OpenAsync(
-          kKeyName);
+          key_name);
 
   async_op.Completed([result, payload_copy, key_format,
                       signature_format](auto const &op, auto status) {
@@ -370,24 +466,67 @@ void BiometricSignaturePlugin::CreateSignature(
 }
 
 void BiometricSignaturePlugin::DeleteKeys(
-    std::function<void(ErrorOr<bool> reply)> result) {
+    const std::string *key_alias,
+  std::function<void(ErrorOr<bool> reply)> result) {
+
+  std::wstring key_name = KeyNameForAlias(key_alias);
+  std::wstring alias_marker = AliasMarkerFromOptionalAlias(key_alias);
 
   auto async_op =
       winrt::Windows::Security::Credentials::KeyCredentialManager::DeleteAsync(
-          kKeyName);
+          key_name);
 
-  async_op.Completed([result](auto const &op, auto status) {
+  async_op.Completed([result, alias_marker](auto const &op, auto status) {
+    UntrackAliasMarker(alias_marker);
     result(true); // Return true even if key didn't exist
   });
 }
 
+// Helper: recursively delete keys one at a time, then call the completion.
+static void DeleteKeysRecursive(
+    std::shared_ptr<std::vector<std::wstring>> key_names,
+    size_t index,
+    std::function<void(ErrorOr<bool> reply)> result) {
+
+  if (index >= key_names->size()) {
+    // All keys deleted
+    ClearTrackedAliasMarkers();
+    result(true);
+    return;
+  }
+
+  auto op = winrt::Windows::Security::Credentials::KeyCredentialManager::DeleteAsync(
+          (*key_names)[index]);
+
+  op.Completed([key_names, index, result](auto const& /*op*/, auto /*status*/) {
+    DeleteKeysRecursive(key_names, index + 1, result);
+  });
+}
+
+void BiometricSignaturePlugin::DeleteAllKeys(
+    std::function<void(ErrorOr<bool> reply)> result) {
+
+  auto key_names = std::make_shared<std::vector<std::wstring>>(TrackedKeyNames());
+
+  if (key_names->empty()) {
+    ClearTrackedAliasMarkers();
+    result(true);
+    return;
+  }
+
+  DeleteKeysRecursive(key_names, 0, result);
+}
+
 void BiometricSignaturePlugin::GetKeyInfo(
-    bool check_validity, const KeyFormat &key_format,
+    const std::string *key_alias, bool check_validity,
+    const KeyFormat &key_format,
     std::function<void(ErrorOr<KeyInfo> reply)> result) {
+
+  std::wstring key_name = KeyNameForAlias(key_alias);
 
   auto async_op =
       winrt::Windows::Security::Credentials::KeyCredentialManager::OpenAsync(
-          kKeyName);
+          key_name);
 
   async_op.Completed([result, key_format, check_validity](auto const &op,
                                                           auto status) {
@@ -425,8 +564,9 @@ void BiometricSignaturePlugin::GetKeyInfo(
 }
 
 void BiometricSignaturePlugin::Decrypt(
-    const std::string &payload, const PayloadFormat &payload_format,
-    const DecryptConfig *config, const std::string *prompt_message,
+    const std::string &payload, const std::string *key_alias,
+    const PayloadFormat &payload_format, const DecryptConfig *config,
+    const std::string *prompt_message,
     std::function<void(ErrorOr<DecryptResult> reply)> result) {
 
   DecryptResult response;
@@ -443,11 +583,6 @@ void BiometricSignaturePlugin::SimplePrompt(
 
   // Bring Flutter window to foreground so Windows Hello dialog appears properly
   BringWindowToForeground();
-
-  // Note: Windows Hello always uses strong biometrics, so biometricStrength
-  // config is ignored. allowDeviceCredentials is handled internally by Windows
-  // Hello. promptMessage is shown as the description in the Windows Hello
-  // dialog.
 
   // First check if Windows Hello is available
   auto is_supported_op = winrt::Windows::Security::Credentials::
@@ -474,11 +609,10 @@ void BiometricSignaturePlugin::SimplePrompt(
       return;
     }
 
-    // Use RequestSignAsync on an existing key to trigger authentication
-    // If no key exists, we'll use a verification approach
+    // Use RequestSignAsync on the default key to trigger authentication
     auto open_op =
         winrt::Windows::Security::Credentials::KeyCredentialManager::OpenAsync(
-            kKeyName);
+            kDefaultKeyName);
 
     open_op.Completed([result, prompt_message](auto const &op, auto status) {
       if (status == winrt::Windows::Foundation::AsyncStatus::Completed) {
@@ -486,9 +620,8 @@ void BiometricSignaturePlugin::SimplePrompt(
 
         if (open_result.Status() == winrt::Windows::Security::Credentials::
                                         KeyCredentialStatus::Success) {
-          // Key exists, use it to trigger authentication via signing
           auto credential = open_result.Credential();
-          std::vector<uint8_t> dummy_data = {0x00}; // Minimal data for signing
+          std::vector<uint8_t> dummy_data = {0x00};
           auto data_buffer = VectorToIBuffer(dummy_data);
 
           auto sign_op = credential.RequestSignAsync(data_buffer);
@@ -540,7 +673,6 @@ void BiometricSignaturePlugin::SimplePrompt(
       }
 
       // No key exists - create a temporary key to trigger authentication
-      // Then delete it immediately after
       auto create_op = winrt::Windows::Security::Credentials::
           KeyCredentialManager::RequestCreateAsync(
               L"BiometricSignatureTemp",
@@ -557,7 +689,6 @@ void BiometricSignaturePlugin::SimplePrompt(
 
           if (create_result.Status() == winrt::Windows::Security::Credentials::
                                             KeyCredentialStatus::Success) {
-            // Authentication succeeded, delete the temp key
             winrt::Windows::Security::Credentials::KeyCredentialManager::
                 DeleteAsync(L"BiometricSignatureTemp");
 

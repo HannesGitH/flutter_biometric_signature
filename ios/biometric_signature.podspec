@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'biometric_signature'
-  s.version          = '10.2.0'
+  s.version          = '11.0.2'
   s.summary          = 'Hardware-backed biometric signatures for Flutter.'
   s.description      = <<-DESC
 Create cryptographic signatures using Secure Enclave, StrongBox, and Windows Hello.
