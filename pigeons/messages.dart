@@ -17,6 +17,23 @@ import 'package:pigeon/pigeon.dart';
     cppOptions: CppOptions(namespace: 'biometric_signature'),
   ),
 )
+/// The type of authentication that was used to complete an operation.
+///
+/// On Android, this is determined by the platform's `AuthenticationResult.getAuthenticationType()`.
+/// On iOS/macOS, this is inferred: [biometric] if device credentials are not allowed,
+/// [credential] if no biometric hardware is available, [unknown] otherwise.
+/// On Windows, this is always [unknown] as Windows Hello handles auth internally.
+enum AuthenticationType {
+  /// The user authenticated using device credentials (PIN, pattern, or password).
+  credential,
+
+  /// The user authenticated using a biometric (fingerprint, face, iris).
+  biometric,
+
+  /// The authentication type could not be determined.
+  unknown,
+}
+
 /// Types of biometric authentication supported by the device.
 enum BiometricType {
   /// Face recognition (Face ID on iOS, face unlock on Android).
@@ -140,6 +157,9 @@ class KeyCreationResult {
   String? decryptingAlgorithm;
   int? decryptingKeySize;
   bool? isHybridMode;
+
+  /// The type of authentication used to complete this operation.
+  AuthenticationType? authenticationType;
 }
 
 class SignatureResult {
@@ -158,6 +178,9 @@ class SignatureResult {
   /// [Android 15+] Text of the selected fallback option.
   /// Only populated when `code == BiometricError.fallbackSelected`.
   String? selectedFallbackText;
+
+  /// The type of authentication used to complete this operation.
+  AuthenticationType? authenticationType;
 }
 
 class DecryptResult {
@@ -172,6 +195,9 @@ class DecryptResult {
   /// [Android 15+] Text of the selected fallback option.
   /// Only populated when `code == BiometricError.fallbackSelected`.
   String? selectedFallbackText;
+
+  /// The type of authentication used to complete this operation.
+  AuthenticationType? authenticationType;
 }
 
 /// Detailed information about existing biometric keys.
@@ -544,4 +570,7 @@ class SimplePromptResult {
   /// [Android 15+] Text of the selected fallback option.
   /// Only populated when `code == BiometricError.fallbackSelected`.
   String? selectedFallbackText;
+
+  /// The type of authentication used to complete this operation.
+  AuthenticationType? authenticationType;
 }
