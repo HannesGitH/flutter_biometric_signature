@@ -1463,6 +1463,20 @@ interface BiometricSignatureApi {
    * Returns a [SimplePromptResult] indicating success or failure.
    */
   fun simplePrompt(promptMessage: String, config: SimplePromptConfig?, callback: (Result<SimplePromptResult>) -> Unit)
+  /**
+   * Checks whether the device has a screen lock (PIN, pattern, password, or
+   * passcode) configured.
+   *
+   * This is a precondition for biometric enrollment on most platforms:
+   * - Android: Uses `KeyguardManager.isDeviceSecure()`
+   * - iOS/macOS: Evaluates `LAPolicy.deviceOwnerAuthentication` to detect
+   *   `kLAErrorPasscodeNotSet`
+   * - Windows: Checks Windows Hello availability via
+   *   `KeyCredentialManager.IsSupportedAsync()`
+   *
+   * Returns `true` if the device has a screen lock configured.
+   */
+  fun isDeviceLockSet(callback: (Result<Boolean>) -> Unit)
 
   companion object {
     /** The codec used by BiometricSignatureApi. */
@@ -1631,6 +1645,24 @@ interface BiometricSignatureApi {
             val promptMessageArg = args[0] as String
             val configArg = args[1] as SimplePromptConfig?
             api.simplePrompt(promptMessageArg, configArg) { result: Result<SimplePromptResult> ->
+              val error = result.exceptionOrNull()
+              if (error != null) {
+                reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))
+              } else {
+                val data = result.getOrNull()
+                reply.reply(BiometricSignatureApiPigeonUtils.wrapResult(data))
+              }
+            }
+          }
+        } else {
+          channel.setMessageHandler(null)
+        }
+      }
+      run {
+        val channel = BasicMessageChannel<Any?>(binaryMessenger, "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.isDeviceLockSet$separatedMessageChannelSuffix", codec)
+        if (api != null) {
+          channel.setMessageHandler { _, reply ->
+            api.isDeviceLockSet{ result: Result<Boolean> ->
               val error = result.exceptionOrNull()
               if (error != null) {
                 reply.reply(BiometricSignatureApiPigeonUtils.wrapError(error))

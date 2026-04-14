@@ -696,6 +696,11 @@ class BiometricSignaturePlugin : FlutterPlugin, BiometricSignatureApi, ActivityA
         }
     }
 
+    override fun isDeviceLockSet(callback: (Result<Boolean>) -> Unit) {
+        val keyguardManager = appContext.getSystemService(android.content.Context.KEYGUARD_SERVICE) as android.app.KeyguardManager
+        callback(Result.success(keyguardManager.isDeviceSecure))
+    }
+
     private fun hasFallbackOptions(options: List<BiometricFallbackOption?>?): Boolean {
         return options != null && options.any { it?.text != null }
     }

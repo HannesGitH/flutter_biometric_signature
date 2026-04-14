@@ -1113,6 +1113,18 @@ class BiometricSignatureApi {
     const std::string& prompt_message,
     const SimplePromptConfig* config,
     std::function<void(ErrorOr<SimplePromptResult> reply)> result) = 0;
+  // Checks whether the device has a screen lock (PIN, pattern, password, or
+  // passcode) configured.
+  //
+  // This is a precondition for biometric enrollment on most platforms:
+  // - Android: Uses `KeyguardManager.isDeviceSecure()`
+  // - iOS/macOS: Evaluates `LAPolicy.deviceOwnerAuthentication` to detect
+  //   `kLAErrorPasscodeNotSet`
+  // - Windows: Checks Windows Hello availability via
+  //   `KeyCredentialManager.IsSupportedAsync()`
+  //
+  // Returns `true` if the device has a screen lock configured.
+  virtual void IsDeviceLockSet(std::function<void(ErrorOr<bool> reply)> result) = 0;
 
   // The codec used by BiometricSignatureApi.
   static const ::flutter::StandardMessageCodec& GetCodec();

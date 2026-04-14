@@ -738,4 +738,18 @@ void BiometricSignaturePlugin::SimplePrompt(
   });
 }
 
+void BiometricSignaturePlugin::IsDeviceLockSet(
+    std::function<void(ErrorOr<bool> reply)> result) {
+  auto async_op = winrt::Windows::Security::Credentials::KeyCredentialManager::
+      IsSupportedAsync();
+
+  async_op.Completed([result](auto const &op, auto status) {
+    if (status == winrt::Windows::Foundation::AsyncStatus::Completed) {
+      result(op.GetResults());
+    } else {
+      result(false);
+    }
+  });
+}
+
 } // namespace biometric_signature

@@ -634,6 +634,21 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         }
     }
 
+    func isDeviceLockSet(completion: @escaping (Result<Bool, Error>) -> Void) {
+        let context = LAContext()
+        var error: NSError?
+        let canEvaluate = context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error)
+        if canEvaluate {
+            completion(.success(true))
+        } else if let error = error, error.code == LAError.passcodeNotSet.rawValue {
+            completion(.success(false))
+        } else {
+            // Policy can't be evaluated for other reasons (e.g. very old device),
+            // but a passcode may still be set. Default to true to avoid false negatives.
+            completion(.success(true))
+        }
+    }
+
     private func mapLAError(_ error: NSError?) -> BiometricError {
         guard let error = error else { return .unknown }
 

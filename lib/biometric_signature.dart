@@ -191,4 +191,19 @@ class BiometricSignature {
       config,
     );
   }
+
+  /// Checks whether the device has a screen lock (PIN, pattern, password, or
+  /// passcode) configured.
+  ///
+  /// This is a precondition for biometric enrollment on most platforms. If this
+  /// returns `false`, the user must set up a device lock before biometrics can
+  /// be used.
+  ///
+  /// Platform behavior:
+  /// - **Android**: Uses `KeyguardManager.isDeviceSecure()`
+  /// - **iOS/macOS**: Evaluates `LAPolicy.deviceOwnerAuthentication`
+  /// - **Windows**: Checks Windows Hello availability
+  Future<bool> isDeviceLockSet() async {
+    return BiometricSignaturePlatform.instance.isDeviceLockSet();
+  }
 }

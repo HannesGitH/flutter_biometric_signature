@@ -1320,6 +1320,18 @@ protocol BiometricSignatureApi {
   ///
   /// Returns a [SimplePromptResult] indicating success or failure.
   func simplePrompt(promptMessage: String, config: SimplePromptConfig?, completion: @escaping (Result<SimplePromptResult, Error>) -> Void)
+  /// Checks whether the device has a screen lock (PIN, pattern, password, or
+  /// passcode) configured.
+  ///
+  /// This is a precondition for biometric enrollment on most platforms:
+  /// - Android: Uses `KeyguardManager.isDeviceSecure()`
+  /// - iOS/macOS: Evaluates `LAPolicy.deviceOwnerAuthentication` to detect
+  ///   `kLAErrorPasscodeNotSet`
+  /// - Windows: Checks Windows Hello availability via
+  ///   `KeyCredentialManager.IsSupportedAsync()`
+  ///
+  /// Returns `true` if the device has a screen lock configured.
+  func isDeviceLockSet(completion: @escaping (Result<Bool, Error>) -> Void)
 }
 
 /// Generated setup class from Pigeon to handle messages through the `binaryMessenger`.
@@ -1521,6 +1533,32 @@ class BiometricSignatureApiSetup {
       }
     } else {
       simplePromptChannel.setMessageHandler(nil)
+    }
+    /// Checks whether the device has a screen lock (PIN, pattern, password, or
+    /// passcode) configured.
+    ///
+    /// This is a precondition for biometric enrollment on most platforms:
+    /// - Android: Uses `KeyguardManager.isDeviceSecure()`
+    /// - iOS/macOS: Evaluates `LAPolicy.deviceOwnerAuthentication` to detect
+    ///   `kLAErrorPasscodeNotSet`
+    /// - Windows: Checks Windows Hello availability via
+    ///   `KeyCredentialManager.IsSupportedAsync()`
+    ///
+    /// Returns `true` if the device has a screen lock configured.
+    let isDeviceLockSetChannel = FlutterBasicMessageChannel(name: "dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.isDeviceLockSet\(channelSuffix)", binaryMessenger: binaryMessenger, codec: codec)
+    if let api = api {
+      isDeviceLockSetChannel.setMessageHandler { _, reply in
+        api.isDeviceLockSet { result in
+          switch result {
+          case .success(let res):
+            reply(wrapResult(res))
+          case .failure(let error):
+            reply(wrapError(error))
+          }
+        }
+      }
+    } else {
+      isDeviceLockSetChannel.setMessageHandler(nil)
     }
   }
 }

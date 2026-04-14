@@ -501,6 +501,20 @@ abstract class BiometricSignatureApi {
     String promptMessage,
     SimplePromptConfig? config,
   );
+
+  /// Checks whether the device has a screen lock (PIN, pattern, password, or
+  /// passcode) configured.
+  ///
+  /// This is a precondition for biometric enrollment on most platforms:
+  /// - Android: Uses `KeyguardManager.isDeviceSecure()`
+  /// - iOS/macOS: Evaluates `LAPolicy.deviceOwnerAuthentication` to detect
+  ///   `kLAErrorPasscodeNotSet`
+  /// - Windows: Checks Windows Hello availability via
+  ///   `KeyCredentialManager.IsSupportedAsync()`
+  ///
+  /// Returns `true` if the device has a screen lock configured.
+  @async
+  bool isDeviceLockSet();
 }
 
 /// Configuration for simple biometric prompt (authentication without crypto ops).

@@ -1455,4 +1455,34 @@ class BiometricSignatureApi {
     ;
     return pigeonVar_replyValue! as SimplePromptResult;
   }
+
+  /// Checks whether the device has a screen lock (PIN, pattern, password, or
+  /// passcode) configured.
+  ///
+  /// This is a precondition for biometric enrollment on most platforms:
+  /// - Android: Uses `KeyguardManager.isDeviceSecure()`
+  /// - iOS/macOS: Evaluates `LAPolicy.deviceOwnerAuthentication` to detect
+  ///   `kLAErrorPasscodeNotSet`
+  /// - Windows: Checks Windows Hello availability via
+  ///   `KeyCredentialManager.IsSupportedAsync()`
+  ///
+  /// Returns `true` if the device has a screen lock configured.
+  Future<bool> isDeviceLockSet() async {
+    final pigeonVar_channelName = 'dev.flutter.pigeon.biometric_signature.BiometricSignatureApi.isDeviceLockSet$pigeonVar_messageChannelSuffix';
+    final pigeonVar_channel = BasicMessageChannel<Object?>(
+      pigeonVar_channelName,
+      pigeonChannelCodec,
+      binaryMessenger: pigeonVar_binaryMessenger,
+    );
+    final Future<Object?> pigeonVar_sendFuture = pigeonVar_channel.send(null);
+    final pigeonVar_replyList = await pigeonVar_sendFuture as List<Object?>?;
+
+    final Object? pigeonVar_replyValue = _extractReplyValueOrThrow(
+        pigeonVar_replyList,
+        pigeonVar_channelName,
+        isNullValid: false,
+    )
+    ;
+    return pigeonVar_replyValue! as bool;
+  }
 }
