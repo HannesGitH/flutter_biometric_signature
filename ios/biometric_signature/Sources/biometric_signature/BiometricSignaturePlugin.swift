@@ -668,7 +668,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         case kLAErrorAuthenticationFailed:
             return .unknown
         case kLAErrorPasscodeNotSet:
-            return .notAvailable
+            return .passcodeNotSet
         case kLAErrorInvalidContext:
             return .promptError
         default:

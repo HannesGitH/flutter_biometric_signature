@@ -176,6 +176,26 @@ enum BiometricError {
   /// [Android 15+ only] Check `selectedFallbackIndex` and `selectedFallbackText`
   /// on the result object to determine which option was selected.
   fallbackSelected,
+  /// The device does not have a screen lock (PIN, pattern, password, or
+  /// passcode) configured.
+  ///
+  /// A screen lock is a prerequisite for biometric enrollment and for
+  /// hardware-backed key storage on all platforms:
+  /// - **iOS/macOS**: Maps from `kLAErrorPasscodeNotSet`. Can surface during
+  ///   any operation that requires Secure Enclave access (key creation,
+  ///   signing, decryption, and simple prompt).
+  /// - **Android**: Maps from `ERROR_NO_DEVICE_CREDENTIAL` (cause code 14).
+  ///   Only surfaces when `allowDeviceCredentials: true` is set; for
+  ///   biometric-only flows Android reports [notAvailable] or [notEnrolled]
+  ///   instead.
+  /// - **Windows**: Not applicable — Windows Hello manages its own credential
+  ///   requirements.
+  ///
+  /// Use [BiometricSignatureApi.isDeviceLockSet] as a proactive precondition
+  /// check before attempting operations. This error is the reactive
+  /// counterpart when the check is skipped or the user removes their screen
+  /// lock between the check and the operation.
+  passcodeNotSet,
 }
 
 /// The cryptographic algorithm to use for key generation.
