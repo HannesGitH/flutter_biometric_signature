@@ -194,6 +194,74 @@ private enum InvalidationSetting {
     }
 }
 
+// MARK: - Device Credentials Setting Storage
+//
+// Apple's SecAccessControl is an opaque type: you can create one with flags
+// (e.g. .userPresence, .biometryAny) but there is no public API to read those
+// flags back. SecAccessControlGetConstraints exists in private headers but is
+// not documented and would risk App Store rejection.
+//
+// Without being able to inspect the key's access control, we cannot tell at
+// signing/decrypt time whether the key was created with .userPresence (which
+// accepts passcode) or .biometryAny/.biometryCurrentSet (biometric only).
+// We need this information to produce an accurate `authenticationType` in
+// results, since iOS doesn't report which authentication method the user
+// actually used after LAContext.evaluatePolicy succeeds.
+//
+// The workaround is to persist the `useDeviceCredentials` flag at key-creation
+// time and read it back when signing or decrypting.
+private enum DeviceCredentialsSetting {
+    private static func service(_ keyAlias: String?) -> String {
+        "com.visionflutter.biometric.deviceCredentials.\(keyAlias ?? "default")"
+    }
+
+    static func save(_ keyAlias: String?, allowsDeviceCredentials: Bool) {
+        let service = service(keyAlias)
+        let data = Data([allowsDeviceCredentials ? 1 : 0])
+        let base: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: service
+        ]
+        let attrs: [String: Any] = [kSecValueData as String: data]
+        let status = SecItemUpdate(base as CFDictionary, attrs as CFDictionary)
+        if status == errSecItemNotFound {
+            var add = base
+            add[kSecValueData as String] = data
+            _ = SecItemAdd(add as CFDictionary, nil)
+        }
+    }
+
+    static func read(_ keyAlias: String?) -> Bool? {
+        let service = service(keyAlias)
+        let q: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: service,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        var out: CFTypeRef?
+        let s = SecItemCopyMatching(q as CFDictionary, &out)
+        if s == errSecSuccess, let d = out as? Data, let first = d.first {
+            return first == 1
+        }
+        return nil
+    }
+
+    @discardableResult
+    static func delete(_ keyAlias: String?) -> Bool {
+        let service = service(keyAlias)
+        let q: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: service
+        ]
+        let s = SecItemDelete(q as CFDictionary)
+        return s == errSecSuccess || s == errSecItemNotFound
+    }
+}
+
 public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatureApi {
 
     public static func register(with registrar: FlutterPluginRegistrar) {
@@ -321,7 +389,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         }
 
         let prompt = promptMessage ?? "Authenticate"
-        let allowDeviceCredentials = config?.allowDeviceCredentials ?? false
+        let allowDeviceCredentials = DeviceCredentialsSetting.read(keyAlias) ?? false
         let authType = inferAuthenticationType(allowDeviceCredentials: allowDeviceCredentials)
 
 #if os(macOS)
@@ -454,7 +522,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         completion: @escaping (Result<DecryptResult, Error>) -> Void
     ) {
         let prompt = promptMessage ?? "Authenticate"
-        let allowDeviceCredentials = config?.allowDeviceCredentials ?? false
+        let allowDeviceCredentials = DeviceCredentialsSetting.read(keyAlias) ?? false
         let authType = inferAuthenticationType(allowDeviceCredentials: allowDeviceCredentials)
 
 #if os(macOS)
@@ -747,6 +815,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         // Save metadata
         if biometryCurrentSet { DomainState.saveCurrent(keyAlias) }
         InvalidationSetting.save(biometryCurrentSet, userAlias: keyAlias)
+        DeviceCredentialsSetting.save(keyAlias, allowsDeviceCredentials: useDeviceCredentials)
 
         guard let ecPublicKey = SecKeyCopyPublicKey(ecPrivateKey) else {
              completion(.success(KeyCreationResult(publicKey: nil, publicKeyBytes: nil, error: "EC Pub Key Error", code: .unknown)))
@@ -953,6 +1022,19 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
 
     // MARK: - Helpers
 
+    /// Best-effort inference of which authentication method was used.
+    ///
+    /// iOS/macOS do not report the actual method after `LAContext.evaluatePolicy`
+    /// succeeds, so this is a pre-auth heuristic:
+    ///  - If device credentials were not allowed for this key, only biometric
+    ///    auth could have succeeded → `.biometric`.
+    ///  - If device credentials were allowed and no biometric hardware exists,
+    ///    only passcode could have succeeded → `.credential`.
+    ///  - Otherwise we cannot tell → `.unknown`.
+    ///
+    /// `allowDeviceCredentials` should come from `DeviceCredentialsSetting` for
+    /// key-based operations (sign/decrypt), or from the caller's config for
+    /// `simplePrompt` (which has no stored key).
     private func inferAuthenticationType(allowDeviceCredentials: Bool) -> AuthenticationType {
         if !allowDeviceCredentials {
             return .biometric
@@ -984,6 +1066,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
 
         _ = DomainState.deleteSaved(keyAlias)
         _ = InvalidationSetting.delete(keyAlias)
+        _ = DeviceCredentialsSetting.delete(keyAlias)
     }
 
 
