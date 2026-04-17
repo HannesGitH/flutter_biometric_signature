@@ -195,14 +195,22 @@ class BiometricSignature {
   /// Checks whether the device has a screen lock (PIN, pattern, password, or
   /// passcode) configured.
   ///
-  /// This is a precondition for biometric enrollment on most platforms. If this
-  /// returns `false`, the user must set up a device lock before biometrics can
-  /// be used.
+  /// This is a precondition for biometric enrollment on most platforms. If
+  /// this returns `false`, the user typically needs to set up a device lock
+  /// before biometrics can be used.
   ///
-  /// Platform behavior:
-  /// - **Android**: Uses `KeyguardManager.isDeviceSecure()`
-  /// - **iOS/macOS**: Evaluates `LAPolicy.deviceOwnerAuthentication`
-  /// - **Windows**: Checks Windows Hello availability
+  /// Platform behavior — note the semantics differ:
+  /// - **Android**: Authoritative. `KeyguardManager.isDeviceSecure()`.
+  /// - **iOS/macOS**: Evaluates `LAPolicy.deviceOwnerAuthentication`.
+  ///   Returns `false` only for the specific `kLAErrorPasscodeNotSet` error;
+  ///   other failures to evaluate the policy fall through to `true` to avoid
+  ///   false negatives, so `true` means "set **or** indeterminate". For a
+  ///   stronger guarantee, rely on [BiometricError.passcodeNotSet] surfaced
+  ///   by the next real operation.
+  /// - **Windows**: Reports **Windows Hello availability** (via
+  ///   `KeyCredentialManager.IsSupportedAsync()`), not generic screen-lock
+  ///   state. A Windows Hello PIN is required for `true`; password-only
+  ///   accounts get `false` even with a screen lock configured.
   Future<bool> isDeviceLockSet() async {
     return BiometricSignaturePlatform.instance.isDeviceLockSet();
   }

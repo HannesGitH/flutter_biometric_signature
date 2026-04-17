@@ -138,6 +138,12 @@ enum BiometricError {
   /// check before attempting operations. This error is the reactive
   /// counterpart when the check is skipped or the user removes their screen
   /// lock between the check and the operation.
+  ///
+  /// **Migration from 11.0.x → 11.1.0**: On Android, `ERROR_NO_DEVICE_CREDENTIAL`
+  /// (cause code 14) was previously mapped to [notAvailable]. Consumers that
+  /// were pattern-matching on [notAvailable] to drive a "no screen lock" UX
+  /// should migrate to [passcodeNotSet]. iOS/macOS mapping of
+  /// `kLAErrorPasscodeNotSet` changed in the same release.
   passcodeNotSet,
 }
 
@@ -180,6 +186,10 @@ class KeyCreationResult {
   bool? isHybridMode;
 
   /// The type of authentication used to complete this operation.
+  ///
+  /// Inferred on Apple platforms (iOS/macOS), authoritative on Android.
+  /// See [AuthenticationType] for how inference is performed when the
+  /// platform does not report the method directly.
   AuthenticationType? authenticationType;
 }
 
@@ -201,6 +211,10 @@ class SignatureResult {
   String? selectedFallbackText;
 
   /// The type of authentication used to complete this operation.
+  ///
+  /// Inferred on Apple platforms (iOS/macOS), authoritative on Android.
+  /// See [AuthenticationType] for how inference is performed when the
+  /// platform does not report the method directly.
   AuthenticationType? authenticationType;
 }
 
@@ -218,6 +232,10 @@ class DecryptResult {
   String? selectedFallbackText;
 
   /// The type of authentication used to complete this operation.
+  ///
+  /// Inferred on Apple platforms (iOS/macOS), authoritative on Android.
+  /// See [AuthenticationType] for how inference is performed when the
+  /// platform does not report the method directly.
   AuthenticationType? authenticationType;
 }
 
@@ -526,14 +544,28 @@ abstract class BiometricSignatureApi {
   /// Checks whether the device has a screen lock (PIN, pattern, password, or
   /// passcode) configured.
   ///
-  /// This is a precondition for biometric enrollment on most platforms:
-  /// - Android: Uses `KeyguardManager.isDeviceSecure()`
-  /// - iOS/macOS: Evaluates `LAPolicy.deviceOwnerAuthentication` to detect
-  ///   `kLAErrorPasscodeNotSet`
-  /// - Windows: Checks Windows Hello availability via
-  ///   `KeyCredentialManager.IsSupportedAsync()`
+  /// This is a precondition for biometric enrollment on most platforms, but
+  /// the precise meaning of `true` varies per platform:
   ///
-  /// Returns `true` if the device has a screen lock configured.
+  /// - **Android**: Authoritative. Uses `KeyguardManager.isDeviceSecure()`
+  ///   and reports exactly whether a lock credential is enrolled.
+  /// - **iOS/macOS**: Evaluates `LAPolicy.deviceOwnerAuthentication` and
+  ///   maps `kLAErrorPasscodeNotSet` to `false`. Any other failure to
+  ///   evaluate the policy (e.g. on unusual or very old devices) is treated
+  ///   as `true` to avoid false negatives. Therefore `true` means
+  ///   "lock is set **or** indeterminate". If you need a stronger guarantee,
+  ///   rely on the reactive [BiometricError.passcodeNotSet] surfaced during
+  ///   the next operation.
+  /// - **Windows**: Reports **Windows Hello availability**, not generic
+  ///   screen-lock state. Uses
+  ///   `KeyCredentialManager.IsSupportedAsync()`, which requires a Windows
+  ///   Hello PIN to be provisioned. Password-only local accounts will get
+  ///   `false` here even though a screen lock is set. Treat the Windows
+  ///   return value as "can this device use Windows Hello for biometric
+  ///   operations?" rather than a direct equivalent of the Android check.
+  ///
+  /// Returns `true` if the device has a screen lock configured (or the
+  /// platform-specific equivalent described above).
   @async
   bool isDeviceLockSet();
 }
@@ -607,5 +639,9 @@ class SimplePromptResult {
   String? selectedFallbackText;
 
   /// The type of authentication used to complete this operation.
+  ///
+  /// Inferred on Apple platforms (iOS/macOS), authoritative on Android.
+  /// See [AuthenticationType] for how inference is performed when the
+  /// platform does not report the method directly.
   AuthenticationType? authenticationType;
 }

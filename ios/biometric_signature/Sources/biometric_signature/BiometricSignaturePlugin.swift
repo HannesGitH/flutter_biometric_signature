@@ -221,7 +221,8 @@ private enum DeviceCredentialsSetting {
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
-            kSecAttrAccount as String: service
+            kSecAttrAccount as String: service,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         ]
         let attrs: [String: Any] = [kSecValueData as String: data]
         let status = SecItemUpdate(base as CFDictionary, attrs as CFDictionary)
@@ -389,8 +390,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         }
 
         let prompt = promptMessage ?? "Authenticate"
-        let allowDeviceCredentials = DeviceCredentialsSetting.read(keyAlias) ?? false
-        let authType = inferAuthenticationType(allowDeviceCredentials: allowDeviceCredentials)
+        let authType = inferAuthenticationType(allowDeviceCredentials: DeviceCredentialsSetting.read(keyAlias))
 
 #if os(macOS)
         if hasRsaKey(keyAlias) {
@@ -522,8 +522,7 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
         completion: @escaping (Result<DecryptResult, Error>) -> Void
     ) {
         let prompt = promptMessage ?? "Authenticate"
-        let allowDeviceCredentials = DeviceCredentialsSetting.read(keyAlias) ?? false
-        let authType = inferAuthenticationType(allowDeviceCredentials: allowDeviceCredentials)
+        let authType = inferAuthenticationType(allowDeviceCredentials: DeviceCredentialsSetting.read(keyAlias))
 
 #if os(macOS)
         if hasRsaKey(keyAlias) {
@@ -1030,12 +1029,16 @@ public class BiometricSignaturePlugin: NSObject, FlutterPlugin, BiometricSignatu
     ///    auth could have succeeded → `.biometric`.
     ///  - If device credentials were allowed and no biometric hardware exists,
     ///    only passcode could have succeeded → `.credential`.
+    ///  - If the stored flag could not be read (e.g. keychain write failed) → `.unknown`.
     ///  - Otherwise we cannot tell → `.unknown`.
     ///
     /// `allowDeviceCredentials` should come from `DeviceCredentialsSetting` for
     /// key-based operations (sign/decrypt), or from the caller's config for
     /// `simplePrompt` (which has no stored key).
-    private func inferAuthenticationType(allowDeviceCredentials: Bool) -> AuthenticationType {
+    private func inferAuthenticationType(allowDeviceCredentials: Bool?) -> AuthenticationType {
+        guard let allowDeviceCredentials = allowDeviceCredentials else {
+            return .unknown
+        }
         if !allowDeviceCredentials {
             return .biometric
         }
